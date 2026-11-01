@@ -17,7 +17,7 @@ import {
 import { setTeacherAdvisorySetting } from "@/lib/actions/teacher";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
-import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+import { ARAL_VOLUNTEER_DESIGNATION, ARAL_VOLUNTEER_LABEL } from "@/lib/validators/profile.schema";
 import { ADVISORY_MODE_LABELS } from "@/lib/constants/enum-labels";
 import type { ActiveTeacherRow } from "@/components/teachers-active-table";
 
@@ -27,7 +27,7 @@ type AdvisoryMode = "DEFAULT" | "FLOATING" | "MULTI_GRADE";
 const DESIGNATION_KIND_OPTIONS: { value: DesignationKind; label: string }[] = [
   { value: "Teacher", label: "Teacher" },
   { value: "Master Teacher", label: "Master Teacher" },
-  { value: ARAL_VOLUNTEER_DESIGNATION, label: ARAL_VOLUNTEER_DESIGNATION },
+  { value: ARAL_VOLUNTEER_DESIGNATION, label: ARAL_VOLUNTEER_LABEL },
   { value: "__OTHER__", label: "Others" },
 ];
 

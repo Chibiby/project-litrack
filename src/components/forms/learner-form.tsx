@@ -77,7 +77,7 @@ import { toastFailure } from "@/lib/ui/toast-failure";
  *
  * The free-form grade selects this replaces were the bug: the grade list was
  * built from every grade the teacher touched (advisory *and* ARAL designations)
- * while the server accepted only the advisory one, so a teacher who also tutored
+ * while the server accepted only the advisory one, so a teacher who also taught ARAL
  * ARAL learners was offered a grade the save then refused.
  */
 export type LearnerFormPlacement = {

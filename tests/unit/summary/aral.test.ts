@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  ARAL_TUTOR_DEPED,
-  ARAL_TUTOR_NON_DEPED,
+  ARAL_TEACHER_DEPED,
+  ARAL_TEACHER_NON_DEPED,
   aralFacetRows,
-  classifyAralTutor,
+  classifyAralTeacher,
   shapeAral,
   type RawAralRow,
 } from "@/lib/summary/queries/aral";
@@ -15,7 +15,7 @@ import type { ScopeSchool } from "@/lib/summary/types";
 /**
  * Facet `aral`: (1) ARAL learners per grade level, showing only grades with a
  * learner somewhere in the result (enum order; the full list if none), and
- * (2) teachers currently designated ARAL tutor, split DepEd / Non-DepEd / Not
+ * (2) teachers currently designated ARAL teacher, split DepEd / Non-DepEd / Not
  * answered by a pure TS rule so the mapping itself is under test, not just the
  * raw buckets passed through. Pure shaping only — no Prisma.
  */
@@ -38,34 +38,34 @@ const SCHOOLS = [
   school("s3", "Glan CES", "Glan 1"),
 ];
 
-describe("classifyAralTutor", () => {
+describe("classifyAralTeacher", () => {
   it("DEPED_PLANTILLA -> DEPED", () => {
-    expect(classifyAralTutor("DEPED_PLANTILLA", null)).toBe(ARAL_TUTOR_DEPED);
+    expect(classifyAralTeacher("DEPED_PLANTILLA", null)).toBe(ARAL_TEACHER_DEPED);
   });
 
   it("NON_DEPED -> NON_DEPED", () => {
-    expect(classifyAralTutor("NON_DEPED", null)).toBe(ARAL_TUTOR_NON_DEPED);
+    expect(classifyAralTeacher("NON_DEPED", null)).toBe(ARAL_TEACHER_NON_DEPED);
   });
 
   it("no employmentType, the ARAL volunteer designation -> NON_DEPED", () => {
-    expect(classifyAralTutor(null, ARAL_VOLUNTEER_DESIGNATION)).toBe(ARAL_TUTOR_NON_DEPED);
+    expect(classifyAralTeacher(null, ARAL_VOLUNTEER_DESIGNATION)).toBe(ARAL_TEACHER_NON_DEPED);
   });
 
   it("no employmentType, a DepEd rank designation -> DEPED", () => {
-    expect(classifyAralTutor(null, "Master Teacher I")).toBe(ARAL_TUTOR_DEPED);
-    expect(classifyAralTutor(null, "Teacher I")).toBe(ARAL_TUTOR_DEPED);
+    expect(classifyAralTeacher(null, "Master Teacher I")).toBe(ARAL_TEACHER_DEPED);
+    expect(classifyAralTeacher(null, "Teacher I")).toBe(ARAL_TEACHER_DEPED);
   });
 
   it("no employmentType, a blank designation -> NOT_ANSWERED", () => {
-    expect(classifyAralTutor(null, "  ")).toBe(NOT_ANSWERED);
+    expect(classifyAralTeacher(null, "  ")).toBe(NOT_ANSWERED);
   });
 
   it("no employmentType, no designation (no profile) -> NOT_ANSWERED", () => {
-    expect(classifyAralTutor(null, null)).toBe(NOT_ANSWERED);
+    expect(classifyAralTeacher(null, null)).toBe(NOT_ANSWERED);
   });
 
   it("DEPED_PLANTILLA wins over a volunteer-looking designation", () => {
-    expect(classifyAralTutor("DEPED_PLANTILLA", ARAL_VOLUNTEER_DESIGNATION)).toBe(ARAL_TUTOR_DEPED);
+    expect(classifyAralTeacher("DEPED_PLANTILLA", ARAL_VOLUNTEER_DESIGNATION)).toBe(ARAL_TEACHER_DEPED);
   });
 });
 
@@ -78,26 +78,26 @@ describe("aralFacetRows", () => {
     expect(rows).toEqual([{ schoolId: "s1", gradeType: null, field: "grade", bucket: "G3", count: 10 }]);
   });
 
-  it("sums two raw tutor rows that map to the same (school, bucket)", () => {
+  it("sums two raw teacher rows that map to the same (school, bucket)", () => {
     const raw: RawAralRow[] = [
-      { school_id: "s1", field: "tutor", bucket: null, employment_type: null, designation: "Master Teacher I", count: 2 },
-      { school_id: "s1", field: "tutor", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 3 },
+      { school_id: "s1", field: "teacher", bucket: null, employment_type: null, designation: "Master Teacher I", count: 2 },
+      { school_id: "s1", field: "teacher", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 3 },
     ];
     const rows = aralFacetRows(raw);
-    expect(rows).toEqual([{ schoolId: "s1", gradeType: null, field: "tutor", bucket: ARAL_TUTOR_DEPED, count: 5 }]);
+    expect(rows).toEqual([{ schoolId: "s1", gradeType: null, field: "teacher", bucket: ARAL_TEACHER_DEPED, count: 5 }]);
   });
 
   it("keeps different schools and different buckets separate", () => {
     const raw: RawAralRow[] = [
-      { school_id: "s1", field: "tutor", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 2 },
-      { school_id: "s1", field: "tutor", bucket: null, employment_type: "NON_DEPED", designation: null, count: 1 },
-      { school_id: "s2", field: "tutor", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 1 },
+      { school_id: "s1", field: "teacher", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 2 },
+      { school_id: "s1", field: "teacher", bucket: null, employment_type: "NON_DEPED", designation: null, count: 1 },
+      { school_id: "s2", field: "teacher", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 1 },
     ];
     const rows = aralFacetRows(raw);
     expect(rows).toHaveLength(3);
-    expect(rows.find((r) => r.schoolId === "s1" && r.bucket === ARAL_TUTOR_DEPED)?.count).toBe(2);
-    expect(rows.find((r) => r.schoolId === "s1" && r.bucket === ARAL_TUTOR_NON_DEPED)?.count).toBe(1);
-    expect(rows.find((r) => r.schoolId === "s2" && r.bucket === ARAL_TUTOR_DEPED)?.count).toBe(1);
+    expect(rows.find((r) => r.schoolId === "s1" && r.bucket === ARAL_TEACHER_DEPED)?.count).toBe(2);
+    expect(rows.find((r) => r.schoolId === "s1" && r.bucket === ARAL_TEACHER_NON_DEPED)?.count).toBe(1);
+    expect(rows.find((r) => r.schoolId === "s2" && r.bucket === ARAL_TEACHER_DEPED)?.count).toBe(1);
   });
 });
 
@@ -106,9 +106,9 @@ const RAW: RawAralRow[] = [
   { school_id: "s1", field: "grade", bucket: "G4", employment_type: null, designation: null, count: 5 },
   { school_id: "s2", field: "grade", bucket: "G3", employment_type: null, designation: null, count: 7 },
   { school_id: "s3", field: "grade", bucket: "G5", employment_type: null, designation: null, count: 3 },
-  { school_id: "s1", field: "tutor", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 2 },
-  { school_id: "s1", field: "tutor", bucket: null, employment_type: "NON_DEPED", designation: null, count: 1 },
-  { school_id: "s2", field: "tutor", bucket: null, employment_type: null, designation: null, count: 1 },
+  { school_id: "s1", field: "teacher", bucket: null, employment_type: "DEPED_PLANTILLA", designation: null, count: 2 },
+  { school_id: "s1", field: "teacher", bucket: null, employment_type: "NON_DEPED", designation: null, count: 1 },
+  { school_id: "s2", field: "teacher", bucket: null, employment_type: null, designation: null, count: 1 },
 ];
 
 /** Shape functions only accept rows fenced by `scopeRaw`. */
@@ -117,10 +117,10 @@ const SCOPED = scopeRaw("aral", RAW, SCHOOLS);
 describe("shapeAral", () => {
   const result = shapeAral({ raw: SCOPED, schools: SCHOOLS, level: "overall", computedAt: "2026-09-25T00:00:00.000Z" });
 
-  it("returns the facetId, title and both sections", () => {
+  it("returns the facetId, title and only the learners section (teachers live on aral-teachers)", () => {
     expect(result.facetId).toBe("aral");
-    expect(result.title).toBe("ARAL learners and tutors");
-    expect(result.sections.map((s) => s.id)).toEqual(["learnersByGrade", "tutors"]);
+    expect(result.title).toBe("ARAL learners");
+    expect(result.sections.map((s) => s.id)).toEqual(["learnersByGrade"]);
   });
 
   it("never puts a teacher or learner's own name, email or contact number in the result", () => {
@@ -157,16 +157,9 @@ describe("shapeAral", () => {
     });
   });
 
-  describe("tutors", () => {
-    const section = result.sections.find((s) => s.id === "tutors")!;
-    const overall = section.table.groups.find((g) => g.key === "overall")!;
-
-    it("maps DepEd, Non-DepEd and Not answered buckets and zero-fills the rest", () => {
-      expect(overall.cells[ARAL_TUTOR_DEPED]!.count).toBe(2);
-      expect(overall.cells[ARAL_TUTOR_NON_DEPED]!.count).toBe(1);
-      expect(overall.cells[NOT_ANSWERED]!.count).toBe(1);
-      expect(overall.base).toBe(4);
-    });
+  it("ignores teacher rows: the learners facet shows no teacher section or teacher counts", () => {
+    expect(result.sections.some((s) => s.id === "teachers" || s.id === "teachersByGrade")).toBe(false);
+    expect(result.exportList!.columns.join("|")).not.toMatch(/teacher/i);
   });
 
   describe("district and school rollup", () => {
@@ -202,15 +195,6 @@ describe("shapeAral", () => {
       expect(s1.cells.G4!.count).toBe(5);
       expect(s2.cells.G3!.count).toBe(7);
       expect(s3.cells.G5!.count).toBe(3);
-
-      const tutors = bySchool.sections.find((s) => s.id === "tutors")!;
-      const t1 = tutors.table.groups.find((g) => g.schoolId === "s1")!;
-      const t2 = tutors.table.groups.find((g) => g.schoolId === "s2")!;
-      const t3 = tutors.table.groups.find((g) => g.schoolId === "s3")!;
-      expect(t1.cells[ARAL_TUTOR_DEPED]!.count).toBe(2);
-      expect(t1.cells[ARAL_TUTOR_NON_DEPED]!.count).toBe(1);
-      expect(t2.cells[NOT_ANSWERED]!.count).toBe(1);
-      expect(t3.base).toBe(0);
     });
   });
 });

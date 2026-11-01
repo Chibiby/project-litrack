@@ -51,7 +51,7 @@ export function AralToggleButton({
     return (
       <ConfirmAction
         title="Remove from ARAL?"
-        description="Their records are kept and you can mark them as an ARAL learner again later. Their assigned ARAL tutor is cleared."
+        description="Their records are kept and you can mark them as an ARAL learner again later. Their assigned ARAL teacher is cleared."
         confirmLabel="Remove"
         variant="destructive"
         disabled={pending}

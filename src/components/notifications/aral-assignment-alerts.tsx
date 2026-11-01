@@ -35,7 +35,7 @@ const COVER_WAIT_CAP_MS = 10_000;
 
 /**
  * Tells a teacher, on their next screen, that someone designated them the ARAL
- * tutor for one or more learners.
+ * teacher for one or more learners.
  *
  * Mounted once in the teacher layout, so it fires on entry into `/teacher` and
  * not again on in-app navigation. It takes no props and fetches from the client
@@ -155,7 +155,7 @@ export function AralAssignmentAlerts() {
             <>
               <DialogTitle>New ARAL learners</DialogTitle>
               <DialogDescription>
-                You were designated the ARAL tutor while you were away.
+                You were designated an ARAL teacher while you were away.
               </DialogDescription>
             </>
           )}

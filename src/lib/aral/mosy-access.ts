@@ -18,7 +18,7 @@ const NO_ADVISORY_MESSAGE =
 /**
  * Who may open or save the MOSY Report, and over which sections.
  *
- * The report is the DepEd adviser's, not the ARAL tutor's. Same gate as the End
+ * The report is the DepEd adviser's, not the ARAL teacher's. Same gate as the End
  * of Terms sheet (`requireAdvisoryForTermSheet`): `advisoryRosterDenial` decides
  * Non-DepEd ARAL Volunteer and Floating; a DepEd teacher with no live advisory
  * section is refused as `no_advisory`.

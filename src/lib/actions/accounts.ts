@@ -1009,7 +1009,7 @@ export const getAccountProfile = action(
     // gets the same treatment as a form field.
     const parsed = parseInput(accountUserIdSchema, { userId });
 
-    // Same join-strategy shape `listAralTutors` already runs in production: a
+    // Same join-strategy shape `listAralTeachers` already runs in production: a
     // to-one relation plus a filtered, ordered to-many, resolved as one SQL
     // statement.
     const user = await prisma.user.findFirst({
@@ -1145,7 +1145,7 @@ export const getAccountProfile = action(
               learnerCount: sections.reduce((total, s) => total + s.learnerCount, 0),
             }
           : null,
-        // An ARAL tutor is a TEACHER with learners pointing at them, not a
+        // An ARAL teacher is a TEACHER with learners pointing at them, not a
         // separate role, so there is nothing else to read.
         aral: isTeacher
           ? {

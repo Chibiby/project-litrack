@@ -360,7 +360,7 @@ export const SCHOOL_HEAD_POSITION_LABELS = {
  * Whether a teacher holds a DepEd plantilla item. A different axis from
  * `TEACHER_POSITION_LABELS`, which records the rank of such an item.
  *
- * Short by design: these read as a chip beside a name in the ARAL tutor picker,
+ * Short by design: these read as a chip beside a name in the ARAL teacher picker,
  * where "Non-DepEd (volunteer, LGU-funded, private hire…)" would crowd out the
  * teacher it describes.
  */

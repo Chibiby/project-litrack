@@ -28,11 +28,11 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import {
-  aralTutorsWhere,
-  getAralTutorsPage,
-  getAralTutorsSummary,
-  parseAralTutorsParams,
-} from "@/lib/admin/aral-tutors";
+  aralTeachersWhere,
+  getAralTeachersPage,
+  getAralTeachersSummary,
+  parseAralTeachersParams,
+} from "@/lib/admin/aral-teachers";
 import {
   getSchoolLearnersPage,
   getSchoolLearnersSummary,
@@ -102,9 +102,9 @@ describe("school-scope learners directory", () => {
   });
 });
 
-describe("aralTutorsWhere", () => {
+describe("aralTeachersWhere", () => {
   it("school scope pins schoolId on teacher and learner, live ARAL learners only", () => {
-    const s = json(aralTutorsWhere({ kind: "school", schoolId: "s1" }, "", false));
+    const s = json(aralTeachersWhere({ kind: "school", schoolId: "s1" }, "", false));
     expect(s).toContain('"schoolId":"s1"');
     expect(s).toContain('"role":"TEACHER"');
     expect(s).toContain('"approvalStatus":"APPROVED"');
@@ -116,24 +116,24 @@ describe("aralTutorsWhere", () => {
   });
 
   it("grade filter adds a live-ARAL-learner grade clause, still pinned to the school", () => {
-    const w = aralTutorsWhere({ kind: "school", schoolId: "s1" }, "", false, "G3");
+    const w = aralTeachersWhere({ kind: "school", schoolId: "s1" }, "", false, "G3");
     const clauses = (w.AND as any[]).filter((c) => json(c).includes('"gradeLevel":{"type":"G3"}'));
     expect(clauses).toHaveLength(1);
     const s = json(clauses[0]);
     expect(s).toContain('"schoolId":"s1"');
     expect(s).toContain('"isAralLearner":true');
     expect(s).toContain('"archivedAt":null');
-    expect(json(aralTutorsWhere({ kind: "school", schoolId: "s1" }, "", false))).not.toContain(
+    expect(json(aralTeachersWhere({ kind: "school", schoolId: "s1" }, "", false))).not.toContain(
       "gradeLevel"
     );
   });
 
   it("parses grade and sort, dropping unknown values", () => {
-    expect(parseAralTutorsParams({ grade: "G3", sort: "learners" })).toMatchObject({
+    expect(parseAralTeachersParams({ grade: "G3", sort: "learners" })).toMatchObject({
       grade: "G3",
       sort: "learners",
     });
-    expect(parseAralTutorsParams({ grade: "nope", sort: "evil" })).toMatchObject({
+    expect(parseAralTeachersParams({ grade: "nope", sort: "evil" })).toMatchObject({
       grade: undefined,
       sort: "name",
     });
@@ -141,7 +141,7 @@ describe("aralTutorsWhere", () => {
 
   it("admin scope applies district / school filters and hides the demo school", () => {
     const s = json(
-      aralTutorsWhere({ kind: "admin", district: "Banga", schoolId: "s9" }, "", false)
+      aralTeachersWhere({ kind: "admin", district: "Banga", schoolId: "s9" }, "", false)
     );
     expect(s).toContain('"district":"Banga"');
     expect(s).toContain('"schoolId":"s9"');
@@ -149,14 +149,14 @@ describe("aralTutorsWhere", () => {
   });
 
   it("admin scope includes the demo school when a demo session is visible", () => {
-    const s = json(aralTutorsWhere({ kind: "admin" }, "", true));
+    const s = json(aralTeachersWhere({ kind: "admin" }, "", true));
     // `schoolWhereForScope` for the division does not set isDemo.
     expect(s).not.toContain('"isDemo":false');
   });
 
   it("a district admin scope confines to its districts and always drops demo", () => {
     const s = json(
-      aralTutorsWhere(
+      aralTeachersWhere(
         { kind: "admin", scope: { kind: "districts", districts: ["Banga"] } },
         "",
         true
@@ -167,8 +167,8 @@ describe("aralTutorsWhere", () => {
   });
 });
 
-describe("getAralTutorsPage", () => {
-  it("school scope: school-pinned queries, counts, untutored, grade order", async () => {
+describe("getAralTeachersPage", () => {
+  it("school scope: school-pinned queries, counts, unassigned, grade order", async () => {
     p.userFindMany.mockResolvedValue([teacher("t1", "Cruz")]);
     p.userCount.mockResolvedValue(1);
     p.learnerCount.mockResolvedValue(7);
@@ -183,9 +183,9 @@ describe("getAralTutorsPage", () => {
       { id: "g1", type: "G1" },
     ]);
 
-    const res = await getAralTutorsPage(
+    const res = await getAralTeachersPage(
       { kind: "school", schoolId: "s1" },
-      parseAralTutorsParams({ schoolId: "evil", district: "evil" })
+      parseAralTeachersParams({ schoolId: "evil", district: "evil" })
     );
 
     // Single grouped query, pinned to the school and live ARAL learners.
@@ -215,12 +215,12 @@ describe("getAralTutorsPage", () => {
       }),
     ]);
     p.userCount.mockResolvedValue(1);
-    const res = await getAralTutorsPage({ kind: "school", schoolId: "s1" }, parseAralTutorsParams({}));
+    const res = await getAralTeachersPage({ kind: "school", schoolId: "s1" }, parseAralTeachersParams({}));
     expect(res.rows[0]!.employmentLabel).toBe("Non-DepEd");
   });
 
-  it("excludes tutors with no live ARAL learners via the where (some), and skips group queries on an empty page", async () => {
-    const res = await getAralTutorsPage({ kind: "school", schoolId: "s1" }, parseAralTutorsParams({}));
+  it("excludes teachers with no live ARAL learners via the where (some), and skips group queries on an empty page", async () => {
+    const res = await getAralTeachersPage({ kind: "school", schoolId: "s1" }, parseAralTeachersParams({}));
     expect(res.rows).toEqual([]);
     expect(p.learnerGroupBy).not.toHaveBeenCalled();
     expect(p.gradeFindMany).not.toHaveBeenCalled();
@@ -228,9 +228,9 @@ describe("getAralTutorsPage", () => {
   });
 
   it("orders by surname, first name, id and pages with skip/take", async () => {
-    await getAralTutorsPage(
+    await getAralTeachersPage(
       { kind: "school", schoolId: "s1" },
-      parseAralTutorsParams({ page: "3" }, 10)
+      parseAralTeachersParams({ page: "3" }, 10)
     );
     const args = p.userFindMany.mock.calls[0]![0];
     expect(args.orderBy).toEqual([{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }]);
@@ -239,9 +239,9 @@ describe("getAralTutorsPage", () => {
   });
 
   it("passes the grade filter into both the page and count queries", async () => {
-    await getAralTutorsPage(
+    await getAralTeachersPage(
       { kind: "school", schoolId: "s1" },
-      parseAralTutorsParams({ grade: "G3" })
+      parseAralTeachersParams({ grade: "G3" })
     );
     for (const call of [p.userFindMany.mock.calls[0]![0], p.userCount.mock.calls[0]![0]]) {
       const s = json(call.where);
@@ -262,9 +262,9 @@ describe("getAralTutorsPage", () => {
       ])
       .mockResolvedValue([]);
     p.userCount.mockResolvedValue(3);
-    const res = await getAralTutorsPage(
+    const res = await getAralTeachersPage(
       { kind: "school", schoolId: "s1" },
-      { ...parseAralTutorsParams({ sort: "learners" }), skip: 0, take: 2 }
+      { ...parseAralTeachersParams({ sort: "learners" }), skip: 0, take: 2 }
     );
     expect(res.rows.map((r) => r.id)).toEqual(["b", "c"]);
     const rank = p.learnerGroupBy.mock.calls[0]![0].where;
@@ -278,9 +278,9 @@ describe("getAralTutorsPage", () => {
   it("admin scope: no learner schoolId pin on the grouped counts, reads the demo session", async () => {
     p.userFindMany.mockResolvedValue([teacher("t1", "Cruz")]);
     p.learnerGroupBy.mockResolvedValue([]);
-    const res = await getAralTutorsPage(
+    const res = await getAralTeachersPage(
       { kind: "admin", district: "Banga" },
-      parseAralTutorsParams({})
+      parseAralTeachersParams({})
     );
     expect(p.learnerCount).not.toHaveBeenCalled();
     expect(res.rows[0]!.school.name).toBe("Alamada ES");
@@ -289,18 +289,18 @@ describe("getAralTutorsPage", () => {
 
   it("refuses an empty school scope id", async () => {
     await expect(
-      getAralTutorsPage({ kind: "school", schoolId: "" }, parseAralTutorsParams({}))
+      getAralTeachersPage({ kind: "school", schoolId: "" }, parseAralTeachersParams({}))
     ).rejects.toThrow();
-    await expect(getAralTutorsSummary({ kind: "school", schoolId: "" })).rejects.toThrow();
+    await expect(getAralTeachersSummary({ kind: "school", schoolId: "" })).rejects.toThrow();
   });
 });
 
-describe("getAralTutorsSummary", () => {
+describe("getAralTeachersSummary", () => {
   it("school scope: three counts, all pinned to the school", async () => {
     p.userCount.mockResolvedValue(4);
     p.learnerCount.mockResolvedValueOnce(10).mockResolvedValueOnce(3);
-    const res = await getAralTutorsSummary({ kind: "school", schoolId: "s1" });
-    expect(res).toEqual({ tutors: 4, learnersWithTutor: 7, learnersWithoutTutor: 3 });
+    const res = await getAralTeachersSummary({ kind: "school", schoolId: "s1" });
+    expect(res).toEqual({ teachers: 4, learnersWithTeacher: 7, learnersWithoutTeacher: 3 });
     expect(json(p.userCount.mock.calls[0]![0].where)).toContain('"schoolId":"s1"');
     expect(p.learnerCount.mock.calls[0]![0].where).toEqual({
       schoolId: "s1",
@@ -315,7 +315,7 @@ describe("getAralTutorsSummary", () => {
   });
 
   it("admin scope: honours district / school filters and the demo rule like the list", async () => {
-    await getAralTutorsSummary({ kind: "admin", district: "Banga", schoolId: "s9" });
+    await getAralTeachersSummary({ kind: "admin", district: "Banga", schoolId: "s9" });
     const s = json(p.learnerCount.mock.calls[0]![0].where);
     expect(s).toContain('"district":"Banga"');
     expect(s).toContain('"schoolId":"s9"');

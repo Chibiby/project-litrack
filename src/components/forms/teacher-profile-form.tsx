@@ -63,6 +63,8 @@ import {
   YEARS_IN_SERVICE_MIN,
   YEARS_IN_SERVICE_MAX,
   ARAL_VOLUNTEER_DESIGNATION,
+  ARAL_VOLUNTEER_LABEL,
+  designationLabel,
   type TeacherProfileInput,
 } from "@/lib/validators/profile.schema";
 import { isValidPhPhone, PH_PHONE_HINT } from "@/lib/validators/phone";
@@ -124,7 +126,7 @@ const TEACHER_STEPS: WizardStepDef[] = [...TEACHER_PROFILING_STEPS];
 const DESIGNATION_KIND_OPTIONS = [
   { value: "Teacher", label: "Teacher" },
   { value: "Master Teacher", label: "Master Teacher" },
-  { value: ARAL_VOLUNTEER_DESIGNATION, label: "Non-DepEd ARAL Volunteer" },
+  { value: ARAL_VOLUNTEER_DESIGNATION, label: ARAL_VOLUNTEER_LABEL },
   { value: "__OTHER__", label: "Others" },
 ];
 
@@ -322,7 +324,7 @@ function buildTeacherPreviewRows(
 ): DryRunPreviewRow[] {
   const rows: DryRunPreviewRow[] = [
     ["Name", preview.fullName],
-    ["Designation", preview.designation || "—"],
+    ["Designation", designationLabel(preview.designation) || "—"],
     [
       "Advisory mode",
       ADVISORY_MODE_LABELS[preview.advisoryMode as keyof typeof ADVISORY_MODE_LABELS] ??
@@ -1380,7 +1382,7 @@ export function TeacherProfileForm({
                         <span className="text-sm font-medium">
                           {designationKind === "__OTHER__"
                             ? values.designationOther || "—"
-                            : designationKind || "—"}
+                            : designationLabel(designationKind) || "—"}
                         </span>
                         <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                         <span className="sr-only">This field cannot be changed here.</span>
@@ -1398,7 +1400,7 @@ export function TeacherProfileForm({
                   <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
                     <span className="text-sm font-medium">
                       {designationKind === ARAL_VOLUNTEER_DESIGNATION
-                        ? "Non-DepEd ARAL Volunteer — no teaching assignment"
+                        ? `${ARAL_VOLUNTEER_LABEL} — no teaching assignment`
                         : values.advisoryMode === "FLOATING"
                           ? "Floating teacher — no classroom section"
                           : `${values.currentGradeAssignment ? labelOf(GRADE_LEVEL_LABELS, values.currentGradeAssignment) : "—"} / ${selectedSectionName ?? "—"}${values.advisoryMode === "MULTI_GRADE" ? " (Multi-advisory)" : ""}`}
@@ -1547,8 +1549,8 @@ export function TeacherProfileForm({
                 aria-disabled="true"
                 className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
               >
-                Non-DepEd ARAL Volunteers don&apos;t take a teaching assignment. Your
-                School Head assigns the learners you tutor for ARAL.
+                Non-DepEd ARAL teachers don&apos;t take a teaching assignment. Your
+                School Head assigns the learners you teach for ARAL.
               </p>
             ) : (
               <>
@@ -1774,7 +1776,7 @@ export function TeacherProfileForm({
                   "Designation",
                   values.designationKind === "__OTHER__"
                     ? values.designationOther || "—"
-                    : values.designationKind || "—",
+                    : designationLabel(values.designationKind) || "—",
                 ],
                 [
                   "Position",

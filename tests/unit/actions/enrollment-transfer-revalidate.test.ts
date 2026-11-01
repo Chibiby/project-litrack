@@ -7,11 +7,11 @@ import { resourceNotFound } from "@/lib/errors/app-error";
  *
  * These two actions had no action-level coverage of any kind. The specific lines
  * pinned here are the `revalidateTeacherCaches(learner.aralTeacherId)` busts: a
- * learner's grade is part of their designated ARAL tutor's grade set, because
+ * learner's grade is part of their designated ARAL teacher's grade set, because
  * `teacherGradeScope` unions the advised-section arm with
  * `{ learners: { some: { aralTeacherId, deletedAt: null } } }`. For a Non-DepEd
- * ARAL Volunteer who advises no section, that one learner can be the tutor's
- * entire scope, and the tutor has no other path into `teacherShell` (300s) or
+ * ARAL Volunteer who advises no section, that one learner can be the teacher's
+ * entire scope, and the teacher has no other path into `teacherShell` (300s) or
  * `teacherDashboard` (60s). `revalidateSchoolHeadTeachers()` sits three lines
  * above that block and is a Task 12 edit site, which is why these lines want a
  * net and not only a review fence.
@@ -19,7 +19,7 @@ import { resourceNotFound } from "@/lib/errors/app-error";
  * Load-bearing fixture choices — do not "simplify" any of these:
  *
  *   1. **Three pairwise-distinct teacher ids** (`teacher-out`, `teacher-in`,
- *      `teacher-aral`). If the tutor id collided with either adviser, the
+ *      `teacher-aral`). If the teacher id collided with either adviser, the
  *      assertion would pass with the bust deleted and the test would prove
  *      nothing. The distinctness is the test.
  *   2. **A cross-grade transfer** (`grade-3` → `grade-4`) with `targetSectionId`
@@ -50,7 +50,7 @@ const TO_GRADE_ID = "grade-4";
 const TEACHER_OUT = "teacher-out";
 /** Receiving adviser. */
 const TEACHER_IN = "teacher-in";
-/** Designated ARAL tutor — advises no section, so this is their only path in. */
+/** Designated ARAL teacher — advises no section, so this is their only path in. */
 const TEACHER_ARAL = "teacher-aral";
 
 type LearnerRow = {
@@ -313,7 +313,7 @@ beforeEach(() => {
 });
 
 describe("transferLearner — teacher cache fan-out", () => {
-  it("busts the designated ARAL tutor as well as both advisers", async () => {
+  it("busts the designated ARAL teacher as well as both advisers", async () => {
     const result = await transferLearner(sameSchoolFormData());
     // Asserted first: a bailed-out action would make the bust assertions vacuous.
     expect(result).toEqual({ ok: true });
@@ -340,7 +340,7 @@ describe("transferLearner — teacher cache fan-out", () => {
     // school's id would clear that tenant's entry and leave this one stale, and
     // `toHaveBeenCalled()` would not notice. The claim is about the argument, not
     // about which of the helper's two halves a transfer needs — a transfer writes
-    // only `Enrollment` and `Learner`, so it changes nothing the cached tutor list
+    // only `Enrollment` and `Learner`, so it changes nothing the cached teacher list
     // holds.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
 
@@ -372,7 +372,7 @@ describe("transferLearner — teacher cache fan-out", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("makes no third call when the learner has no designated ARAL tutor", async () => {
+  it("makes no third call when the learner has no designated ARAL teacher", async () => {
     learnerRow = makeLearner({ aralTeacherId: null });
 
     const result = await transferLearner(sameSchoolFormData());
@@ -384,7 +384,7 @@ describe("transferLearner — teacher cache fan-out", () => {
     // The variant this actually nets is the one that launders the null and still
     // compiles: `revalidateTeacherCaches(learner.aralTeacherId!)` or `?? ""`,
     // which ships and busts `teacher-dashboard:null` / `teacher-shell:null` on
-    // every transfer of a tutorless learner. Dropping the guard outright is not
+    // every transfer of a unassigned learner. Dropping the guard outright is not
     // this case's job — `revalidateTeacherCaches` takes `(userId: string)` and
     // `Learner.aralTeacherId` is `String?`, so the unguarded call is a TS2345
     // that `npm run typecheck` stops before Vitest (esbuild, no typecheck) ever
@@ -460,7 +460,7 @@ describe("transferLearner — teacher cache fan-out", () => {
 });
 
 describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
-  it("busts the designated ARAL tutor and both schools' dashboards", async () => {
+  it("busts the designated ARAL teacher and both schools' dashboards", async () => {
     const result = await transferLearnerCrossSchool(crossSchoolFormData());
     expect(result).toEqual({ ok: true });
 
@@ -469,7 +469,7 @@ describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
     expect(revalidateSchoolDashboard).toHaveBeenCalledWith(OTHER_SCHOOL_ID);
     expect(revalidateSchoolsList).toHaveBeenCalled();
 
-    // The tutor remains a user of the ORIGIN school after a cross-school move.
+    // The teacher remains a user of the ORIGIN school after a cross-school move.
     // That dangling pointer is a known pre-existing defect and is out of scope
     // here; busting their caches is correct either way, because the stale entry
     // genuinely belongs to them.
@@ -483,7 +483,7 @@ describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
     expect(revalidatePath).not.toHaveBeenCalledWith("/school-head/transfer");
   });
 
-  it("clears aralTeacherId so no pointer to the old school's tutor survives", async () => {
+  it("clears aralTeacherId so no pointer to the old school's teacher survives", async () => {
     // Seed explicitly non-null so a dropped `aralTeacherId: null` (key absent or
     // pointer carried over) cannot pass by coincidence.
     learnerRow = makeLearner({ aralTeacherId: TEACHER_ARAL });
@@ -504,7 +504,7 @@ describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
       aralTeacherId: null,
       archivedAt: null,
     });
-    // The old tutor's caches are still busted from the pre-update row value.
+    // The old teacher's caches are still busted from the pre-update row value.
     expect(revalidateTeacherCaches).toHaveBeenCalledWith(TEACHER_ARAL);
   });
 });

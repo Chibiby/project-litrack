@@ -7,7 +7,7 @@ import { assertSameSchool } from "@/lib/auth/tenant";
 import { aralProfileSchema } from "@/lib/validators/aral.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
-import { teacherIsAralTutorFor } from "@/lib/teachers/scope";
+import { teacherIsAralTeacherFor } from "@/lib/teachers/scope";
 import { action } from "@/lib/errors/action";
 import { resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
@@ -33,8 +33,8 @@ function formToObj(formData: FormData): Record<string, unknown> {
 
 /**
  * Authorization: `requireSchoolUser("TEACHER")`. Tenancy: `assertSameSchool`
- * against the learner's `schoolId`, then `teacherIsAralTutorFor` — the
- * designated ARAL tutor, not merely the adviser, because the ARAL profile is
+ * against the learner's `schoolId`, then `teacherIsAralTeacherFor` — the
+ * designated ARAL teacher, not merely the adviser, because the ARAL profile is
  * the programme's own intake record for this learner.
  */
 export const saveAralProfile = action(
@@ -53,7 +53,7 @@ export const saveAralProfile = action(
     if (!learner) throw resourceNotFound("Learner");
 
     assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-    if (!teacherIsAralTutorFor(learner, user.id)) {
+    if (!teacherIsAralTeacherFor(learner, user.id)) {
       throw resourceNotFound("Learner");
     }
     if (!learner.isAralLearner) throw resourceNotFound("Learner");

@@ -36,7 +36,7 @@ export const DISTRICT_ROUTES = {
  * The summary facet registry's ids and labels, as far as routing and nav need
  * them. `src/lib/summary/facets.ts` (backend-owned) is the full registry with
  * loaders and export shaping; this constant exists so nav and route code do
- * not need to import that module just to list the eight facets.
+ * not need to import that module just to list the ten facets.
  */
 export const DISTRICT_SUMMARY_FACETS = [
   { id: "learners", label: "Learners" },
@@ -46,7 +46,9 @@ export const DISTRICT_SUMMARY_FACETS = [
   { id: "reading-levels", label: "Monthly reading level" },
   { id: "compliance", label: "Non-compliance" },
   { id: "profiling", label: "Teacher and School Head profiling" },
-  { id: "aral", label: "ARAL learners and tutors" },
+  { id: "aral", label: "ARAL learners" },
+  { id: "aral-teachers", label: "ARAL teachers" },
+  { id: "advisory", label: "Advisory" },
 ] as const;
 
 export type DistrictSummaryFacetId = (typeof DISTRICT_SUMMARY_FACETS)[number]["id"];

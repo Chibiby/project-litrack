@@ -26,8 +26,8 @@ import {
  * ARAL Progress tab — program membership, then Sections C–E of the ARAL
  * profile. Same label maps and same section names as the learner detail page.
  *
- * Read-only, including the tutor. Changing the designation is a footer action
- * (Transfer tutor), beside Transfer student — see the direction contract in
+ * Read-only, including the ARAL teacher. Changing the designation is a footer action
+ * (Transfer ARAL teacher), beside Transfer student — see the direction contract in
  * index.tsx for why it moved out of this panel.
  */
 export function AralPanel({ learner }: { learner: LearnerProfileData }) {
@@ -47,7 +47,7 @@ export function AralPanel({ learner }: { learner: LearnerProfileData }) {
           <Field label="Date enrolled">
             {formatDateKey(learner.aralEnrolledAt)}
           </Field>
-          <Field label="ARAL tutor">{orDash(learner.aralTutorName)}</Field>
+          <Field label="ARAL teacher">{orDash(learner.aralTeacherName)}</Field>
         </FieldGrid>
       </InfoCard>
 

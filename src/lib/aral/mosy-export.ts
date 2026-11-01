@@ -23,7 +23,7 @@ export const MOSY_EXPORT_TITLE = "MOSY Report — ARAL Learners (Middle of Schoo
 export type MosyExportInput = {
   /** School, school year and signatories (`loadReportFrame`). */
   frame: ReportFrame;
-  /** The ARAL tutor the report is for (the signed-in teacher). */
+  /** The ARAL teacher the report is for (the signed-in teacher). */
   teacherName: string;
   /** The MOSY term window label, e.g. "November - January". */
   windowLabel: string;
@@ -136,7 +136,7 @@ export function buildMosyExportTable(input: MosyExportInput): ReportTable {
     reportingPeriod: `MOSY window: ${input.windowLabel}`,
     gradeSection,
     summary: [
-      `ARAL tutor: ${input.teacherName}`,
+      `ARAL teacher: ${input.teacherName}`,
       `Filters applied: ${describeMosyFilters(input.filters)}`,
       `As of ${formatReportDate(input.asOf)}`,
       `${input.rows.length} learner(s) listed`,

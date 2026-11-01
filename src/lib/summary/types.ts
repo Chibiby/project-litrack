@@ -15,6 +15,8 @@ export const SUMMARY_FACET_IDS = [
   "compliance",
   "profiling",
   "aral",
+  "aral-teachers",
+  "advisory",
 ] as const;
 
 export type SummaryFacetId = (typeof SUMMARY_FACET_IDS)[number];
@@ -146,8 +148,8 @@ export type FacetResult = {
   /**
    * Export-only: a list the file prints in place of the tables. The on-screen
    * view ignores it. Compliance sets it at school level (one row per flagged
-   * school, with a Remarks column); ARAL sets it at every level (one row per
-   * school, district or scope: learners and tutors).
+   * school, with a Remarks column); ARAL learners and ARAL teachers and Advisory set it at
+   * every level (one row per school, district or scope, counts first).
    */
   exportList?: SummaryList;
   /** Choices for the facet's own selects, e.g. `schoolYearLabels` for end-of-term. */

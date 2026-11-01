@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * Action-level coverage for `enrollRosterLearnersToAral` — the write behind the
  * teacher roster's ARAL spark, its bulk "Enroll in ARAL", and the profile
- * dialog's tutor picker. All three send the same shape, so this is the one place
+ * dialog's teacher picker. All three send the same shape, so this is the one place
  * the rules live.
  *
  * What is contract here, and so asserted rather than assumed:
@@ -12,8 +12,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *     learner from another tenant or another teacher's roster cannot be enrolled
  *     by id. A partial match fails the whole call with one generic message, which
  *     is what stops the error from telling a prober which of those it was.
- *   - Any teacher at the school may tutor — plantilla or volunteer — but only a
- *     teacher at the school, and a rejected tutor writes nothing at all.
+ *   - Any teacher at the school may teacher — plantilla or volunteer — but only a
+ *     teacher at the school, and a rejected teacher writes nothing at all.
  *   - Enrolling and moving are counted separately, because the caller reports
  *     them separately, and a selection that only moved learners is logged under
  *     the designation action rather than the enrolment one.
@@ -61,8 +61,8 @@ let findManyArgs: { where: Record<string, unknown> }[] = [];
 /** `updateMany` calls made inside the transaction, in order. */
 let updates: { where: Record<string, unknown>; data: Record<string, unknown> }[] =
   [];
-/** Whether the named tutor passes the eligibility check. */
-let tutorEligible = true;
+/** Whether the named teacher passes the eligibility check. */
+let teacherEligible = true;
 let profileCompleted = true;
 
 /**
@@ -145,10 +145,10 @@ vi.mock("@/lib/auth/session", () => ({
   requireSchoolUser: (...args: unknown[]) => requireSchoolUser(...(args as [])),
 }));
 
-const isEligibleAralTutor = vi.fn(async () => tutorEligible);
-vi.mock("@/lib/teachers/aral-tutor", () => ({
-  isEligibleAralTutor: (...args: unknown[]) =>
-    isEligibleAralTutor(...(args as [])),
+const isEligibleAralTeacher = vi.fn(async () => teacherEligible);
+vi.mock("@/lib/teachers/aral-teacher", () => ({
+  isEligibleAralTeacher: (...args: unknown[]) =>
+    isEligibleAralTeacher(...(args as [])),
 }));
 
 const notifyAralAssigned = vi.fn(async () => {});
@@ -204,7 +204,7 @@ beforeEach(() => {
   rows = [];
   findManyArgs = [];
   updates = [];
-  tutorEligible = true;
+  teacherEligible = true;
   profileCompleted = true;
 });
 
@@ -218,7 +218,7 @@ describe("enrollRosterLearnersToAral — the selection it will act on", () => {
     expect(where.schoolId).toBe(SCHOOL_ID);
     expect(where.deletedAt).toBeNull();
     expect(where.archivedAt).toBeNull();
-    // Adviser OR designated tutor — the same scope the roster lists by, so
+    // Adviser OR designated teacher — the same scope the roster lists by, so
     // anything visible there is actionable and nothing else is.
     expect(where.OR).toEqual([
       { teacherId: TEACHER_ID },
@@ -310,8 +310,8 @@ describe("enrollRosterLearnersToAral — the selection it will act on", () => {
   });
 });
 
-describe("enrollRosterLearnersToAral — who tutors", () => {
-  it("keeps the learners itself when no tutor is named", async () => {
+describe("enrollRosterLearnersToAral — who teachers", () => {
+  it("keeps the learners itself when no teacher is named", async () => {
     rows = [learner({ id: "a" }), learner({ id: "b" })];
 
     const res = await enrollRosterLearnersToAral({ learnerIds: ["a", "b"] });
@@ -331,7 +331,7 @@ describe("enrollRosterLearnersToAral — who tutors", () => {
       expect.objectContaining({ recipientId: TEACHER_ID, actorId: TEACHER_ID })
     );
     // And no eligibility round-trip for oneself.
-    expect(isEligibleAralTutor).not.toHaveBeenCalled();
+    expect(isEligibleAralTeacher).not.toHaveBeenCalled();
   });
 
   it("accepts any teacher at the school, and tells them", async () => {
@@ -343,8 +343,8 @@ describe("enrollRosterLearnersToAral — who tutors", () => {
     });
 
     expect(res.ok).toBe(true);
-    // Eligibility is checked in the tutor's own school, not globally.
-    expect(isEligibleAralTutor).toHaveBeenCalledWith(VOLUNTEER_ID, SCHOOL_ID);
+    // Eligibility is checked in the teacher's own school, not globally.
+    expect(isEligibleAralTeacher).toHaveBeenCalledWith(VOLUNTEER_ID, SCHOOL_ID);
     expect(updates[0].data).toMatchObject({ aralTeacherId: VOLUNTEER_ID });
     // One message for the whole gesture, naming who assigned it.
     expect(notifyAralAssigned).toHaveBeenCalledTimes(1);
@@ -356,8 +356,8 @@ describe("enrollRosterLearnersToAral — who tutors", () => {
     });
   });
 
-  it("refuses a tutor from outside the school, and writes nothing", async () => {
-    tutorEligible = false;
+  it("refuses a teacher from outside the school, and writes nothing", async () => {
+    teacherEligible = false;
     rows = [learner({ id: "a" })];
 
     const res = await enrollRosterLearnersToAral({
@@ -366,13 +366,13 @@ describe("enrollRosterLearnersToAral — who tutors", () => {
     });
 
     // Same generic wording a missing teacher gets, and the check runs before the
-    // learners are even read — so a bad tutor id reveals nothing about either.
+    // learners are even read — so a bad teacher id reveals nothing about either.
     expect(res).toEqual({ ok: false, error: "Teacher not found" });
     expect(learnerFindMany).not.toHaveBeenCalled();
     expectNoWrites();
   });
 
-  it("rejects a tutor id that is not a uuid", async () => {
+  it("rejects a teacher id that is not a uuid", async () => {
     const res = await enrollRosterLearnersToAral({
       learnerIds: ["a"],
       aralTeacherId: "not-a-uuid",
@@ -383,7 +383,7 @@ describe("enrollRosterLearnersToAral — who tutors", () => {
       code: "VALIDATION_FAILED",
       error: "Invalid teacher",
     });
-    expect(isEligibleAralTutor).not.toHaveBeenCalled();
+    expect(isEligibleAralTeacher).not.toHaveBeenCalled();
     expectNoWrites();
   });
 });
@@ -401,7 +401,7 @@ describe("enrollRosterLearnersToAral — enrolling versus moving", () => {
       aralTeacherId: VOLUNTEER_ID,
     });
 
-    // "settled" is already with the chosen tutor, so it is in neither write.
+    // "settled" is already with the chosen teacher, so it is in neither write.
     expect(res).toEqual({ ok: true, data: { enrolled: 1, redesignated: 1 } });
     expect(updates).toHaveLength(2);
     expect(updates[0].where).toEqual({ id: { in: ["new"] } });
@@ -456,7 +456,7 @@ describe("enrollRosterLearnersToAral — enrolling versus moving", () => {
     expect(audit.resourceId).toBe("moving");
   });
 
-  it("does nothing, loudly, when every learner is already with that tutor", async () => {
+  it("does nothing, loudly, when every learner is already with that teacher", async () => {
     rows = [
       learner({ id: "a", isAralLearner: true, aralTeacherId: VOLUNTEER_ID }),
       learner({ id: "b", isAralLearner: true, aralTeacherId: VOLUNTEER_ID }),
@@ -479,7 +479,7 @@ describe("enrollRosterLearnersToAral — what it busts", () => {
   it("busts only the grades the selection actually touched", async () => {
     rows = [
       learner({ id: "moved", gradeLevelId: "grade-g3" }),
-      // Already with the chosen tutor, so this grade is untouched.
+      // Already with the chosen teacher, so this grade is untouched.
       learner({
         id: "settled",
         gradeLevelId: "grade-g4",
@@ -503,7 +503,7 @@ describe("enrollRosterLearnersToAral — what it busts", () => {
     expect(paths).toContain("/teacher/aral");
   });
 
-  it("busts the incoming tutor's caches as well as its own", async () => {
+  it("busts the incoming teacher's caches as well as its own", async () => {
     rows = [learner({ id: "a" })];
 
     await enrollRosterLearnersToAral({
@@ -511,7 +511,7 @@ describe("enrollRosterLearnersToAral — what it busts", () => {
       aralTeacherId: VOLUNTEER_ID,
     });
 
-    // The tutor's sidebar and metrics are derived from the learners they track.
+    // The teacher's sidebar and metrics are derived from the learners they track.
     expect(revalidateLearnerScoped).toHaveBeenCalledWith({
       schoolId: SCHOOL_ID,
       teacherId: TEACHER_ID,
@@ -524,13 +524,13 @@ describe("enrollRosterLearnersToAral — what it busts", () => {
     });
   });
 
-  it("busts the outgoing tutor's caches too", async () => {
+  it("busts the outgoing teacher's caches too", async () => {
     rows = [
       learner({
         id: "moving",
         isAralLearner: true,
         aralTeacherId: OUTSIDER_ID,
-        // Reached through the adviser axis, since the tutor is somebody else.
+        // Reached through the adviser axis, since the teacher is somebody else.
         teacherId: TEACHER_ID,
       }),
     ];

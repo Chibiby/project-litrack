@@ -467,7 +467,7 @@ export default async function TeacherLearnersPage({
         <EmptyState
           icon={Sparkles}
           title="Open to DepEd advisers only"
-          description="The advisory roster belongs to the DepEd teacher who advises a section. As a Non-DepEd ARAL Volunteer you don't advise one, so there's nothing to manage here. Your ARAL learners are in the ARAL Program."
+          description="The advisory roster belongs to the DepEd teacher who advises a section. As a Non-DepEd ARAL teacher you don't advise one, so there's nothing to manage here. Your ARAL learners are in the ARAL Program."
           actionHref="/teacher/aral"
           actionLabel="Go to ARAL Program"
         />
@@ -488,12 +488,12 @@ export default async function TeacherLearnersPage({
 
   // §5: a floating DepEd teacher — one who advises no section. `shellGrades` is
   // the union `teacherGradeScope` resolves: grades they advise in, plus grades
-  // holding a learner they tutor for ARAL. Empty therefore means there is
+  // holding a learner they teach for ARAL. Empty therefore means there is
   // genuinely nothing this roster could list, which is exactly when a table
   // reads as broken rather than as empty.
   //
   // Keyed on that union rather than on the advisory alone, deliberately: a
-  // floating teacher who DOES tutor ARAL learners still sees them here, because
+  // floating teacher who DOES teach ARAL learners still sees them here, because
   // `teacherLearnerScope` reaches them. Refusing the page on "no advisory" would
   // hide rows they are entitled to.
   if (!isSuperAdmin && shellGrades.length === 0) {

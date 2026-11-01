@@ -94,9 +94,9 @@ export type LearnerProfileData = {
   isAralLearner: boolean;
   /** Local date key, `YYYY-MM-DD`. Null when never enrolled in ARAL. */
   aralEnrolledAt: string | null;
-  aralTutorName: string | null;
+  aralTeacherName: string | null;
   /**
-   * The tutor's id, so a reassign picker can open on whoever holds the learner
+   * The ARAL teacher's id, so a reassign picker can open on whoever holds the learner
    * now instead of resetting to the viewing teacher.
    */
   aralTeacherId: string | null;

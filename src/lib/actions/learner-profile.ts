@@ -203,7 +203,7 @@ export const getLearnerProfile = action(
       adviserName: learner.teacher?.fullName ?? null,
       isAralLearner: learner.isAralLearner,
       aralEnrolledAt: dateKey(learner.aralEnrolledAt),
-      aralTutorName: learner.aralTeacher?.fullName ?? null,
+      aralTeacherName: learner.aralTeacher?.fullName ?? null,
       aralTeacherId: learner.aralTeacherId,
       archivedAt: dateKey(learner.archivedAt),
       createdAt: formatLocalDateKey(learner.createdAt),

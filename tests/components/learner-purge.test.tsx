@@ -23,7 +23,7 @@ vi.mock("@/lib/actions/learner", () => ({
   toggleAralLearner: vi.fn(),
   enrollRosterLearnersToAral: vi.fn(),
 }));
-vi.mock("@/lib/actions/aral-tutors", () => ({ listAralTutorOptions: vi.fn() }));
+vi.mock("@/lib/actions/aral-teachers", () => ({ listAralTeacherOptions: vi.fn() }));
 const purgeArchivedLearner = vi.fn();
 vi.mock("@/lib/actions/learner-purge", () => ({
   purgeArchivedLearner: (fd: FormData) => purgeArchivedLearner(fd),

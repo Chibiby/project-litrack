@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import {
-  AralTutorCombobox,
-  type AralTutorOption,
-} from "@/components/aral/aral-tutor-combobox";
+  AralTeacherCombobox,
+  type AralTeacherPickOption,
+} from "@/components/aral/aral-teacher-combobox";
 
 beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -15,7 +15,7 @@ afterEach(cleanup);
 
 const SELF_ID = "self-1";
 
-const TUTORS: AralTutorOption[] = [
+const TEACHERS: AralTeacherPickOption[] = [
   {
     id: "t1",
     name: "Maria Bañas",
@@ -34,11 +34,11 @@ function open() {
   fireEvent.click(screen.getByRole("combobox"));
 }
 
-describe("AralTutorCombobox", () => {
-  it("lists Myself first, followed by other tutors", () => {
+describe("AralTeacherCombobox", () => {
+  it("lists Myself first, followed by other teachers", () => {
     render(
-      <AralTutorCombobox
-        tutors={TUTORS}
+      <AralTeacherCombobox
+        teachers={TEACHERS}
         selfId={SELF_ID}
         value={SELF_ID}
         onValueChange={() => {}}
@@ -53,8 +53,8 @@ describe("AralTutorCombobox", () => {
 
   it("filters by name and sublabel, diacritic-insensitively, and keeps Myself", () => {
     render(
-      <AralTutorCombobox
-        tutors={TUTORS}
+      <AralTeacherCombobox
+        teachers={TEACHERS}
         selfId={SELF_ID}
         value={SELF_ID}
         onValueChange={() => {}}
@@ -70,8 +70,8 @@ describe("AralTutorCombobox", () => {
 
   it("filters by advisory sublabel", () => {
     render(
-      <AralTutorCombobox
-        tutors={TUTORS}
+      <AralTeacherCombobox
+        teachers={TEACHERS}
         selfId={SELF_ID}
         value={SELF_ID}
         onValueChange={() => {}}
@@ -86,8 +86,8 @@ describe("AralTutorCombobox", () => {
 
   it("shows an empty state when nothing matches, but still keeps Myself", () => {
     render(
-      <AralTutorCombobox
-        tutors={TUTORS}
+      <AralTeacherCombobox
+        teachers={TEACHERS}
         selfId={SELF_ID}
         value={SELF_ID}
         onValueChange={() => {}}
@@ -95,17 +95,17 @@ describe("AralTutorCombobox", () => {
     );
     open();
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzzz" } });
-    expect(screen.getByText("No tutor found")).toBeTruthy();
+    expect(screen.getByText("No teacher found")).toBeTruthy();
     const options = screen.getAllByRole("option");
     expect(options).toHaveLength(1);
     expect(options[0].textContent).toContain("Myself");
   });
 
-  it("selects a tutor on click and updates the trigger label", () => {
+  it("selects a teacher on click and updates the trigger label", () => {
     const onValueChange = vi.fn();
     render(
-      <AralTutorCombobox
-        tutors={TUTORS}
+      <AralTeacherCombobox
+        teachers={TEACHERS}
         selfId={SELF_ID}
         value={SELF_ID}
         onValueChange={onValueChange}
@@ -119,8 +119,8 @@ describe("AralTutorCombobox", () => {
   it("is keyboard accessible: arrow down then Enter selects", () => {
     const onValueChange = vi.fn();
     render(
-      <AralTutorCombobox
-        tutors={TUTORS}
+      <AralTeacherCombobox
+        teachers={TEACHERS}
         selfId={SELF_ID}
         value={SELF_ID}
         onValueChange={onValueChange}

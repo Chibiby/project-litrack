@@ -20,10 +20,10 @@ import {
   type ListFilterField,
 } from "@/components/admin/management/list-filter-bar";
 import { ListPager, PageOutOfRangeState } from "@/components/admin/management/list-pager";
-import { ARAL_TUTOR_SORTS, type AralTutorSort } from "@/lib/admin/aral-tutor-sorts";
-import type { AralTutorRow } from "@/lib/admin/aral-tutors";
+import { ARAL_TEACHER_SORTS, type AralTeacherSort } from "@/lib/admin/aral-teacher-sorts";
+import type { AralTeacherRow } from "@/lib/admin/aral-teachers";
 
-export type AralTutorsTableList = {
+export type AralTeachersTableList = {
   page: number;
   pageSize: number;
   totalPages: number;
@@ -31,14 +31,14 @@ export type AralTutorsTableList = {
   q: string;
 };
 
-type AralTutorsTableProps = {
-  rows: AralTutorRow[];
-  list: AralTutorsTableList;
+type AralTeachersTableProps = {
+  rows: AralTeacherRow[];
+  list: AralTeachersTableList;
   basePath: string;
   filters: ListFilterField[];
   /** Admin page: adds the School column. */
   showSchool?: boolean;
-  sort: AralTutorSort;
+  sort: AralTeacherSort;
   /** Params that survive "Clear filters" (a Super Admin's `schoolId` view context). */
   keepParams?: readonly string[];
   /** Where "Clear filters" in the empty state goes; defaults to `basePath`. */
@@ -46,11 +46,11 @@ type AralTutorsTableProps = {
 };
 
 /** "Grade 3 (4) · Grade 4 (2)" */
-export function formatTutorGrades(grades: AralTutorRow["grades"]): string {
+export function formatTeacherGrades(grades: AralTeacherRow["grades"]): string {
   return grades.map((g) => `${g.label} (${g.count.toLocaleString()})`).join(" · ");
 }
 
-function EmploymentCell({ row, dash = false }: { row: AralTutorRow; dash?: boolean }) {
+function EmploymentCell({ row, dash = false }: { row: AralTeacherRow; dash?: boolean }) {
   if (!row.employment) return dash ? <span className="text-muted-foreground">—</span> : null;
   return (
     <EmploymentTypeChip
@@ -59,16 +59,16 @@ function EmploymentCell({ row, dash = false }: { row: AralTutorRow; dash?: boole
   );
 }
 
-/** Tutor list: filters, sort, table, pager. One navigation provider for all. */
-export function AralTutorsTable(props: AralTutorsTableProps) {
+/** ARAL teacher list: filters, sort, table, pager. One navigation provider for all. */
+export function AralTeachersTable(props: AralTeachersTableProps) {
   return (
     <ListNavigationProvider>
-      <AralTutorsTableInner {...props} />
+      <AralTeachersTableInner {...props} />
     </ListNavigationProvider>
   );
 }
 
-function AralTutorsTableInner({
+function AralTeachersTableInner({
   rows,
   list,
   basePath,
@@ -77,22 +77,22 @@ function AralTutorsTableInner({
   sort,
   keepParams,
   clearHref,
-}: AralTutorsTableProps) {
+}: AralTeachersTableProps) {
   const active = describeActiveFilters(filters, list.q);
   const searchOnly = filters.every((f) => !f.value);
   const columns = showSchool ? 6 : 5;
 
   return (
     <div className="space-y-4">
-      <Surface as="section" aria-label="Find ARAL tutors" className="rounded-2xl p-3 sm:p-4">
+      <Surface as="section" aria-label="Find ARAL teachers" className="rounded-2xl p-3 sm:p-4">
         <ListFilterBar
           basePath={basePath}
           q={list.q}
           resultCount={list.totalCount}
-          searchLabel="Search ARAL tutors"
+          searchLabel="Search ARAL teachers"
           searchPlaceholder="Teacher name…"
           fields={filters}
-          sort={{ value: sort, options: ARAL_TUTOR_SORTS.options }}
+          sort={{ value: sort, options: ARAL_TEACHER_SORTS.options }}
           keepParams={keepParams}
         />
       </Surface>
@@ -100,7 +100,7 @@ function AralTutorsTableInner({
       <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
         <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
           <h2 className="text-base font-semibold">
-            ARAL tutors{" "}
+            ARAL teachers{" "}
             <span className="text-muted-foreground">({list.totalCount.toLocaleString()})</span>
           </h2>
           <span className="text-xs text-muted-foreground">
@@ -108,7 +108,7 @@ function AralTutorsTableInner({
           </span>
         </div>
         <ListBusyRegion
-          label="ARAL tutors"
+          label="ARAL teachers"
           skeleton={<TableSectionSkeleton rows={8} columns={columns} showToolbar={false} />}
         >
           {rows.length === 0 ? (
@@ -119,11 +119,11 @@ function AralTutorsTableInner({
                   page={list.page}
                   totalPages={list.totalPages}
                   totalCount={list.totalCount}
-                  noun="tutors"
+                  noun="teachers"
                 />
               ) : active.length > 0 ? (
                 <EmptyState
-                  title="No tutors match"
+                  title="No teachers match"
                   description={`Nothing matches ${active.join(" · ")}. ${
                     searchOnly ? "Try a different search or clear it." : "Try a wider filter or clear them."
                   }`}
@@ -133,8 +133,8 @@ function AralTutorsTableInner({
                 />
               ) : (
                 <EmptyState
-                  title="No teacher is tutoring ARAL learners yet"
-                  description="Teachers appear here once they are designated as the ARAL tutor of at least one learner."
+                  title="No ARAL teachers yet"
+                  description="Teachers appear here once they are designated as the ARAL teacher of at least one learner."
                   icon={HandHelping}
                 />
               )}
@@ -167,7 +167,7 @@ function AralTutorsTableInner({
                           {row.aralLearnerCount.toLocaleString()}
                         </TableCell>
                         <TableCell className={showSchool ? "py-2.5 text-sm" : "py-2.5 pr-4 text-sm"}>
-                          {formatTutorGrades(row.grades) || "—"}
+                          {formatTeacherGrades(row.grades) || "—"}
                         </TableCell>
                         {showSchool ? (
                           <TableCell className="py-2.5 pr-4 text-sm text-muted-foreground">
@@ -179,7 +179,7 @@ function AralTutorsTableInner({
                   </TableBody>
                 </Table>
               </div>
-              <ul className="divide-y divide-border/60 lg:hidden" aria-label="ARAL tutors">
+              <ul className="divide-y divide-border/60 lg:hidden" aria-label="ARAL teachers">
                 {rows.map((row) => (
                   <li key={row.id} className="flex items-start gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
@@ -191,7 +191,7 @@ function AralTutorsTableInner({
                         {row.advisorySummary ?? "No advisory"}
                       </p>
                       {row.grades.length > 0 ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{formatTutorGrades(row.grades)}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{formatTeacherGrades(row.grades)}</p>
                       ) : null}
                       {showSchool ? (
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.school.name}</p>
@@ -218,7 +218,7 @@ function AralTutorsTableInner({
             pageSize={list.pageSize}
             totalPages={list.totalPages}
             totalCount={list.totalCount}
-            noun="tutors"
+            noun="teachers"
           />
         ) : null}
       </Surface>

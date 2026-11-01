@@ -12,7 +12,7 @@ import { REMOVAL_CLOCK_START } from "@/lib/learners/removal";
  * used to leave everything green. Each assertion below pins one write exactly.
  *
  * Style follows tests/unit/learner-bulk-tenancy.test.ts: the real `action()`
- * wrapper, real validators, real advisory / reactivate-enrollment / aral-tutor
+ * wrapper, real validators, real advisory / reactivate-enrollment / aral-teacher
  * logic, and a hand-built Prisma surface. `tx` and the global client are
  * deliberately different objects, so a write that escapes the transaction hits an
  * undefined method and fails the test instead of passing silently.
@@ -27,10 +27,10 @@ const GRADE_ID = "grade-g4";
 const SECTION_ID = "11111111-1111-4111-8111-111111111111";
 const LEARNER_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const LEARNER_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const TUTOR_OK = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-const TUTOR_OTHER_SCHOOL = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-const TUTOR_INACTIVE = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
-const TUTOR_UNKNOWN = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const TEACHER_OK = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const TEACHER_OTHER_SCHOOL = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const TEACHER_INACTIVE = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const TEACHER_UNKNOWN = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 
 const m = vi.hoisted(() => ({
   // global client
@@ -173,9 +173,9 @@ beforeEach(() => {
   m.currentUser.current = teacher;
 
   users = [
-    { id: TUTOR_OK, schoolId: SCHOOL_ID, role: "TEACHER", deletedAt: null, isActive: true, approvalStatus: "APPROVED" },
-    { id: TUTOR_OTHER_SCHOOL, schoolId: OTHER_SCHOOL_ID, role: "TEACHER", deletedAt: null, isActive: true, approvalStatus: "APPROVED" },
-    { id: TUTOR_INACTIVE, schoolId: SCHOOL_ID, role: "TEACHER", deletedAt: null, isActive: false, approvalStatus: "APPROVED" },
+    { id: TEACHER_OK, schoolId: SCHOOL_ID, role: "TEACHER", deletedAt: null, isActive: true, approvalStatus: "APPROVED" },
+    { id: TEACHER_OTHER_SCHOOL, schoolId: OTHER_SCHOOL_ID, role: "TEACHER", deletedAt: null, isActive: true, approvalStatus: "APPROVED" },
+    { id: TEACHER_INACTIVE, schoolId: SCHOOL_ID, role: "TEACHER", deletedAt: null, isActive: false, approvalStatus: "APPROVED" },
   ];
   m.userFindFirst.mockImplementation(async (a: { where: Row }) => {
     const hit = users.find((u) => matchesWhere(u, a.where));
@@ -536,7 +536,7 @@ describe("restoreLearner — reactivates the enrollment", () => {
     expect(m.txEnrollmentCreate).not.toHaveBeenCalled();
   });
 
-  it("refuses a learner neither advised nor tutored by the caller", async () => {
+  it("refuses a learner neither advised nor taught by the caller", async () => {
     m.learnerFindFirst.mockResolvedValue({ ...archivedLearner, teacherId: "someone-else" });
 
     const res = await restoreLearner(form({ id: LEARNER_A }));
@@ -771,7 +771,7 @@ describe("updateLearner — placement and enrollment stay untouched", () => {
     expect(m.txLearnerUpdate).not.toHaveBeenCalled();
   });
 
-  it("refuses a learner the caller neither advises nor tutors", async () => {
+  it("refuses a learner the caller neither advises nor teachers", async () => {
     m.learnerFindFirst.mockResolvedValue({ ...stored, teacherId: "someone-else" });
 
     const res = await updateLearner(payload());
@@ -792,18 +792,18 @@ describe("setLearnerAralTeacher", () => {
     form({ learnerId, aralTeacherId });
 
   it("assigns an eligible teacher from the same school, notifies them and audits", async () => {
-    const res = await setLearnerAralTeacher(assign(LEARNER_A, TUTOR_OK));
+    const res = await setLearnerAralTeacher(assign(LEARNER_A, TEACHER_OK));
 
     expect(res).toEqual({ ok: true });
     // Binds to `prisma.learner.update({ data: { aralTeacherId: nextAralTeacherId } })`.
     expect(m.learnerUpdate).toHaveBeenCalledWith({
       where: { id: LEARNER_A },
-      data: { aralTeacherId: TUTOR_OK },
+      data: { aralTeacherId: TEACHER_OK },
     });
     // Binds to the notifyAralAssigned call.
     expect(m.notifyAralAssigned).toHaveBeenCalledWith({
       schoolId: SCHOOL_ID,
-      recipientId: TUTOR_OK,
+      recipientId: TEACHER_OK,
       actorId: HEAD_ID,
       learnerIds: [LEARNER_A],
     });
@@ -816,29 +816,29 @@ describe("setLearnerAralTeacher", () => {
           schoolId: SCHOOL_ID,
           learnerId: LEARNER_A,
           previousAralTeacherId: null,
-          aralTeacherId: TUTOR_OK,
+          aralTeacherId: TEACHER_OK,
         },
       })
     );
   });
 
   it("refuses a teacher from another school and writes nothing", async () => {
-    const res = await setLearnerAralTeacher(assign(LEARNER_A, TUTOR_OTHER_SCHOOL));
+    const res = await setLearnerAralTeacher(assign(LEARNER_A, TEACHER_OTHER_SCHOOL));
 
-    // Binds to the `isEligibleAralTutor(nextAralTeacherId, user.schoolId)` guard.
+    // Binds to the `isEligibleAralTeacher(nextAralTeacherId, user.schoolId)` guard.
     expect(res).toMatchObject({ ok: false, error: "Teacher not found" });
     expect(m.learnerUpdate).not.toHaveBeenCalled();
     expect(m.notifyAralAssigned).not.toHaveBeenCalled();
     expect(m.writeAudit).not.toHaveBeenCalled();
     // The eligibility probe is scoped to the head's school, not just the id.
     expect(firstArg(m.userFindFirst).where).toMatchObject({
-      id: TUTOR_OTHER_SCHOOL,
+      id: TEACHER_OTHER_SCHOOL,
       schoolId: SCHOOL_ID,
     });
   });
 
   it("refuses a teacher id that does not exist (wrong id)", async () => {
-    const res = await setLearnerAralTeacher(assign(LEARNER_A, TUTOR_UNKNOWN));
+    const res = await setLearnerAralTeacher(assign(LEARNER_A, TEACHER_UNKNOWN));
 
     expect(res).toMatchObject({ ok: false, error: "Teacher not found" });
     expect(m.learnerUpdate).not.toHaveBeenCalled();
@@ -846,14 +846,14 @@ describe("setLearnerAralTeacher", () => {
   });
 
   it("refuses an inactive teacher, matching the picker's list", async () => {
-    const res = await setLearnerAralTeacher(assign(LEARNER_A, TUTOR_INACTIVE));
+    const res = await setLearnerAralTeacher(assign(LEARNER_A, TEACHER_INACTIVE));
 
     expect(res).toMatchObject({ ok: false, error: "Teacher not found" });
     expect(m.learnerUpdate).not.toHaveBeenCalled();
   });
 
   it("refuses to touch a learner from another school", async () => {
-    const res = await setLearnerAralTeacher(assign(LEARNER_B, TUTOR_OK));
+    const res = await setLearnerAralTeacher(assign(LEARNER_B, TEACHER_OK));
 
     // Binds to `schoolId: user.schoolId` in the learner lookup.
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
@@ -861,10 +861,10 @@ describe("setLearnerAralTeacher", () => {
     expect(m.learnerUpdate).not.toHaveBeenCalled();
   });
 
-  it("refuses to designate a tutor for a learner who is not in ARAL", async () => {
+  it("refuses to designate a teacher for a learner who is not in ARAL", async () => {
     learners[0].isAralLearner = false;
 
-    const res = await setLearnerAralTeacher(assign(LEARNER_A, TUTOR_OK));
+    const res = await setLearnerAralTeacher(assign(LEARNER_A, TEACHER_OK));
 
     // Binds to the `!learner.isAralLearner` guard.
     expect(res).toMatchObject({
@@ -874,8 +874,8 @@ describe("setLearnerAralTeacher", () => {
     expect(m.learnerUpdate).not.toHaveBeenCalled();
   });
 
-  it("clears the designation with an empty id, without a tutor lookup or notification", async () => {
-    learners[0].aralTeacherId = TUTOR_OK;
+  it("clears the designation with an empty id, without a teacher lookup or notification", async () => {
+    learners[0].aralTeacherId = TEACHER_OK;
 
     const res = await setLearnerAralTeacher(assign(LEARNER_A, ""));
 
@@ -890,9 +890,9 @@ describe("setLearnerAralTeacher", () => {
   });
 
   it("is a no-op when the same teacher is already designated", async () => {
-    learners[0].aralTeacherId = TUTOR_OK;
+    learners[0].aralTeacherId = TEACHER_OK;
 
-    const res = await setLearnerAralTeacher(assign(LEARNER_A, TUTOR_OK));
+    const res = await setLearnerAralTeacher(assign(LEARNER_A, TEACHER_OK));
 
     // Binds to `if (learner.aralTeacherId === nextAralTeacherId) return`.
     expect(res).toEqual({ ok: true });
@@ -901,7 +901,7 @@ describe("setLearnerAralTeacher", () => {
   });
 
   it("asks the session guard for the SCHOOL_HEAD role, not TEACHER", async () => {
-    await setLearnerAralTeacher(assign(LEARNER_A, TUTOR_OK));
+    await setLearnerAralTeacher(assign(LEARNER_A, TEACHER_OK));
 
     // Binds to `requireSchoolUser("SCHOOL_HEAD")`: a teacher must not grant
     // themselves the designation that gives ARAL-only access.

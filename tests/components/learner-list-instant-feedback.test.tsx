@@ -70,8 +70,8 @@ vi.mock("@/lib/actions/learner", () => ({
     data: { enrolled: 0, redesignated: 0 },
   })),
 }));
-vi.mock("@/lib/actions/aral-tutors", () => ({
-  listAralTutorOptions: vi.fn().mockResolvedValue({ ok: true, data: { tutors: [], selfId: "self" } }),
+vi.mock("@/lib/actions/aral-teachers", () => ({
+  listAralTeacherOptions: vi.fn().mockResolvedValue({ ok: true, data: { teachers: [], selfId: "self" } }),
 }));
 vi.mock("@/components/nav-prefetcher", () => ({
   invalidateNavWarm: vi.fn(),

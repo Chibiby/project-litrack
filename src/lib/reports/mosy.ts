@@ -100,7 +100,7 @@ export type MosyLearner = {
   middleName: string | null;
   lastName: string;
   isAralLearner: boolean;
-  aralTutorName: string | null;
+  aralTeacherName: string | null;
   record: MosyReadingRecord | null;
   profile: MosyAralProfileInfo | null;
   /** `null` when unset — grouped into neither the Male nor Female summary row. */
@@ -523,7 +523,7 @@ function buildLearnerDetailBlock(learners: MosyLearner[]): ReportBlock {
       learner.gradeLabel,
       learner.sectionName ?? null,
       learner.isAralLearner ? "Yes" : "No",
-      learner.isAralLearner ? (learner.aralTutorName ?? null) : null,
+      learner.isAralLearner ? (learner.aralTeacherName ?? null) : null,
       record ? formatAssessmentMonth(record.weekStartKey) : null,
       labelForBand(record?.englishProfile ?? null, learner.gradeType),
       labelForBand(record?.filipinoProfile ?? null, learner.gradeType),
@@ -551,7 +551,7 @@ function buildLearnerDetailBlock(learners: MosyLearner[]): ReportBlock {
       { header: "Grade", width: 14 },
       { header: "Section", width: 14 },
       { header: "ARAL", width: 8 },
-      { header: "ARAL Tutor", width: 20 },
+      { header: "ARAL Teacher", width: 20 },
       { header: "Assessment Month", width: 18 },
       { header: "English", width: 20 },
       { header: "Filipino", width: 20 },

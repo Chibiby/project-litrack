@@ -21,7 +21,7 @@ export const ADMIN_ROUTES = {
   // Management
   learners: "/admin/management/learners",
   teachers: "/admin/management/teachers",
-  aralTutors: "/admin/management/aral-tutors",
+  aralTeachers: "/admin/management/aral-teachers",
   schoolHeads: "/admin/management/school-heads",
   schools: "/admin/management/schools",
   newSchool: "/admin/management/schools/new",

@@ -22,7 +22,7 @@ export function parseProfilingStatus(raw: string | undefined): ProfilingStatusFi
 }
 
 export type ProfilingStatsInput = {
-  /** Every ARAL learner in the teacher's tutor scope. */
+  /** Every ARAL learner in the teacher's ARAL teacher scope. */
   total: number;
   /** Learners in scope with no saved `AralProfile`. */
   pending: number;

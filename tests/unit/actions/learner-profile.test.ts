@@ -168,12 +168,12 @@ describe("getLearnerProfile — teacher scope", () => {
     expect(res.data.archivedAt).toBe(formatLocalDateKey(new Date(2026, 6, 1)));
   });
 
-  it("returns a learner the teacher only holds as ARAL tutor", async () => {
+  it("returns a learner the teacher only holds as ARAL teacher", async () => {
     const res = await getLearnerProfile("own-aral");
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.data.isAralLearner).toBe(true);
-    expect(res.data.aralTutorName).toBe("Teacher One");
+    expect(res.data.aralTeacherName).toBe("Teacher One");
   });
 
   it("hides a learner in the same school but another teacher's care", async () => {
@@ -326,7 +326,7 @@ describe("getLearnerProfile — serialisation", () => {
     if (!res.ok) return;
     expect(res.data.sectionName).toBeNull();
     expect(res.data.adviserName).toBeNull();
-    expect(res.data.aralTutorName).toBeNull();
+    expect(res.data.aralTeacherName).toBeNull();
     expect(res.data.aralEnrolledAt).toBeNull();
   });
 });

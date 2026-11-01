@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { AralTutorRow } from "@/lib/admin/aral-tutors";
+import type { AralTeacherRow } from "@/lib/admin/aral-teachers";
 
 beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -15,19 +15,19 @@ beforeAll(() => {
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/school-head/aral-tutors",
+  usePathname: () => "/school-head/aral-teachers",
   useSearchParams: () => new URLSearchParams(""),
 }));
 
-const { AralTutorsTable, formatTutorGrades } = await import(
-  "@/components/admin/management/aral-tutors-table"
+const { AralTeachersTable, formatTeacherGrades } = await import(
+  "@/components/admin/management/aral-teachers-table"
 );
 
 afterEach(cleanup);
 
-const BASE = "/school-head/aral-tutors";
+const BASE = "/school-head/aral-teachers";
 
-function row(overrides: Partial<AralTutorRow> = {}): AralTutorRow {
+function row(overrides: Partial<AralTeacherRow> = {}): AralTeacherRow {
   return {
     id: "t1",
     listingName: "Cruz, Ana",
@@ -46,12 +46,12 @@ function row(overrides: Partial<AralTutorRow> = {}): AralTutorRow {
 }
 
 function renderTable(
-  props: Partial<React.ComponentProps<typeof AralTutorsTable>> & { totalCount?: number; q?: string } = {}
+  props: Partial<React.ComponentProps<typeof AralTeachersTable>> & { totalCount?: number; q?: string } = {}
 ) {
   const { totalCount, q = "", ...rest } = props;
   const rows = rest.rows ?? [];
   return render(
-    <AralTutorsTable
+    <AralTeachersTable
       rows={rows}
       filters={[]}
       basePath={BASE}
@@ -62,24 +62,24 @@ function renderTable(
   );
 }
 
-describe("formatTutorGrades", () => {
+describe("formatTeacherGrades", () => {
   it("joins grades with a middle dot and puts the learner count in brackets", () => {
-    expect(formatTutorGrades(row().grades)).toBe("Grade 3 (4) · Grade 4 (2)");
+    expect(formatTeacherGrades(row().grades)).toBe("Grade 3 (4) · Grade 4 (2)");
   });
 });
 
-describe("AralTutorsTable", () => {
-  it("shows the empty state when no teacher tutors ARAL learners", () => {
+describe("AralTeachersTable", () => {
+  it("shows the empty state when no teacher is designated an ARAL teacher", () => {
     renderTable();
-    expect(screen.getByText("No teacher is tutoring ARAL learners yet")).not.toBeNull();
+    expect(screen.getByText("No ARAL teachers yet")).not.toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.queryByText(/no tutor\./)).toBeNull();
+    expect(screen.queryByText(/no teacher\./)).toBeNull();
   });
 
-  it("says nothing matches, with a way back, when a search finds no tutor", () => {
+  it("says nothing matches, with a way back, when a search finds no teacher", () => {
     renderTable({ q: "zzz", totalCount: 0 });
-    expect(screen.getByText("No tutors match")).not.toBeNull();
-    expect(screen.queryByText("No teacher is tutoring ARAL learners yet")).toBeNull();
+    expect(screen.getByText("No teachers match")).not.toBeNull();
+    expect(screen.queryByText("No ARAL teachers yet")).toBeNull();
     expect(screen.getByRole("link", { name: "Clear filters" }).getAttribute("href")).toBe(BASE);
   });
 
@@ -94,7 +94,7 @@ describe("AralTutorsTable", () => {
     expect(within(table).queryByRole("columnheader", { name: "School" })).toBeNull();
   });
 
-  it("marks a Non-DepEd volunteer and a tutor with no advisory", () => {
+  it("marks a Non-DepEd volunteer and a teacher with no advisory", () => {
     renderTable({
       rows: [
         row({
@@ -120,7 +120,7 @@ describe("AralTutorsTable", () => {
 
   it("never nests a block element in a paragraph in the mobile card list", () => {
     renderTable({ rows: [row(), row({ id: "t2", employment: "NON_DEPED" })] });
-    const list = screen.getByRole("list", { name: "ARAL tutors" });
+    const list = screen.getByRole("list", { name: "ARAL teachers" });
     expect(list.querySelectorAll("p div")).toHaveLength(0);
     const chip = within(list).getAllByText("DepEd")[0]!;
     expect(chip.closest("p")).toBeNull();
@@ -128,7 +128,7 @@ describe("AralTutorsTable", () => {
 
   it("renders no dash in the mobile card when employment is unknown, but keeps it in the table", () => {
     renderTable({ rows: [row({ employment: null, employmentLabel: null })] });
-    const list = screen.getByRole("list", { name: "ARAL tutors" });
+    const list = screen.getByRole("list", { name: "ARAL teachers" });
     expect(within(list).queryByText("—")).toBeNull();
     expect(within(screen.getByRole("table")).getAllByText("—").length).toBeGreaterThan(0);
   });

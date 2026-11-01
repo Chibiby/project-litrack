@@ -7,8 +7,10 @@ import {
   ClipboardList,
   GraduationCap,
   ShieldAlert,
+  UserCheck,
   UserRound,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +26,8 @@ export const SUMMARY_FACET_ICON: Record<SummaryFacetId, LucideIcon> = {
   compliance: ShieldAlert,
   profiling: UserRound,
   aral: GraduationCap,
+  "aral-teachers": UserCheck,
+  advisory: UsersRound,
 };
 
 const PRIMARY_TILE = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200";
@@ -40,6 +44,8 @@ export const SUMMARY_FACET_TILE: Record<SummaryFacetId, string> = {
   compliance: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
   profiling: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
   aral: ARAL_TILE,
+  "aral-teachers": ARAL_TILE,
+  advisory: PRIMARY_TILE,
 };
 
 /** One card per summary facet, linking to `${basePath}/<facet>`. */

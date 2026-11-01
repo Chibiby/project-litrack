@@ -17,7 +17,7 @@ import {
 } from "@/lib/validators/summary.schema";
 import { resolveScopeSchools } from "@/lib/summary/scope-schools";
 import { scopeRaw, type ScopableRow, type ScopedRaw } from "@/lib/summary/scoped-raw";
-import { aralReportTable, complianceReportTable, summaryReportTable } from "@/lib/summary/export";
+import { complianceReportTable, exportListReportTable, summaryReportTable } from "@/lib/summary/export";
 import { SUMMARY_FACET_META } from "@/lib/summary/facet-meta";
 import {
   defaultJulyMonth,
@@ -35,7 +35,14 @@ import { queryAttendanceRows, shapeAttendance } from "@/lib/summary/queries/atte
 import { queryReadingLevelRows, shapeReadingLevels } from "@/lib/summary/queries/reading-levels";
 import { queryComplianceRows, shapeCompliance } from "@/lib/summary/queries/compliance";
 import { queryProfilingRows, shapeProfiling } from "@/lib/summary/queries/profiling";
-import { queryAralRows, shapeAral } from "@/lib/summary/queries/aral";
+import {
+  queryAralLearnerRows,
+  queryAralTeacherRows,
+  queryAdvisoryRows,
+  shapeAral,
+  shapeAralTeachers,
+  shapeAdvisory,
+} from "@/lib/summary/queries/aral";
 import {
   SUMMARY_FACET_IDS,
   type FacetResult,
@@ -102,9 +109,12 @@ export type SummaryFacet = {
  * Cache-key version for every summary entry. Bump when a raw entry's shape
  * changes. v2: division-wide raw rows (end-of-term rows carry `label`, no
  * `selected` row). v3: the raw entry is `{ computedAt, rows }` and is the only
- * facet entry (no per-scope shaped entry).
+ * facet entry (no per-scope shaped entry). v4: `aral` is learners only, with
+ * the teacher rows moved to `aral-teachers` (no old combined blob is read).
+ * v5: the ARAL teachers facet renamed to `aral-teachers` (raw fields `teacher` /
+ * `teacherGrade`), and facet `advisory` added.
  */
-export const SUMMARY_CACHE_VERSION = "v3";
+export const SUMMARY_CACHE_VERSION = "v5";
 
 /** A facet's division raw entry: the rows and when the SQL read them ("Figures as of"). */
 export type DivisionRaw<T> = { computedAt: string; rows: T[] };
@@ -261,8 +271,8 @@ function defineFacet<S extends z.ZodTypeAny, R extends ResolvedParams, T extends
     toReportTable:
       def.id === "compliance"
         ? complianceReportTable
-        : def.id === "aral"
-          ? aralReportTable
+        : def.id === "aral" || def.id === "aral-teachers" || def.id === "advisory"
+          ? exportListReportTable
           : summaryReportTable,
   };
 }
@@ -395,9 +405,29 @@ export const SUMMARY_FACETS: Record<SummaryFacetId, SummaryFacet> = {
     params: levelOnlyParamsSchema,
     resolve: (p) => ({ level: p.level }),
     queryInput: () => ({}),
-    query: () => queryAralRows(),
+    query: () => queryAralLearnerRows(),
     shape: (raw, { schools, params, computedAt }) =>
       shapeAral({ raw, schools, level: params.level, computedAt }),
+  }),
+
+  "aral-teachers": defineFacet({
+    id: "aral-teachers",
+    params: levelOnlyParamsSchema,
+    resolve: (p) => ({ level: p.level }),
+    queryInput: () => ({}),
+    query: () => queryAralTeacherRows(),
+    shape: (raw, { schools, params, computedAt }) =>
+      shapeAralTeachers({ raw, schools, level: params.level, computedAt }),
+  }),
+
+  advisory: defineFacet({
+    id: "advisory",
+    params: levelOnlyParamsSchema,
+    resolve: (p) => ({ level: p.level }),
+    queryInput: () => ({}),
+    query: () => queryAdvisoryRows(),
+    shape: (raw, { schools, params, computedAt }) =>
+      shapeAdvisory({ raw, schools, level: params.level, computedAt }),
   }),
 };
 

@@ -33,7 +33,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
 vi.mock("@/lib/teachers/scope", () => ({
   aralLearnerScope: () => ({}),
   teacherGradeScope: () => ({}),
-  teacherIsAralTutorFor: async () => true,
+  teacherIsAralTeacherFor: async () => true,
 }));
 
 const { setAttendanceDayHoliday } = await import("@/lib/actions/attendance");

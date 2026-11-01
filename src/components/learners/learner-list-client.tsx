@@ -65,9 +65,9 @@ import { archiveLearners, restoreLearner } from "@/lib/actions/learner";
 import { callAction } from "@/lib/ui/call-action";
 import { LearnerProfileModal } from "@/components/learners/learner-profile-modal";
 import {
-  AssignAralTutorDialog,
-  type AssignAralTutorTarget,
-} from "@/components/learners/assign-aral-tutor-dialog";
+  AssignAralTeacherDialog,
+  type AssignAralTeacherTarget,
+} from "@/components/learners/assign-aral-teacher-dialog";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -243,8 +243,8 @@ function LearnerListPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** Learner whose read-only profile dialog is open; `null` when closed. */
   const [profileLearnerId, setProfileLearnerId] = useState<string | null>(null);
-  /** Subject of the open ARAL tutor picker; `null` when closed. */
-  const [aralTarget, setAralTarget] = useState<AssignAralTutorTarget | null>(
+  /** Subject of the open ARAL teacher picker; `null` when closed. */
+  const [aralTarget, setAralTarget] = useState<AssignAralTeacherTarget | null>(
     null
   );
   /** Learners awaiting archive confirmation; `null` when no confirm is open. */
@@ -445,7 +445,7 @@ function LearnerListPanel({
     setAralTarget({
       learnerIds: [l.id],
       learnerName: l.fullName,
-      currentTutorId: null,
+      currentTeacherId: null,
       enrolling: true,
     });
 
@@ -463,8 +463,8 @@ function LearnerListPanel({
     setAralTarget({
       learnerIds: rows.map((l) => l.id),
       learnerName: rows.length === 1 ? (rows[0]?.fullName ?? null) : null,
-      currentTutorId: null,
-      // Every one of them already in ARAL makes this a change of tutor, and the
+      currentTeacherId: null,
+      // Every one of them already in ARAL makes this a change of ARAL teacher, and the
       // dialog says so rather than offering to enroll them twice.
       enrolling: rows.some((l) => !l.isAralLearner),
     });
@@ -856,7 +856,7 @@ function LearnerListPanel({
       {/* Also one instance, and for the same reason: the row menu and the bulk
           menu are two ways into one decision, so they set its subject rather
           than each carrying a dialog of their own. */}
-      <AssignAralTutorDialog
+      <AssignAralTeacherDialog
         target={aralTarget}
         onClose={() => setAralTarget(null)}
         onDone={() => setSelected(new Set())}

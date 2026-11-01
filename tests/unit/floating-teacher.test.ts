@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { teacherProfileSchema } from "@/lib/validators/profile.schema";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
-import { aralTutorScope } from "@/lib/teachers/aral-tutor";
+import { aralTeacherScope } from "@/lib/teachers/aral-teacher";
 import { getAdvisoryPlacements } from "@/lib/teachers/advisory";
 
 /**
@@ -124,15 +124,15 @@ describe("teacherProfileSchema — the floating declaration", () => {
   });
 });
 
-describe("aralTutorScope — a floating teacher may still tutor", () => {
+describe("aralTeacherScope — a floating teacher may still teacher", () => {
   /**
    * Point 2 of §5: "Already true and must stay true." This is the test the
-   * design asked for. `aralTutorScope` is what makes an ARAL-only teacher work
+   * design asked for. `aralTeacherScope` is what makes an ARAL-only teacher work
    * at all, and adding an advisory requirement to it would silently undo the
    * whole concern.
    */
   it("requires no advisory section of any kind", () => {
-    const where = aralTutorScope("school-malandag");
+    const where = aralTeacherScope("school-malandag");
 
     expect(where).toEqual({
       schoolId: "school-malandag",

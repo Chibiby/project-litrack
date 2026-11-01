@@ -40,15 +40,15 @@ async function loadValidSections(
  * giving up — `Learner.teacherId` AND `Learner.aralTeacherId` — plus the
  * matching ACTIVE `Enrollment.teacherId`. Both learner pointers go, not just
  * the advisory one: a School Head moving a teacher off a section expects the
- * roster (`/teacher/learners`) AND the ARAL tutor list to actually let go,
+ * roster (`/teacher/learners`) AND the ARAL teacher list to actually let go,
  * not keep listing an ex-adviser who no longer sees the section anywhere. A
- * School Head re-designates an ARAL tutor afterwards; this does not hand the
+ * School Head re-designates an ARAL teacher afterwards; this does not hand the
  * ARAL seat to whichever teacher happens to take the section next (that only
  * happens for `teacherId`, in the `add` branch above).
  *
  * Scoped by `sectionId` (and `schoolId`), never by `teacherId` alone: `remove`
  * gives up exactly ONE section, so a teacher's other advisories must not be
- * swept along with it, and a learner this teacher tutors ARAL for in a
+ * swept along with it, and a learner this teacher teaches in ARAL in a
  * section they don't advise is out of scope for this call entirely. The
  * `teacherId` / `aralTeacherId` equality inside each `where` is a second
  * guard on top of that: a learner already reassigned to someone else (e.g. by

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EnrollToAralDialog } from "@/components/aral/enroll-to-aral-dialog";
-import { listAralTutors } from "@/lib/teachers/aral-tutor";
+import { listAralTeachers } from "@/lib/teachers/aral-teacher";
 
 /**
  * The "Enroll to ARAL" header control, with the two lists it needs.
@@ -32,7 +32,7 @@ export async function AralEnrollAction({
   schoolId: string;
   teacherId: string;
 }) {
-  const [enrollCandidates, tutors] = await Promise.all([
+  const [enrollCandidates, aralTeachers] =await Promise.all([
     prisma.learner.findMany({
       where: {
         gradeLevelId: gradeId,
@@ -48,7 +48,7 @@ export async function AralEnrollAction({
       },
       orderBy: { fullName: "asc" },
     }),
-    listAralTutors(schoolId),
+    listAralTeachers(schoolId),
   ]);
 
   const candidates = enrollCandidates.map((l) => ({
@@ -61,7 +61,7 @@ export async function AralEnrollAction({
     <EnrollToAralDialog
       gradeId={gradeId}
       candidates={candidates}
-      tutors={tutors}
+      teachers={aralTeachers}
       selfId={teacherId}
     />
   );

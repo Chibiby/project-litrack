@@ -29,8 +29,8 @@ export type ReleasedAdvisory = {
  *     adviser (who picks them up; see `setTeacherAdvisory`'s `add`).
  *   - `Learner.aralTeacherId`, for the same learners — `setTeacherAdvisory`'s
  *     `clear` drops it section-by-section for every section this teacher gave
- *     up, so a departing adviser stops being listed as anyone's ARAL tutor for
- *     a roster they no longer hold. A School Head re-designates a tutor after.
+ *     up, so a departing adviser stops being listed as anyone's ARAL teacher for
+ *     a roster they no longer hold. A School Head re-designates an ARAL teacher after.
  *   - `Enrollment.teacherId` on the ACTIVE row only, so it keeps agreeing with
  *     the learner row. Closed enrolments are history and keep who advised them.
  *

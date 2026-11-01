@@ -145,7 +145,7 @@ it("does not purge when the learner was restored before the in-transaction re-ch
   txLearnerFindFirst.mockResolvedValue(null);
   const res = await purgeArchivedLearner(fd(NAME));
   expect(res).toMatchObject({ ok: false });
-  // The re-read repeats tenant, archived-or-removed AND adviser-or-ARAL-tutor.
+  // The re-read repeats tenant, archived-or-removed AND adviser-or-ARAL-teacher.
   expect(txLearnerFindFirst.mock.calls[0][0].where).toEqual({
     id: LEARNER_ID,
     schoolId: SCHOOL_ID,

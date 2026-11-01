@@ -29,7 +29,7 @@ import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache
 import {
   aralLearnerScope,
   teacherGradeScope,
-  teacherIsAralTutorFor,
+  teacherIsAralTeacherFor,
 } from "@/lib/teachers/scope";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
@@ -58,10 +58,10 @@ export const markAttendance = action("markAttendance", async (formData: FormData
   if (!learner) throw resourceNotFound("Learner");
 
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-  // The designated ARAL tutor, not merely the adviser: attendance here is the
+  // The designated ARAL teacher, not merely the adviser: attendance here is the
   // ARAL programme's record, and the teacher running it for this learner is the
   // one entitled to write it.
-  if (!teacherIsAralTutorFor(learner, user.id)) throw resourceNotFound("Learner");
+  if (!teacherIsAralTeacherFor(learner, user.id)) throw resourceNotFound("Learner");
   if (!learner.isAralLearner) {
     return { ok: false, error: "Attendance tracking is only for ARAL learners" };
   }
@@ -239,7 +239,7 @@ export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async
       id: { in: learnerIds },
       schoolId: user.schoolId,
       gradeLevelId: grade.id,
-      // The designated tutor only. An adviser is not entitled to encode the
+      // The designated ARAL teacher only. An adviser is not entitled to encode the
       // ARAL week for a learner somebody else runs the programme for, even
       // though the learner sits in their class.
       ...aralLearnerScope(user.id),

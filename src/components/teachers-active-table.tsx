@@ -48,6 +48,7 @@ import { SortSelect } from "@/components/ui/sort-select";
 import type { SortOption } from "@/lib/sort/registry";
 import { RefreshCw, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { designationLabel } from "@/lib/validators/profile.schema";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
 import { callAction } from "@/lib/ui/call-action";
 import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
@@ -879,7 +880,7 @@ function TeachersManagedTable({
               >
                 <SelectItem value="all">All active teachers</SelectItem>
                 <SelectItem value="non-deped-aral-volunteer">
-                  Non-DepEd ARAL Volunteer
+                  Non-DepEd ARAL Teacher
                 </SelectItem>
                 <SelectItem value="teacher">Teacher</SelectItem>
                 <SelectItem value="floating">Floating</SelectItem>
@@ -1047,10 +1048,10 @@ function TeachersManagedTable({
                         Hasn&apos;t finished profiling
                       </span>
                     ) : readOnly ? (
-                      row.designation
+                      designationLabel(row.designation)
                     ) : (
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span>{row.designation}</span>
+                        <span>{designationLabel(row.designation)}</span>
                         <TeacherRoleDialog
                           row={row}
                           onSaved={() =>
@@ -1158,10 +1159,10 @@ function TeachersManagedTable({
                       {row.designation === null ? (
                         "Hasn't finished profiling"
                       ) : readOnly ? (
-                        row.designation
+                        designationLabel(row.designation)
                       ) : (
                         <span className="inline-flex flex-wrap items-center gap-1.5">
-                          {row.designation}
+                          {designationLabel(row.designation)}
                           <TeacherRoleDialog
                             row={row}
                             onSaved={() =>

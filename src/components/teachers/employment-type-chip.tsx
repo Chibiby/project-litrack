@@ -3,10 +3,10 @@ import { EMPLOYMENT_TYPE_LABELS } from "@/lib/constants/enum-labels";
 
 /**
  * Whether a teacher holds a DepEd plantilla item, shown beside their name
- * wherever an ARAL tutor is chosen.
+ * wherever an ARAL teacher is chosen.
  *
  * DISPLAY ONLY. It answers "who am I picking?", never "who may I pick?" — a
- * non-DepEd teacher is a valid ARAL tutor, which is the whole reason the field
+ * non-DepEd teacher is a valid ARAL teacher, which is the whole reason the field
  * exists. Nothing here filters, disables or reorders a list.
  *
  * `null` renders nothing rather than an "Unknown" chip: most profiles predate

@@ -143,7 +143,7 @@ export function LearnerRosterNav({
 }: {
   basePath: string;
   state: RosterUrlState;
-  /** Hidden for Super Admin, who tutors nobody. */
+  /** Hidden for Super Admin, who teaches no ARAL learners. */
   showProfiling: boolean;
   addControl?: React.ReactNode;
 }) {

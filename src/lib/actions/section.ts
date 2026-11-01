@@ -159,10 +159,10 @@ export const updateSection = action("updateSection", async (formData: FormData):
 
   revalidatePath(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   revalidateSchoolDashboard(user.schoolId);
-  // `listAralTutors` builds each teacher's `advisoryLabel` from
+  // `listAralTeachers` builds each teacher's `advisoryLabel` from
   // `advisorySection.name`, so a rename changes that cached list without
   // touching a single `User` row. Nothing else here busts `schoolTeachers`,
-  // and every ARAL tutor picker would keep the old section name for the
+  // and every ARAL teacher picker would keep the old section name for the
   // entry's remaining TTL.
   revalidateSchoolTeachers(user.schoolId);
   return { ok: true };

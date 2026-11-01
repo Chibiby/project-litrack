@@ -83,10 +83,10 @@ vi.mock("@/lib/actions/learner", () => ({
     enrollRosterLearnersToAral(...(args as [])),
 }));
 
-/** The tutor picker's list. A server action, so it is stubbed, not imported. */
-const listAralTutorOptions = vi.fn();
-vi.mock("@/lib/actions/aral-tutors", () => ({
-  listAralTutorOptions: () => listAralTutorOptions(),
+/** The teacher picker's list. A server action, so it is stubbed, not imported. */
+const listAralTeacherOptions = vi.fn();
+vi.mock("@/lib/actions/aral-teachers", () => ({
+  listAralTeacherOptions: () => listAralTeacherOptions(),
 }));
 
 vi.mock("@/components/nav-prefetcher", () => ({
@@ -140,7 +140,7 @@ function makeLearner(
     adviserName: "Teacher One",
     isAralLearner: false,
     aralEnrolledAt: null,
-    aralTutorName: null,
+    aralTeacherName: null,
     aralTeacherId: null,
     archivedAt: null,
     createdAt: "2026-06-10",
@@ -207,7 +207,7 @@ function footerLabels(): string[] {
 
 /**
  * The ARAL action's current label, by name rather than by position: an enrolled
- * learner also gets Transfer tutor, so the footer's length is not fixed and an
+ * learner also gets Transfer teacher, so the footer's length is not fixed and an
  * index would be asserting the wrong thing.
  */
 function aralActionLabel(): string | undefined {
@@ -232,11 +232,11 @@ beforeEach(() => {
     data: { enrolled: 1, redesignated: 0 },
   });
   // One plantilla teacher (this one, hence `selfId`) and one volunteer, because
-  // the brief admits both as tutors.
-  listAralTutorOptions.mockResolvedValue({
+  // the brief admits both as teachers.
+  listAralTeacherOptions.mockResolvedValue({
     ok: true,
     data: {
-      tutors: [
+      teachers: [
         {
           id: "self",
           name: "Marivic Reyes",
@@ -267,9 +267,9 @@ beforeAll(async () => {
   // yet, and leave nothing behind: unmount, then clear every mock and module
   // state a real test relies on being empty at test start.
   getLearnerProfile.mockResolvedValue({ ok: true, data: makeLearner() });
-  listAralTutorOptions.mockResolvedValue({
+  listAralTeacherOptions.mockResolvedValue({
     ok: true,
-    data: { tutors: [], selfId: null },
+    data: { teachers: [], selfId: null },
   });
   renderModal();
   await awaitLoaded();
@@ -360,7 +360,7 @@ describe("LearnerProfileModal — view mode is read-only", () => {
     await awaitLoaded();
 
     // Every tab, no exceptions: the one control that used to live in one —
-    // changing the ARAL tutor — is a footer action now.
+    // changing the ARAL teacher — is a footer action now.
     for (const tab of ["Profile", "Attendance", "Reading Level", "Grades", "ARAL Progress"]) {
       fireEvent.click(screen.getByRole("tab", { name: tab }));
       const panel = within(screen.getByRole("tabpanel"));
@@ -468,20 +468,20 @@ describe("LearnerProfileModal — footer actions", () => {
     expect(screen.getByRole("dialog")).not.toBeNull();
   });
 
-  it("asks who will tutor before it enrolls, instead of confirming blindly", async () => {
+  it("asks who will teacher before it enrolls, instead of confirming blindly", async () => {
     renderModal();
     await awaitLoaded();
 
     fireEvent.click(screen.getByRole("button", { name: "Enroll as ARAL" }));
 
     // Enrolment carries a decision — who tracks this learner's weekly progress —
-    // so the footer opens the tutor picker rather than a confirm sheet, and
+    // so the footer opens the teacher picker rather than a confirm sheet, and
     // writes nothing until that picker is confirmed.
     const picker = await screen.findByRole("dialog", {
       name: "Enroll Ana Santos in ARAL",
     });
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(listAralTutorOptions).toHaveBeenCalled();
+    expect(listAralTeacherOptions).toHaveBeenCalled();
     expect(enrollRosterLearnersToAral).not.toHaveBeenCalled();
     expect(toggleAralLearner).not.toHaveBeenCalled();
 
@@ -496,13 +496,13 @@ describe("LearnerProfileModal — footer actions", () => {
       data: makeLearner({
         isAralLearner: true,
         aralEnrolledAt: "2026-08-20",
-        aralTutorName: "Marivic Reyes",
+        aralTeacherName: "Marivic Reyes",
         aralTeacherId: "self",
       }),
     });
     fireEvent.click(within(picker).getByRole("button", { name: "Enroll" }));
 
-    // Keeping the learner yourself sends no tutor at all — the action reads an
+    // Keeping the learner yourself sends no teacher at all — the action reads an
     // omitted designation as "whoever enrolled them".
     await waitFor(() =>
       expect(enrollRosterLearnersToAral).toHaveBeenCalledWith({
@@ -515,13 +515,13 @@ describe("LearnerProfileModal — footer actions", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("confirms a removal, then drops the tutor along with the enrolment", async () => {
+  it("confirms a removal, then drops the teacher along with the enrolment", async () => {
     getLearnerProfile.mockResolvedValue({
       ok: true,
       data: makeLearner({
         isAralLearner: true,
         aralEnrolledAt: "2026-07-01",
-        aralTutorName: "Grace Lim",
+        aralTeacherName: "Grace Lim",
         aralTeacherId: "vol-9",
       }),
     });
@@ -545,7 +545,7 @@ describe("LearnerProfileModal — footer actions", () => {
     expect(toastSuccess).toHaveBeenCalledWith("Removed from ARAL");
     expect(refresh).toHaveBeenCalled();
     // The action clears the designation on its way out, so the tab must not go
-    // on printing a tutor for a learner who has left the program.
+    // on printing a teacher for a learner who has left the program.
     expect(screen.queryByText("Grace Lim")).toBeNull();
   });
 
@@ -556,7 +556,7 @@ describe("LearnerProfileModal — footer actions", () => {
     });
     renderModal();
     await awaitLoaded();
-    expect(footerLabels()).toEqual(["Transfer tutor", "Remove from ARAL", "Edit"]);
+    expect(footerLabels()).toEqual(["Transfer ARAL teacher", "Remove from ARAL", "Edit"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove from ARAL" }));
 
@@ -621,14 +621,14 @@ describe("LearnerProfileModal — footer actions", () => {
   });
 });
 
-describe("LearnerProfileModal — Transfer tutor", () => {
+describe("LearnerProfileModal — Transfer teacher", () => {
   const enrolledUnder = (name: string | null, id: string | null) =>
     getLearnerProfile.mockResolvedValue({
       ok: true,
       data: makeLearner({
         isAralLearner: true,
         aralEnrolledAt: "2026-07-01",
-        aralTutorName: name,
+        aralTeacherName: name,
         aralTeacherId: id,
       }),
     });
@@ -643,30 +643,30 @@ describe("LearnerProfileModal — Transfer tutor", () => {
     // rather than opening a tab.
     expect(footerLabels()).toEqual([
       "Request transfer",
-      "Transfer tutor",
+      "Transfer ARAL teacher",
       "Remove from ARAL",
       "Edit",
     ]);
   });
 
-  it("reassigns from the footer, starting on the current tutor", async () => {
+  it("reassigns from the footer, starting on the current teacher", async () => {
     enrolledUnder("Jun Dela Cruz", "vol-1");
     renderModal();
     await awaitLoaded();
 
     fireEvent.click(
-      within(footer()).getByRole("button", { name: "Transfer tutor" })
+      within(footer()).getByRole("button", { name: "Transfer ARAL teacher" })
     );
 
     const picker = await screen.findByRole("dialog", {
-      name: "Change Ana Santos's ARAL tutor",
+      name: "Change Ana Santos's ARAL teacher",
     });
     // Not a second enrolment: the wording says so, and the picker opens on the
-    // tutor the learner already has rather than resetting to the viewer.
+    // teacher the learner already has rather than resetting to the viewer.
     const trigger = await waitFor(() => within(picker).getByRole("combobox"));
     expect(trigger.textContent).toContain("Jun Dela Cruz");
 
-    fireEvent.click(within(picker).getByRole("button", { name: "Save tutor" }));
+    fireEvent.click(within(picker).getByRole("button", { name: "Save ARAL teacher" }));
     await waitFor(() =>
       expect(enrollRosterLearnersToAral).toHaveBeenCalledWith({
         learnerIds: ["learner-1"],
@@ -677,13 +677,13 @@ describe("LearnerProfileModal — Transfer tutor", () => {
     await waitFor(() => expect(getLearnerProfile).toHaveBeenCalledTimes(2));
   });
 
-  it("keeps the ARAL tab read-only, tutor included", async () => {
+  it("keeps the ARAL tab read-only, teacher included", async () => {
     enrolledUnder("Jun Dela Cruz", "vol-1");
     renderModal();
     await awaitLoaded();
     fireEvent.click(screen.getByRole("tab", { name: "ARAL Progress" }));
 
-    // The tab still names the tutor — that is what it is for — but the control
+    // The tab still names the teacher — that is what it is for — but the control
     // that rewrites it left with the rest of the actions.
     const panel = within(screen.getByRole("tabpanel"));
     expect(panel.getByText("Jun Dela Cruz")).not.toBeNull();
@@ -695,12 +695,12 @@ describe("LearnerProfileModal — Transfer tutor", () => {
     renderModal();
     await awaitLoaded();
 
-    // Enrolled but untutored is the row that needs this button most.
+    // Enrolled but unassigned is the row that needs this button most.
     fireEvent.click(
-      within(footer()).getByRole("button", { name: "Transfer tutor" })
+      within(footer()).getByRole("button", { name: "Transfer ARAL teacher" })
     );
     expect(
-      await screen.findByRole("dialog", { name: "Change Ana Santos's ARAL tutor" })
+      await screen.findByRole("dialog", { name: "Change Ana Santos's ARAL teacher" })
     ).not.toBeNull();
   });
 
@@ -708,21 +708,21 @@ describe("LearnerProfileModal — Transfer tutor", () => {
     renderModal();
     await awaitLoaded();
 
-    // Enroll as ARAL already asks who will tutor, so a second control asking the
+    // Enroll as ARAL already asks who will teacher, so a second control asking the
     // same question would be the same button twice.
-    expect(screen.queryByRole("button", { name: "Transfer tutor" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Transfer ARAL teacher" })).toBeNull();
   });
 
-  it("gives Super Admin no way to change the tutor either", async () => {
+  it("gives Super Admin no way to change the teacher either", async () => {
     enrolledUnder("Jun Dela Cruz", "vol-1");
     renderModal({ isSuperAdmin: true });
     await awaitLoaded();
     fireEvent.click(screen.getByRole("tab", { name: "ARAL Progress" }));
 
-    // The tutor is still named — Super Admin reads the roster, and reading it is
+    // The teacher is still named — Super Admin reads the roster, and reading it is
     // the point — but the control that would rewrite it is not drawn.
     expect(screen.getByText("Jun Dela Cruz")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Transfer tutor" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Transfer ARAL teacher" })).toBeNull();
   });
 
   it("disables the transfer for an archived learner", async () => {
@@ -730,7 +730,7 @@ describe("LearnerProfileModal — Transfer tutor", () => {
       ok: true,
       data: makeLearner({
         isAralLearner: true,
-        aralTutorName: "Jun Dela Cruz",
+        aralTeacherName: "Jun Dela Cruz",
         aralTeacherId: "vol-1",
         archivedAt: "2026-08-01",
       }),
@@ -741,7 +741,7 @@ describe("LearnerProfileModal — Transfer tutor", () => {
     // Disabled rather than hidden, like every other write in this footer: the
     // action still belongs to this learner, it is the learner that is closed.
     expect(
-      within(footer()).getByRole("button", { name: "Transfer tutor" })
+      within(footer()).getByRole("button", { name: "Transfer ARAL teacher" })
     ).toHaveProperty("disabled", true);
   });
 });

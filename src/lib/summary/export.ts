@@ -122,15 +122,15 @@ export function complianceReportTable(result: FacetResult, frame: ReportFrame): 
 }
 
 /**
- * ARAL learners and tutors' `toReportTable`: the result's `exportList` (one
- * row per school, district or scope, counts before percentages) replaces both
- * Category/Count blocks, at every level.
+ * ARAL learners' and ARAL teachers' and Advisory's `toReportTable`: the result's `exportList`
+ * (one row per school, district or scope, counts before percentages) replaces
+ * the Category/Count blocks, at every level.
  */
-export function aralReportTable(result: FacetResult, frame: ReportFrame): ReportTable {
+export function exportListReportTable(result: FacetResult, frame: ReportFrame): ReportTable {
   const list = result.exportList;
   const table = summaryReportTable(result, frame);
   if (!list) return table;
-  // No heading: the report title already says "ARAL learners and tutors".
+  // No heading: the report title already names the facet.
   const block: ReportBlock = {
     columns: list.columns.map((header, i) => ({ header, width: i === 0 ? 36 : header === "District" ? 18 : 11 })),
     rows: list.rows,

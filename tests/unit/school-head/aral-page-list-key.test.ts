@@ -18,8 +18,8 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/teachers/aral-tutor", () => ({
-  listAralTutors: vi.fn(async () => []),
+vi.mock("@/lib/teachers/aral-teacher", () => ({
+  listAralTeachers: vi.fn(async () => []),
 }));
 
 vi.mock("@/lib/school-head/view", () => ({

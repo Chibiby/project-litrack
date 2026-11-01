@@ -89,7 +89,7 @@ export function ProfilingList({
             }
             description={
               status === "all"
-                ? "Learners you tutor in the ARAL program appear here."
+                ? "Learners you teach in the ARAL program appear here."
                 : "Switch tabs or clear a filter to see the other learners."
             }
           />

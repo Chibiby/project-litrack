@@ -38,8 +38,8 @@ vi.mock("@/lib/actions/learner", () => ({
   toggleAralLearner: vi.fn(),
   enrollRosterLearnersToAral: vi.fn(),
 }));
-vi.mock("@/lib/actions/aral-tutors", () => ({
-  listAralTutorOptions: vi.fn(),
+vi.mock("@/lib/actions/aral-teachers", () => ({
+  listAralTeacherOptions: vi.fn(),
 }));
 vi.mock("@/components/nav-prefetcher", () => ({
   invalidateNavWarm: vi.fn(),

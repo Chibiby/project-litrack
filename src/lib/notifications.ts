@@ -35,7 +35,7 @@ function formatLongDateInSchoolTimeZone(date: Date): string {
  * renamed or archived learner leaves no stale text behind.
  */
 
-/** Ceiling on one feed read. A tutor with more waiting has a bigger problem than paging. */
+/** Ceiling on one feed read. An ARAL teacher with more waiting has a bigger problem than paging. */
 const FEED_LIMIT = 20;
 
 /** Names listed in full before the sentence switches to a count. */
@@ -72,7 +72,7 @@ function honorificFor(actor: {
 }
 
 /**
- * Record that `recipientId` was designated the ARAL tutor for `learnerIds`.
+ * Record that `recipientId` was designated the ARAL teacher for `learnerIds`.
  *
  * Never throws, for the same reason `writeAudit` does not: the designation itself
  * has already succeeded and committed. Losing the courtesy message is a smaller
@@ -119,7 +119,7 @@ function describeLearners(names: string[], requested: number): string {
 }
 
 /**
- * A tutor's unread ARAL designations, newest first, as sentences ready to render.
+ * An ARAL teacher's unread ARAL designations, newest first, as sentences ready to render.
  *
  * Tenant-scoped on `schoolId` as well as `recipientId`: the recipient pointer is
  * already specific to one person, but a query that reads learner names must carry
@@ -158,7 +158,7 @@ export async function getUnreadAralAssignments(user: {
 
   // One lookup for every notification's learners at once. Scoped to the school and
   // to rows that still exist and are still ARAL — an unenrolled or archived learner
-  // drops out of the sentence rather than sending the tutor somewhere empty.
+  // drops out of the sentence rather than sending the ARAL teacher somewhere empty.
   const allIds = [...new Set(rows.flatMap((r) => r.learnerIds))];
   const learners = await prisma.learner.findMany({
     where: {

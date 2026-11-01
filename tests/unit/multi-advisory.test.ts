@@ -192,7 +192,7 @@ describe("floating teachers — no advisory, ARAL still open", () => {
   });
 
   it("leaves both ARAL rows live, with their real grade-scoped hrefs", () => {
-    // A floating teacher's ARAL tutoring is untouched: `aralLearnerScope` has
+    // A floating teacher's ARAL teaching is untouched: `aralLearnerScope` has
     // never required an advisory, so closing these rows would take away the only
     // work they have.
     const items = flattenNavGroups(floatingNav());

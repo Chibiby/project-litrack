@@ -98,7 +98,7 @@ export const purgeArchivedLearner = action(
         where: {
           id: learner.id,
           schoolId: user.schoolId,
-          // Archived-or-removed AND adviser-or-ARAL-tutor: both `OR`s, so they
+          // Archived-or-removed AND adviser-or-ARAL-teacher: both `OR`s, so they
           // sit in an `AND` rather than competing for one key.
           AND: [
             { deletedAt: null, archivedAt: { not: null } },

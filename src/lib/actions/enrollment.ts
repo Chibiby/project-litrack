@@ -295,9 +295,9 @@ export const transferLearner = action("transferLearner", async (formData: FormDa
   if (resolvedTeacherId && resolvedTeacherId !== learner.teacherId) {
     revalidateTeacherCaches(resolvedTeacherId);
   }
-  // The designated ARAL tutor holds this grade through `teacherGradeScope`'s
+  // The designated ARAL teacher holds this grade through `teacherGradeScope`'s
   // learner arm, so changing the learner's grade moves their grade set too — and
-  // an ARAL-only tutor has no other path into these caches.
+  // an ARAL-only teacher has no other path into these caches.
   if (learner.aralTeacherId) revalidateTeacherCaches(learner.aralTeacherId);
   return { ok: true };
 }, { verb: "transfer the learner" });
@@ -449,7 +449,7 @@ export const transferLearnerCrossSchool = action(
           gradeLevelId: targetGradeLevelId,
           sectionId: resolvedSectionId,
           teacherId: targetTeacherId,
-          // The designated ARAL tutor belongs to the origin school; keeping the
+          // The designated ARAL teacher belongs to the origin school; keeping the
           // pointer would be a cross-tenant reference.
           aralTeacherId: null,
           archivedAt: null,
@@ -512,7 +512,7 @@ export const transferLearnerCrossSchool = action(
     if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
     revalidateTeacherCaches(targetTeacherId);
     // Same reason as the same-school transfer: `teacherGradeScope`'s learner arm
-    // makes the learner's grade part of their designated tutor's grade set.
+    // makes the learner's grade part of their designated ARAL teacher's grade set.
     if (learner.aralTeacherId) revalidateTeacherCaches(learner.aralTeacherId);
     return { ok: true };
   },

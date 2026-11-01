@@ -27,9 +27,9 @@ import { getTeacherShellGrades } from "@/lib/dashboard/aggregates";
 import { getGradeSections } from "@/lib/cache/grade-sections";
 import { aralLearnerScope, teacherGradeScope } from "@/lib/teachers/scope";
 import {
-  listAralTutors,
-  type AralTutorOption,
-} from "@/lib/teachers/aral-tutor";
+  listAralTeachers,
+  type AralTeacherPickOption,
+} from "@/lib/teachers/aral-teacher";
 import {
   gradeLevelIdWhere,
   parseLearnerListParams,
@@ -264,7 +264,7 @@ export default async function AralDashboard({
   const actionGradeId =
     activeGrade !== "all" ? activeGrade : assignedGradeIds[0]!;
 
-  const [gradeSections, enrollCandidates, tutors] = await Promise.all([
+  const [gradeSections, enrollCandidates, aralTeachers] =await Promise.all([
     getGradeSections({
       schoolId,
       gradeLevelIds: activeGrade === "all" ? assignedGradeIds : [activeGrade],
@@ -297,8 +297,8 @@ export default async function AralDashboard({
     // Empty for Super Admin for the same reason the candidate list above is:
     // with no learners to enroll, there is nobody to designate.
     isSuperAdmin
-      ? Promise.resolve([] as AralTutorOption[])
-      : listAralTutors(schoolId),
+      ? Promise.resolve([] as AralTeacherPickOption[])
+      : listAralTeachers(schoolId),
   ]);
 
   const sectionIds = new Set(gradeSections.map((s) => s.id));
@@ -400,7 +400,7 @@ export default async function AralDashboard({
             <EnrollToAralDialog
               gradeId={actionGradeId}
               candidates={candidates}
-              tutors={tutors}
+              teachers={aralTeachers}
               selfId={user.id}
             />
           )}

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+import { ARAL_VOLUNTEER_DESIGNATION, ARAL_VOLUNTEER_LABEL } from "@/lib/validators/profile.schema";
 
 /**
  * Task 7: the profiling wizard stops locking a volunteer into a separate step
@@ -175,11 +175,11 @@ describe("teacher profiling — advisory mode checkboxes", () => {
   it("removes the section pickers for the Non-DepEd ARAL Volunteer designation", async () => {
     render(<TeacherProfileForm defaultValues={BASE_DEFAULTS} gradeLevels={GRADE_LEVELS} />);
 
-    fireEvent.click(screen.getByRole("button", { name: ARAL_VOLUNTEER_DESIGNATION }));
+    fireEvent.click(screen.getByRole("button", { name: ARAL_VOLUNTEER_LABEL }));
     await goToAssignmentStep();
 
     expect(
-      screen.getByText(/Non-DepEd ARAL Volunteers don't take a teaching assignment/)
+      screen.getByText(/Non-DepEd ARAL teachers don't take a teaching assignment/)
     ).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: "Floating teacher" })).toBeNull();
     expect(screen.queryByLabelText("Current Grade Level / Assignment")).toBeNull();

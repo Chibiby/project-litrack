@@ -282,7 +282,7 @@ export function StatCard({
               className={cn(
                 "font-semibold leading-snug text-foreground sm:text-sm lg:hidden",
                 // Wraps rather than clipping: a two-up phone or tablet row cuts
-                // longer titles ("Learners without a tutor") mid-word otherwise.
+                // longer titles ("Learners without an ARAL teacher") mid-word otherwise.
                 denseOnPhone ? "text-xs break-words" : "text-[13px]"
               )}
             >

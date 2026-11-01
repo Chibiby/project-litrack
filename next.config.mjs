@@ -146,7 +146,21 @@ const nextConfig = {
    * The page's own `redirect()` stays as a fallback.
    */
   async redirects() {
-    return [{ source: "/", destination: "/login", permanent: false }];
+    return [
+      { source: "/", destination: "/login", permanent: false },
+      // "ARAL tutor" became "ARAL teacher": old bookmarks and links keep working.
+      // Query strings are carried over by Next's redirect handling.
+      {
+        source: "/admin/management/aral-tutors/:path*",
+        destination: "/admin/management/aral-teachers/:path*",
+        permanent: false,
+      },
+      {
+        source: "/school-head/aral-tutors/:path*",
+        destination: "/school-head/aral-teachers/:path*",
+        permanent: false,
+      },
+    ];
   },
   // CSP deferred: Next.js App Router relies on inline scripts/styles that make a
   // strict CSP non-trivial without nonces/hashes. Tracked in docs/backlog.md.

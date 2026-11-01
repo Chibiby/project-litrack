@@ -223,7 +223,7 @@ function MosyDecisionForm({
               <span className="text-muted-foreground"> · {gradeSection}</span>
             </p>
             <p className="text-sm text-muted-foreground">
-              You can undo a move-out: the tutor who recorded it can reopen this dialog and
+              You can undo a move-out: the ARAL teacher who recorded it can reopen this dialog and
               choose Stay.
             </p>
           </div>

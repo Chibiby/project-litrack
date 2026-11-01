@@ -1,6 +1,6 @@
 import type { RawCountRow } from "@/lib/summary/queries/population";
 import type { RawAttendanceRow } from "@/lib/summary/queries/attendance";
-import type { RawAralRow } from "@/lib/summary/queries/aral";
+import type { RawAdvisoryRow, RawAralRow } from "@/lib/summary/queries/aral";
 import type { RawComplianceRow } from "@/lib/summary/queries/compliance";
 import type { RawTermRow } from "@/lib/summary/queries/end-of-term";
 import type { RawProfilingRow } from "@/lib/summary/queries/profiling";
@@ -237,8 +237,29 @@ function aralRows(id: string): RawAralRow[] {
   return [
     { school_id: id, field: "grade", bucket: "G3", employment_type: null, designation: null, count: n },
     { school_id: id, field: "grade", bucket: gt, employment_type: null, designation: null, count: 2 },
-    { school_id: id, field: "tutor", bucket: null, employment_type: null, designation, count: 2 },
-    { school_id: id, field: "tutor", bucket: null, employment_type: "NON_DEPED", designation: null, count: 1 },
+  ];
+}
+
+/** Teachers: 3 per school; a teacher counts in every grade they teacher, so the per-grade rows overlap. */
+function aralTeacherRows(id: string): RawAralRow[] {
+  const { gt, designation } = p(id);
+  return [
+    { school_id: id, field: "teacher", bucket: null, employment_type: null, designation, count: 2 },
+    { school_id: id, field: "teacher", bucket: null, employment_type: "NON_DEPED", designation: null, count: 1 },
+    { school_id: id, field: "teacherGrade", bucket: "G3", employment_type: null, designation, count: 2 },
+    { school_id: id, field: "teacherGrade", bucket: "G3", employment_type: "NON_DEPED", designation: null, count: 1 },
+    { school_id: id, field: "teacherGrade", bucket: gt, employment_type: null, designation, count: 1 },
+  ];
+}
+
+/** Advisers: 2 advisory + 1 multi-advisory per school; the multi-advisory teacher advises in G3 and the school's own grade. */
+function advisoryRows(id: string): RawAdvisoryRow[] {
+  const { gt } = p(id);
+  return [
+    { school_id: id, field: "adviser", bucket: "DEFAULT", count: 2 },
+    { school_id: id, field: "adviser", bucket: "MULTI_GRADE", count: 1 },
+    { school_id: id, field: "adviserGrade", bucket: "G3", count: 2 },
+    { school_id: id, field: "adviserGrade", bucket: gt, count: 1 },
   ];
 }
 
@@ -264,6 +285,10 @@ function rowsFor(facet: SummaryFacetId, ids: readonly string[]): AnyRaw[] {
       return ids.flatMap(profilingRows);
     case "aral":
       return ids.flatMap(aralRows);
+    case "aral-teachers":
+      return ids.flatMap(aralTeacherRows);
+    case "advisory":
+      return ids.flatMap(advisoryRows);
   }
 }
 
@@ -292,6 +317,16 @@ function orphanRows(facet: SummaryFacetId): AnyRaw[] {
       return [{ school_id: nul, who: "TEACHER", field: "designation", bucket: "Orphan Designation", count: 9 } as RawProfilingRow];
     case "aral":
       return [{ school_id: nul, field: "grade", bucket: "G9", employment_type: null, designation: null, count: 9 } as RawAralRow];
+    case "aral-teachers":
+      return [
+        { school_id: nul, field: "teacher", bucket: null, employment_type: "NON_DEPED", designation: null, count: 9 },
+        { school_id: nul, field: "teacherGrade", bucket: "G9", employment_type: "NON_DEPED", designation: null, count: 9 },
+      ] as RawAralRow[];
+    case "advisory":
+      return [
+        { school_id: nul, field: "adviser", bucket: "DEFAULT", count: 9 },
+        { school_id: nul, field: "adviserGrade", bucket: "G9", count: 9 },
+      ] as RawAdvisoryRow[];
   }
 }
 

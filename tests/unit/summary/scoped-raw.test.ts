@@ -97,7 +97,7 @@ const { shapeAttendance } = await import("@/lib/summary/queries/attendance");
 const { shapeReadingLevels } = await import("@/lib/summary/queries/reading-levels");
 const { shapeCompliance } = await import("@/lib/summary/queries/compliance");
 const { shapeProfiling } = await import("@/lib/summary/queries/profiling");
-const { shapeAral } = await import("@/lib/summary/queries/aral");
+const { shapeAral, shapeAralTeachers, shapeAdvisory } = await import("@/lib/summary/queries/aral");
 
 type SummaryScope = import("@/lib/auth/admin-scope").SummaryScope;
 type SummaryFacetId = import("@/lib/summary/types").SummaryFacetId;
@@ -121,6 +121,8 @@ const PARAMS: Record<SummaryFacetId, Record<string, string>> = {
   compliance: {},
   profiling: {},
   aral: {},
+  "aral-teachers": {},
+  advisory: {},
 };
 
 /** Scopes and the schools each must cover, written out by hand (name order). */
@@ -219,6 +221,10 @@ function referenceResult(
       return shapeProfiling({ raw, schools, level, computedAt });
     case "aral":
       return shapeAral({ raw, schools, level, computedAt });
+    case "aral-teachers":
+      return shapeAralTeachers({ raw, schools, level, computedAt });
+    case "advisory":
+      return shapeAdvisory({ raw, schools, level, computedAt });
   }
 }
 
@@ -308,6 +314,16 @@ describe("(2) nothing only an out-of-scope school has reaches the output", () =>
           const shown = section("learnersByGrade").buckets.map((b) => b.id);
           for (const g of shown) expect(gts).toContain(g);
         }
+        if (facet === "aral-teachers") {
+          // Per-grade teacher columns only for grades some in-scope school has teachers in.
+          const shown = section("teachersByGrade").buckets.map((b) => b.id.split("|")[0]!);
+          for (const g of shown) expect(gts).toContain(g);
+        }
+        if (facet === "advisory") {
+          // Per-grade adviser columns only for grades some in-scope school has advisers in.
+          const shown = section("advisersByGrade").buckets.map((b) => b.id);
+          for (const g of shown) expect(gts).toContain(g);
+        }
         if (facet === "end-of-term") {
           const labels = new Set(ids.flatMap((id) => PROFILES[id]!.years.map((y) => y.label)));
           for (const l of res.options?.schoolYearLabels ?? []) expect(labels).toContain(l);
@@ -389,7 +405,7 @@ describe("(4) every scope and level of a period runs the SQL once", () => {
     expect(rawCacheKeyParts("attendance", { from: "2026-09", to: "2026-09", todayKey: "2026-10-04" })).toEqual([
       "summary-raw",
       "attendance",
-      "v3",
+      "v5",
       JSON.stringify({ from: "2026-09", to: "2026-09", todayKey: "2026-10-04" }),
     ]);
   });

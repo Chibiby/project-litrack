@@ -929,7 +929,7 @@ export const removeTeacher = action("removeTeacher", async (formData: FormData):
 
   // Advisory learners no longer block removal — they are released below. ARAL
   // designations still do: nothing releases those, so a removed teacher would
-  // stay the named tutor of learners nobody is then tracking. The School Head
+  // stay the named ARAL teacher of learners nobody is then tracking. The School Head
   // designates someone else first.
   if (teacher._count.aralLearners > 0) {
     return {

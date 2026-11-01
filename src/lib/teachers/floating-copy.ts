@@ -19,14 +19,14 @@ import { Sparkles } from "lucide-react";
  * would leave them with no idea what to ask their School Head for.
  *
  * It points at ARAL because that is the surface a floating teacher CAN reach —
- * `aralTutorScope` has never required an advisory, which is what makes an
+ * `aralTeacherScope` has never required an advisory, which is what makes an
  * ARAL-only teacher work at all.
  */
 export const FLOATING_TEACHER_CARD = {
   icon: Sparkles,
   title: "No advisory section yet",
   description:
-    "You don't advise a section, so there is no class roster here. Ask your School Head to assign you one and this page will fill in. Learners you tutor for ARAL are in the ARAL Program, which does not need an advisory section.",
+    "You don't advise a section, so there is no class roster here. Ask your School Head to assign you one and this page will fill in. Learners you teach in ARAL are in the ARAL Program, which does not need an advisory section.",
   actionHref: "/teacher/aral",
   actionLabel: "Go to ARAL Program",
 } as const;
@@ -44,7 +44,7 @@ export const DECLARED_FLOATING_CARD = {
   icon: Sparkles,
   title: "You're a floating teacher",
   description:
-    "Floating teachers don't advise a section, so there is no class roster or end-of-term sheet here. Your School Head can change this. Learners you tutor for ARAL are in the ARAL Program.",
+    "Floating teachers don't advise a section, so there is no class roster or end-of-term sheet here. Your School Head can change this. Learners you teach in ARAL are in the ARAL Program.",
   actionHref: "/teacher/aral",
   actionLabel: "Go to ARAL Program",
 } as const;

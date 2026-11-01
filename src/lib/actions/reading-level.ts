@@ -19,7 +19,7 @@ import { BULK_CHUNK_ROWS, BULK_TX_OPTIONS, chunkRows } from "@/lib/db/bulk-write
 import { revalidateLearnerScoped, revalidateTeacherDashboard } from "@/lib/cache/revalidate";
 import {
   aralLearnerScope,
-  teacherIsAralTutorFor,
+  teacherIsAralTeacherFor,
 } from "@/lib/teachers/scope";
 import {
   formatMonthDeadlineLongDate,
@@ -92,9 +92,9 @@ export const recordReadingLevel = action("recordReadingLevel", async (formData: 
   if (!learner) throw resourceNotFound("Learner");
 
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-  // The designated ARAL tutor, not merely the adviser — same rule as the bulk
+  // The designated ARAL teacher, not merely the adviser — same rule as the bulk
   // path below and as `markAttendance`.
-  if (!teacherIsAralTutorFor(learner, user.id)) throw resourceNotFound("Learner");
+  if (!teacherIsAralTeacherFor(learner, user.id)) throw resourceNotFound("Learner");
   if (!learner.isAralLearner) {
     return { ok: false, error: "Reading-level tracking is only for ARAL learners" };
   }
@@ -209,7 +209,7 @@ export const bulkRecordMonthlyReadingLevel = action("bulkRecordMonthlyReadingLev
     where: {
       id: { in: learnerIds },
       schoolId: user.schoolId,
-      // The designated tutor only — see `saveAralWeeklyAttendance`. Reading
+      // The designated ARAL teacher only — see `saveAralWeeklyAttendance`. Reading
       // levels are the ARAL programme's own record of a learner's progress.
       ...aralLearnerScope(user.id),
       deletedAt: null,

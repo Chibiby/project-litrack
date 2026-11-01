@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.44.0",
+    date: "2026-11-01",
+    title: "ARAL tutors are now ARAL teachers, with their own summary page, and a new Advisory summary",
+    announce: true,
+    fixes: [
+      "ARAL tutors are now called ARAL teachers on every screen. The ARAL Tutors pages are now ARAL Teachers, and old links still open them.",
+      "Teachers saved as Non-DepEd ARAL Volunteer now show as Non-DepEd ARAL Teacher. Nothing you saved changes, and they still have no advisory class or End of Term.",
+      "In the Division Summary, ARAL learners and ARAL teachers are now two pages. ARAL teachers shows DepEd and Non-DepEd ARAL teachers in total and for each grade.",
+      "A new Advisory page in the Division Summary counts teachers who advise a section: Advisory, Multi-advisory and Total advisers, then advisers per grade. A teacher with several sections in one grade counts once in that grade. Non-DepEd ARAL teachers and floating teachers are not counted.",
+      "The ARAL learners, ARAL teachers and Advisory exports each give one row per school, with a Total row at the bottom.",
+    ],
+  },
+  {
     version: "2.43.0",
     date: "2026-10-29",
     title: "The ARAL learners and tutors export gives one row per school, and exported text no longer spills or gets cut off",

@@ -63,7 +63,7 @@ export type ReportScope = {
   /**
    * MOSY only, set only for a real TEACHER: the advisory section ids from
    * `resolveMosyAccess`. When present, `buildMosyTable` restricts learners to
-   * those sections instead of the wider "advised or ARAL-tutored" scope, so the
+   * those sections instead of the wider "advised or ARAL-taught" scope, so the
    * hub's MOSY kind cannot show more than the MOSY Report page does.
    */
   mosySectionIds?: string[];
@@ -955,7 +955,7 @@ export async function buildMosyTable(
         ? {
             // Advisory scope (same rule as the MOSY Report page): the learner's
             // current section is one of the teacher's advisory sections. The
-            // tutor-based `teacherLearnerScope` is dropped, not added to.
+            // ARAL-teacher-based `teacherLearnerScope` is dropped, not added to.
             ...learnerWhere({ ...scope, teacherId: null }, filters),
             AND: [{ sectionId: { in: scope.mosySectionIds } }],
           }
@@ -1005,10 +1005,10 @@ export async function buildMosyTable(
       lastName: learner.lastName,
       sex: learner.gender === "MALE" || learner.gender === "FEMALE" ? learner.gender : null,
       isAralLearner: learner.isAralLearner,
-      // Scope is advised UNION ARAL-tutored (`teacherLearnerScope`), as in
-      // every other builder, so the tutor's name is what makes visible which
+      // Scope is advised UNION ARAL-taught (`teacherLearnerScope`), as in
+      // every other builder, so the ARAL teacher's name is what makes visible which
       // learners are here on the ARAL axis rather than the advisory one.
-      aralTutorName: learner.aralTeacher
+      aralTeacherName: learner.aralTeacher
         ? formatListingNameFromRecord(learner.aralTeacher)
         : null,
       record: pickMosyRecord(learner.readingLevels, gradeType),

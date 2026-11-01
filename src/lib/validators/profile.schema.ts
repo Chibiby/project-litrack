@@ -9,6 +9,19 @@ const READING_TRAININGS = ["ARAL", "TEACHING_READING", "ELLN", "TEACEP", "NONE"]
 export const ARAL_VOLUNTEER_DESIGNATION = "Non-DepEd ARAL Volunteer" as const;
 
 /**
+ * What screens show for the stored `ARAL_VOLUNTEER_DESIGNATION`. The stored
+ * value stays as it is (the advisory-roster rule matches it); only the display
+ * changed, because the program calls these people ARAL teachers.
+ */
+export const ARAL_VOLUNTEER_LABEL = "Non-DepEd ARAL Teacher" as const;
+
+/** Display label for a stored designation; any other value passes through unchanged. */
+export function designationLabel(stored: string | null | undefined): string | null {
+  if (stored == null) return null;
+  return stored === ARAL_VOLUNTEER_DESIGNATION ? ARAL_VOLUNTEER_LABEL : stored;
+}
+
+/**
  * Optional legacy profile contact email (P-I4 / DB column).
  * No longer collected in profiling UI; still accepted if present so older payloads
  * do not break. Never mutates login email on User.

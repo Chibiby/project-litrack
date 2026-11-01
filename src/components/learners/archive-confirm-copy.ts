@@ -22,7 +22,7 @@ export function archiveConfirmLabel(_t?: ArchiveTarget): string {
   return "Yes, remove";
 }
 
-// Removing leaves isAralLearner and the tutor untouched, but the ARAL weekly
+// Removing leaves isAralLearner and the ARAL teacher untouched, but the ARAL weekly
 // grids only list learners who are not removed, so they drop out of the grids until restored.
 export function archiveConfirmDescription(t: ArchiveTarget): string {
   const who = t.name ?? (t.ids.length === 1 ? "The learner" : "They");
@@ -30,8 +30,8 @@ export function archiveConfirmDescription(t: ArchiveTarget): string {
   if (t.aralCount === 0) return base;
   const aral =
     t.ids.length === 1
-      ? "This learner leaves the ARAL weekly grids while removed. Their ARAL enrollment and tutor are kept."
-      : `${t.aralCount === t.ids.length ? "All of them are" : `${t.aralCount} of them ${t.aralCount === 1 ? "is" : "are"}`} in ARAL and leave the ARAL weekly grids while removed. Their ARAL enrollment and tutor are kept.`;
+      ? "This learner leaves the ARAL weekly grids while removed. Their ARAL enrollment and ARAL teacher are kept."
+      : `${t.aralCount === t.ids.length ? "All of them are" : `${t.aralCount} of them ${t.aralCount === 1 ? "is" : "are"}`} in ARAL and leave the ARAL weekly grids while removed. Their ARAL enrollment and ARAL teacher are kept.`;
   return `${base} ${aral}`;
 }
 

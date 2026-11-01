@@ -331,7 +331,7 @@ describe("setTeacherAdvisorySection", () => {
     // Pending, Inactive and Declined tabs serving stale rows and stale badges.
     // Asserted with the id, not bare: the helper also busts the tenant-scoped
     // `schoolTeachers(schoolId)` tag, so a site passing another school's id
-    // would clear the wrong tenant's ARAL tutor list and leave this one stale.
+    // would clear the wrong tenant's ARAL teacher list and leave this one stale.
     // `revalidateSchoolHeadTeachers` now busts the school dashboard itself (see
     // `tests/unit/cache/revalidate.test.ts` for that fold, pinned against the
     // real module) so this action no longer calls `revalidateSchoolDashboard`

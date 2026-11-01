@@ -131,7 +131,7 @@ export default async function AralGradeWeeklyAttendancePage({
         </Link>
       </Button>
       {!isSuperAdmin && (
-        // Its own boundary: the sheet's candidate and tutor lists are two
+        // Its own boundary: the sheet's candidate and ARAL teacher lists are two
         // more queries, and the cross-links above have no reason to wait on
         // a control the teacher has not opened yet.
         <Suspense fallback={<AralEnrollActionFallback />}>

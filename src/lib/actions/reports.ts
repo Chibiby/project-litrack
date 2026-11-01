@@ -157,7 +157,7 @@ export const generateReport = action(
 
   // The MOSY kind is the DepEd adviser's report, same as the MOSY Report page:
   // it goes through the same gate and is narrowed to the advisory sections,
-  // never to the wider "advised or ARAL-tutored" learner scope.
+  // never to the wider "advised or ARAL-taught" learner scope.
   let scope = resolved.scope;
   if (kind === "MOSY" && scope.teacherId) {
     const access = await resolveMosyAccess({

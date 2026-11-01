@@ -48,7 +48,7 @@ vi.mock("@/lib/actions/learner", () => ({
   toggleAralLearner: vi.fn(),
   enrollRosterLearnersToAral: vi.fn(),
 }));
-vi.mock("@/lib/actions/aral-tutors", () => ({ listAralTutorOptions: vi.fn() }));
+vi.mock("@/lib/actions/aral-teachers", () => ({ listAralTeacherOptions: vi.fn() }));
 vi.mock("@/components/nav-prefetcher", () => ({
   invalidateNavWarm: vi.fn(),
   NavPrefetcher: () => null,
@@ -89,7 +89,7 @@ function makeLearner(overrides: Partial<LearnerProfileData> = {}): LearnerProfil
     adviserName: "Teacher One",
     isAralLearner: false,
     aralEnrolledAt: null,
-    aralTutorName: null,
+    aralTeacherName: null,
     aralTeacherId: null,
     archivedAt: null,
     createdAt: "2026-06-10",
@@ -161,7 +161,7 @@ describe("Student Profile dialog — unsaved edits", () => {
 });
 
 describe("Student Profile dialog — Remove from ARAL wording", () => {
-  it("says what is kept, what is cleared, and that a tutor must be assigned again", async () => {
+  it("says what is kept, what is cleared, and that a teacher must be assigned again", async () => {
     getLearnerProfile.mockResolvedValue({
       ok: true,
       data: makeLearner({ isAralLearner: true, aralEnrolledAt: "2026-07-01", aralTeacherId: "t-1" }),
@@ -173,8 +173,8 @@ describe("Student Profile dialog — Remove from ARAL wording", () => {
     const alert = await screen.findByRole("alertdialog");
     const text = alert.textContent ?? "";
     expect(text).toContain("Attendance, reading levels, the ARAL profile and MOSY decisions are kept");
-    expect(text).toContain("assigned ARAL tutor is cleared");
+    expect(text).toContain("assigned ARAL teacher is cleared");
     expect(text).toContain("mark them as ARAL again later");
-    expect(text).toContain("tutor has to be assigned again");
+    expect(text).toContain("teacher has to be assigned again");
   }, 15_000);
 });

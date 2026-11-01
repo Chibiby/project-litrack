@@ -7,7 +7,7 @@ import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
  * Three contracts live here, and the popup is wrong in a different way if any of
  * them slips:
  *
- *   - The row stores ids, never names. The sentence a tutor reads is composed at
+ *   - The row stores ids, never names. The sentence a teacher reads is composed at
  *     read time from the learners as they are *now*, so a renamed, unenrolled or
  *     archived learner leaves no stale text behind — and no learner PII is
  *     duplicated into a second table for the Data Privacy Act to worry about.
@@ -46,7 +46,7 @@ type LearnerRow = {
 
 const SCHOOL_ID = "school-1";
 const OTHER_SCHOOL_ID = "school-2";
-const TUTOR_ID = "tutor-1";
+const TEACHER_ID = "teacher-1";
 const ACTOR_ID = "actor-1";
 
 function learner(overrides: Partial<LearnerRow> & { id: string }): LearnerRow {
@@ -178,10 +178,10 @@ afterEach(() => {
 });
 
 describe("notifyAralAssigned", () => {
-  it("addresses one row to the tutor, carrying ids and nothing else", async () => {
+  it("addresses one row to the teacher, carrying ids and nothing else", async () => {
     await notifyAralAssigned({
       schoolId: SCHOOL_ID,
-      recipientId: TUTOR_ID,
+      recipientId: TEACHER_ID,
       actorId: ACTOR_ID,
       learnerIds: ["l-1", "l-2"],
     });
@@ -191,7 +191,7 @@ describe("notifyAralAssigned", () => {
     // keeps in step with the roster.
     expect(creates[0].data).toEqual({
       schoolId: SCHOOL_ID,
-      recipientId: TUTOR_ID,
+      recipientId: TEACHER_ID,
       actorId: ACTOR_ID,
       type: "ARAL_ASSIGNED",
       learnerIds: ["l-1", "l-2"],
@@ -201,8 +201,8 @@ describe("notifyAralAssigned", () => {
   it("says nothing when a teacher assigns learners to themselves", async () => {
     await notifyAralAssigned({
       schoolId: SCHOOL_ID,
-      recipientId: TUTOR_ID,
-      actorId: TUTOR_ID,
+      recipientId: TEACHER_ID,
+      actorId: TEACHER_ID,
       learnerIds: ["l-1"],
     });
 
@@ -215,7 +215,7 @@ describe("notifyAralAssigned", () => {
   it("says nothing when the selection turned out to be empty", async () => {
     await notifyAralAssigned({
       schoolId: SCHOOL_ID,
-      recipientId: TUTOR_ID,
+      recipientId: TEACHER_ID,
       actorId: ACTOR_ID,
       learnerIds: [],
     });
@@ -233,7 +233,7 @@ describe("notifyAralAssigned", () => {
     await expect(
       notifyAralAssigned({
         schoolId: SCHOOL_ID,
-        recipientId: TUTOR_ID,
+        recipientId: TEACHER_ID,
         actorId: ACTOR_ID,
         learnerIds: ["l-1"],
       })
@@ -245,13 +245,13 @@ describe("notifyAralAssigned", () => {
 
 describe("getUnreadAralAssignments", () => {
   it("reads only this recipient's unread ARAL rows, in this school", async () => {
-    await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     expect(feedArgs).toHaveLength(1);
     // The recipient pointer alone would do today; the school is on the query
     // anyway, so the next edit here cannot become a leak.
     expect(feedArgs[0].where).toEqual({
-      recipientId: TUTOR_ID,
+      recipientId: TEACHER_ID,
       schoolId: SCHOOL_ID,
       type: "ARAL_ASSIGNED",
       readAt: null,
@@ -261,7 +261,7 @@ describe("getUnreadAralAssignments", () => {
   });
 
   it("skips the name lookup entirely when the feed is empty", async () => {
-    const alerts = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const alerts = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     expect(alerts).toEqual([]);
     expect(learnerFindMany).not.toHaveBeenCalled();
@@ -280,12 +280,12 @@ describe("getUnreadAralAssignments", () => {
       learner({ id: "l-2", fullName: "Ben Dela Cruz", gradeLevelId: "grade-g3" }),
     ];
 
-    const [alert] = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const [alert] = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     expect(alert.id).toBe("n-1");
     expect(alert.title).toBe("Teacher Marivic Santos assigned you 2 ARAL learners.");
     expect(alert.description).toBe("Ana Cruz and Ben Dela Cruz");
-    // One grade, so the popup can land the tutor on the grid they will use.
+    // One grade, so the popup can land the teacher on the grid they will use.
     expect(alert.href).toBe("/teacher/aral?grade=grade-g3");
   });
 
@@ -299,7 +299,7 @@ describe("getUnreadAralAssignments", () => {
     ];
     learners = [learner({ id: "l-1", fullName: "Ana Cruz" })];
 
-    const [alert] = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const [alert] = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     expect(alert.title).toBe("Teacher Marivic Santos assigned you an ARAL learner.");
     expect(alert.description).toBe("Ana Cruz");
@@ -317,7 +317,7 @@ describe("getUnreadAralAssignments", () => {
       learner({ id: `l-${i + 1}`, fullName: n })
     );
 
-    const [alert] = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const [alert] = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     expect(alert.description).toBe("Ana, Ben, Cita and 2 more");
     expect(alert.title).toBe("Teacher Marivic Santos assigned you 5 ARAL learners.");
@@ -336,9 +336,9 @@ describe("getUnreadAralAssignments", () => {
       learner({ id: "l-2", gradeLevelId: "grade-g4" }),
     ];
 
-    const [alert] = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const [alert] = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
-    // No single grid to open, so the tutor picks — better than guessing one and
+    // No single grid to open, so the teacher picks — better than guessing one and
     // hiding the other half of the assignment.
     expect(alert.href).toBe("/teacher/aral");
   });
@@ -360,10 +360,10 @@ describe("getUnreadAralAssignments", () => {
       learner({ id: "stays", fullName: "Someone Else", schoolId: OTHER_SCHOOL_ID }),
     ];
 
-    const [alert] = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const [alert] = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     // Only the surviving learner is named, and only ours: three of the four are
-    // no longer somewhere this tutor could be sent.
+    // no longer somewhere this teacher could be sent.
     expect(alert.description).toBe("Ana Cruz");
     expect(alert.title).toBe("Teacher Marivic Santos assigned you an ARAL learner.");
     expect(learnerArgs[0].where).toMatchObject({
@@ -383,7 +383,7 @@ describe("getUnreadAralAssignments", () => {
       },
     ];
 
-    const [alert] = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const [alert] = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     // A silent empty sentence would read as a bug; "2 learners" is at least true.
     expect(alert.description).toBe("2 learners");
@@ -402,7 +402,7 @@ describe("getUnreadAralAssignments", () => {
     ];
     learners = [learner({ id: "l-1", fullName: "Ana Cruz" })];
 
-    const alerts = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const alerts = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     // A blank fullName is not a name — School Heads carry synthetic accounts and
     // some legacy rows have only the parts.
@@ -430,7 +430,7 @@ describe("getUnreadAralAssignments", () => {
     ];
     learners = [learner({ id: "l-1", fullName: "Ana Cruz" })];
 
-    const alerts = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const alerts = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     // Calling a School Head "Teacher" is a demotion in print, and a Non-DepEd
     // ARAL Volunteer holds the TEACHER role without being a teacher. The
@@ -451,7 +451,7 @@ describe("getUnreadAralAssignments", () => {
     ];
     learners = [learner({ id: "l-1", fullName: "Ana Cruz" })];
 
-    const [alert] = await getUnreadAralAssignments({ id: TUTOR_ID, schoolId: SCHOOL_ID });
+    const [alert] = await getUnreadAralAssignments({ id: TEACHER_ID, schoolId: SCHOOL_ID });
 
     // Nameless but present: the row knows who acted, so say what they are rather
     // than falling through to the guess kept for a missing actor.
@@ -462,7 +462,7 @@ describe("getUnreadAralAssignments", () => {
 describe("markNotificationsRead", () => {
   it("clears only rows this recipient owns, in this school, still unread", async () => {
     const count = await markNotificationsRead({
-      recipientId: TUTOR_ID,
+      recipientId: TEACHER_ID,
       schoolId: SCHOOL_ID,
       ids: ["n-1", "n-2"],
     });
@@ -473,7 +473,7 @@ describe("markNotificationsRead", () => {
     // valid id from anywhere would clear somebody else's popup.
     expect(updateArgs[0].where).toEqual({
       id: { in: ["n-1", "n-2"] },
-      recipientId: TUTOR_ID,
+      recipientId: TEACHER_ID,
       schoolId: SCHOOL_ID,
       readAt: null,
     });
@@ -482,7 +482,7 @@ describe("markNotificationsRead", () => {
 
   it("does not touch the table for an empty list", async () => {
     const count = await markNotificationsRead({
-      recipientId: TUTOR_ID,
+      recipientId: TEACHER_ID,
       schoolId: SCHOOL_ID,
       ids: [],
     });

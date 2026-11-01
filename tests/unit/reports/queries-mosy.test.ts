@@ -104,7 +104,7 @@ function learnerRow(overrides: {
   /** Selected the same way as `learner`'s own name fields (defect: this used
    * to be a single `fullName`, which rendered next to the surname-first
    * `Learner` column in the wrong convention â€” see queries.ts). */
-  aralTutor?: { firstName: string; middleName?: string | null; lastName: string } | null;
+  aralTeacher?: { firstName: string; middleName?: string | null; lastName: string } | null;
   profile?: { updatedAt: Date; suggestedInterventions: string[] } | null;
   readingLevels?: RecordRow[];
 }) {
@@ -117,7 +117,7 @@ function learnerRow(overrides: {
     isAralLearner: overrides.isAralLearner ?? false,
     gradeLevel: { type: overrides.gradeType ?? "G5" },
     section: { name: "Sampaguita" },
-    aralTeacher: overrides.aralTutor ?? null,
+    aralTeacher: overrides.aralTeacher ?? null,
     aralProfile: overrides.profile ?? null,
     readingLevels: overrides.readingLevels ?? [],
   };
@@ -208,8 +208,8 @@ describe("buildMosyTable â€” scope", () => {
   it("narrows grades and learners for a TEACHER", async () => {
     await buildMosyTable(TEACHER_SCOPE, {});
 
-    // Advised UNION ARAL-tutored (`teacherLearnerScope`) â€” the same scope
-    // every other builder uses, deliberately NOT the tutor-only one.
+    // Advised UNION ARAL-taught (`teacherLearnerScope`) â€” the same scope
+    // every other builder uses, deliberately NOT the teacher-only one.
     expect(learnerWhereOf().OR).toEqual([
       { teacherId: "teacher-1" },
       { aralTeacherId: "teacher-1" },
@@ -220,7 +220,7 @@ describe("buildMosyTable â€” scope", () => {
     ]);
   });
 
-  it("scopes a TEACHER with advisory sections to those sections, not to advised-or-tutored learners", async () => {
+  it("scopes a TEACHER with advisory sections to those sections, not to advised-or-taught learners", async () => {
     await buildMosyTable({ ...TEACHER_SCOPE, mosySectionIds: ["sec-a", "sec-b"] }, {});
 
     const learner = learnerWhereOf();
@@ -388,7 +388,7 @@ describe("buildMosyTable â€” ARAL profiles are optional", () => {
         id: "l1",
         lastName: "Abad",
         isAralLearner: true,
-        aralTutor: { firstName: "Jun", middleName: null, lastName: "Dela Cruz" },
+        aralTeacher: { firstName: "Jun", middleName: null, lastName: "Dela Cruz" },
         profile: null,
         readingLevels: [completeRecord(new Date(2025, 11, 1))],
       }),
@@ -407,7 +407,7 @@ describe("buildMosyTable â€” ARAL profiles are optional", () => {
 
     const detail = table.blocks![5];
     expect(detail.rows[0][12]).toBe("Not completed");
-    // The ARAL Tutor column is what makes the advised-union-tutored scope
+    // The ARAL Teacher column is what makes the advised-union-taught scope
     // visible on the sheet, formatted surname-first like the Learner column
     // next to it rather than as the raw `fullName` column.
     expect(detail.rows[0][5]).toBe("Dela Cruz, Jun");
@@ -426,7 +426,7 @@ describe("buildMosyTable â€” person-name conventions", () => {
     ]);
   });
 
-  it("selects the ARAL tutor's name parts, not fullName, for surname-first formatting", async () => {
+  it("selects the ARAL teacher's name parts, not fullName, for surname-first formatting", async () => {
     await buildMosyTable(ADMIN_SCOPE, {});
 
     const args = learnerFindMany.mock.calls[0][0] as {

@@ -13,7 +13,7 @@ import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { Callout } from "@/components/ui/callout";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { listAralTutors } from "@/lib/teachers/aral-tutor";
+import { listAralTeachers } from "@/lib/teachers/aral-teacher";
 import {
   LEARNER_PAGE_SIZE,
   nameSearchWhere,
@@ -77,12 +77,12 @@ async function loadAralHero({
     isAralLearner: true,
   };
 
-  const [programCount, programUntutored] = await Promise.all([
+  const [programCount, programWithoutTeacher] =await Promise.all([
     prisma.learner.count({ where: programWhere }),
     prisma.learner.count({ where: { ...programWhere, aralTeacherId: null } }),
   ]);
 
-  const programTutored = programCount - programUntutored;
+  const programWithTeacher = programCount - programWithoutTeacher;
 
   return (
     <SchoolHeadHero
@@ -102,8 +102,8 @@ async function loadAralHero({
             denseOnPhone
           />
           <StatCard
-            title="With a tutor"
-            value={programTutored}
+            title="With an ARAL teacher"
+            value={programWithTeacher}
             hint="Already designated"
             icon={UserCheck}
             tone="emerald"
@@ -111,11 +111,11 @@ async function loadAralHero({
             denseOnPhone
           />
           <StatCard
-            title="Awaiting a tutor"
-            value={programUntutored}
+            title="Awaiting an ARAL teacher"
+            value={programWithoutTeacher}
             hint="Needs a designated teacher"
             icon={UserX}
-            tone={programUntutored > 0 ? "amber" : "neutral"}
+            tone={programWithoutTeacher > 0 ? "amber" : "neutral"}
             inlineOnPhone
             denseOnPhone
           />
@@ -163,7 +163,7 @@ async function AralLearnersBody({
     // The whole active roster: an ARAL-only teacher (no advisory section) is a
     // valid designee, so this must not be narrowed to advisers. Shared with the
     // teacher's own picker so the two can never disagree about who qualifies.
-    listAralTutors(schoolId),
+    listAralTeachers(schoolId),
   ]);
 
   const rows: AralLearnerRow[] = learners.map((l) => ({

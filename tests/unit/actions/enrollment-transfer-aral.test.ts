@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * Cross-school transfer of an ARAL learner. Decision: the ARAL flag
  * (`isAralLearner` / `aralEnrolledAt`) is KEPT and only the origin school's
- * tutor pointer is cleared, because the destination School Head's ARAL page
+ * teacher pointer is cleared, because the destination School Head's ARAL page
  * (`src/app/school-head/(app)/aral/page.tsx`) lists every
  * `isAralLearner: true, archivedAt: null` learner of the school and counts the
- * ones with `aralTeacherId: null` as "Awaiting a tutor". This pins both halves:
+ * ones with `aralTeacherId: null` as "Awaiting a teacher". This pins both halves:
  * what the action writes, and that the destination's list query matches it.
  */
 
@@ -24,7 +24,7 @@ const learner = {
   gradeLevelId: "grade-from",
   sectionId: null,
   teacherId: "teacher-old",
-  aralTeacherId: "tutor-at-a",
+  aralTeacherId: "teacher-at-a",
   isAralLearner: true,
   deletedAt: null,
   archivedAt: null as Date | null,
@@ -90,7 +90,7 @@ const { transferLearnerCrossSchool } = await import("@/lib/actions/enrollment");
 beforeEach(() => vi.clearAllMocks());
 
 describe("transferLearnerCrossSchool — ARAL learner", () => {
-  it("clears the origin tutor but keeps the ARAL flag, so the learner lands in the destination's untutored list", async () => {
+  it("clears the origin teacher but keeps the ARAL flag, so the learner lands in the destination's unassigned list", async () => {
     const fd = new FormData();
     fd.set("learnerId", LEARNER_ID);
     fd.set("targetSchoolId", SCHOOL_B);
@@ -109,7 +109,7 @@ describe("transferLearnerCrossSchool — ARAL learner", () => {
     expect(data).not.toHaveProperty("aralEnrolledAt");
 
     // The row as it stands after the update matches the destination School
-    // Head's "Awaiting a tutor" predicate.
+    // Head's "Awaiting a teacher" predicate.
     const after = { ...learner, ...data, deletedAt: null };
     expect(after.schoolId).toBe(SCHOOL_B);
     expect(after.deletedAt).toBeNull();
@@ -118,7 +118,7 @@ describe("transferLearnerCrossSchool — ARAL learner", () => {
     expect(after.aralTeacherId).toBeNull();
   });
 
-  it("the destination School Head ARAL page still counts untutored ARAL learners by that predicate", () => {
+  it("the destination School Head ARAL page still counts unassigned ARAL learners by that predicate", () => {
     const src = readFileSync(
       path.join(process.cwd(), "src/app/school-head/(app)/aral/page.tsx"),
       "utf8"

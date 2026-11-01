@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { Surface } from "@/components/ui/surface";
-import type { AralTutorsSummary } from "@/lib/admin/aral-tutors";
+import type { AralTeachersSummary } from "@/lib/admin/aral-teachers";
 import type {
   DistrictAdminsSummary,
   SchoolHeadsSummary,
@@ -180,17 +180,17 @@ export function DistrictAdminsSummaryCards({
   );
 }
 
-export function AralTutorsSummaryCards({ summary, scope }: { summary: AralTutorsSummary; scope: string }) {
+export function AralTeachersSummaryCards({ summary, scope }: { summary: AralTeachersSummary; scope: string }) {
   return (
-    <SummaryGrid scope={scope} label="ARAL tutor overview" compact>
-      <StatCard title="ARAL tutors" value={n(summary.tutors)} hint="Teachers tutoring ARAL learners" icon={HandHelping} tone="violet" {...card} />
-      <StatCard title="Learners with a tutor" value={n(summary.learnersWithTutor)} hint="ARAL learners" icon={Sparkles} tone="violet" {...card} />
+    <SummaryGrid scope={scope} label="ARAL teacher overview" compact>
+      <StatCard title="ARAL teachers" value={n(summary.teachers)} hint="Teachers handling ARAL learners" icon={HandHelping} tone="violet" {...card} />
+      <StatCard title="Learners with an ARAL teacher" value={n(summary.learnersWithTeacher)} hint="ARAL learners" icon={Sparkles} tone="violet" {...card} />
       <StatCard
-        title="Learners without a tutor"
-        value={n(summary.learnersWithoutTutor)}
+        title="Learners without an ARAL teacher"
+        value={n(summary.learnersWithoutTeacher)}
         hint="Assign one from a learner's profile"
         icon={UserX}
-        tone={summary.learnersWithoutTutor > 0 ? "amber" : "neutral"}
+        tone={summary.learnersWithoutTeacher > 0 ? "amber" : "neutral"}
         {...card}
       />
     </SummaryGrid>

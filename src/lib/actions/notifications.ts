@@ -21,7 +21,7 @@ const dismissSchema = z.object({
 });
 
 /**
- * The tutor's unread ARAL designations.
+ * The ARAL teacher's unread ARAL designations.
  *
  * Called from the client after the shell has painted, not awaited in the teacher
  * layout: everything that layout awaits blocks the sidebar and header for every
@@ -54,7 +54,7 @@ export async function fetchAralAssignmentAlerts(): Promise<AralAssignmentAlert[]
   }
 }
 
-/** Mark the alerts the tutor just saw as read. Scoped to them; ids are untrusted. */
+/** Mark the alerts the ARAL teacher just saw as read. Scoped to them; ids are untrusted. */
 export const dismissAralAssignmentAlerts = action(
   "dismissAralAssignmentAlerts",
   async (ids: string[]): Promise<{ ok: true; data: { dismissed: number } }> => {

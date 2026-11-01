@@ -15,7 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
-const OTHER_TUTOR = "22222222-2222-4222-8222-222222222222";
+const OTHER_TEACHER = "22222222-2222-4222-8222-222222222222";
 const SCHOOL_ID = "school-1";
 const OTHER_SCHOOL = "school-2";
 const LEARNER_ID = "3f0c8f0e-6a55-4c1e-9d55-0d3a6a1f2b10";
@@ -270,12 +270,12 @@ describe("saveMosyDecision — guards", () => {
     expect(learnerFindFirst.mock.calls[0][0].select.sectionId).toBe(true);
   });
 
-  it("the adviser may save a learner tagged to a different ARAL tutor (advisory, not tutor, scope)", async () => {
-    learnerRow = taggedLearner({ aralTeacherId: OTHER_TUTOR });
+  it("the adviser may save a learner tagged to a different ARAL teacher (advisory, not teacher, scope)", async () => {
+    learnerRow = taggedLearner({ aralTeacherId: OTHER_TEACHER });
     const res = await saveMosyDecision(form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" }));
     expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
     expect(revalidateLearnerScoped).toHaveBeenCalledWith(
-      expect.objectContaining({ aralTeacherId: OTHER_TUTOR })
+      expect.objectContaining({ aralTeacherId: OTHER_TEACHER })
     );
   });
 
@@ -307,7 +307,7 @@ describe("saveMosyDecision — guards", () => {
     expect(learnerUpdate).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
   });
-  it("a Super Admin-like session (not the tutor) can never save, even with a forged post", async () => {
+  it("a Super Admin-like session (not the teacher) can never save, even with a forged post", async () => {
     requireSchoolUser.mockResolvedValue({ id: "sa-1", schoolId: SCHOOL_ID, role: "SUPER_ADMIN" });
     const res = await saveMosyDecision(form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" }));
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
@@ -638,9 +638,9 @@ describe("saveMosyDecision — re-tag", () => {
     );
   });
 
-  it("the adviser may re-tag a learner another tutor moved out; they become the designated ARAL teacher", async () => {
+  it("the adviser may re-tag a learner another teacher moved out; they become the designated ARAL teacher", async () => {
     learnerRow = taggedLearner({ isAralLearner: false, aralTeacherId: null, aralEnrolledAt: null });
-    existingRow = { decision: "MOVE_OUT", tutorId: OTHER_TUTOR, priorAralEnrolledAt: ENROLLED };
+    existingRow = { decision: "MOVE_OUT", tutorId: OTHER_TEACHER, priorAralEnrolledAt: ENROLLED };
     const res = await saveMosyDecision(form({ decision: "STAY" }));
     expect(res).toEqual({ ok: true, data: { transition: "RETAGGED" } });
     expect(learnerUpdate).toHaveBeenCalledWith({

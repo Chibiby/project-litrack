@@ -5,6 +5,7 @@ import { getSchoolName } from "@/lib/cache/school";
 import { teacherBannerSrc } from "@/lib/dashboard/banner";
 import { TEACHER_POSITION_LABELS } from "@/lib/constants/enum-labels";
 import { computeProfileCompletion } from "@/lib/teachers/profile-completion";
+import { designationLabel } from "@/lib/validators/profile.schema";
 import { markProfilePhotoRemovalsRead } from "@/lib/notifications";
 import { AppShell } from "@/components/app-shell";
 import { ProfilePhotoCard } from "@/components/profile-photo/profile-photo-card";
@@ -86,7 +87,7 @@ export default async function TeacherSettingsProfilePage() {
           dryRun={dryRun}
           summary={
             <TeacherProfileSummary
-              roleLabel={profile?.designation || "Teacher"}
+              roleLabel={designationLabel(profile?.designation) || "Teacher"}
               roleHint={profile?.position ? TEACHER_POSITION_LABELS[profile.position] : undefined}
               isActive={user.isActive}
               schoolName={schoolName}

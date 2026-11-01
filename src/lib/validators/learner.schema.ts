@@ -221,7 +221,7 @@ export const enrollLearnersToAralSchema = z.object({
   gradeId: nonEmpty("Grade required"),
   learnerIds: z.array(nonEmpty()).min(1, "Select at least one learner"),
   /**
-   * Who tutors them. Omitted means the enrolling teacher takes it themselves,
+   * Who is their ARAL teacher. Omitted means the enrolling teacher takes it themselves,
    * which is what the picker defaults to. Any teacher at the school is valid —
    * DepEd or not, advisory section or not — so this is only shape-checked here;
    * the action verifies the person.

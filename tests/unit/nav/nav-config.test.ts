@@ -51,7 +51,7 @@ describe("getNavGroups — teacher", () => {
   });
 
   it("has one ARAL Profiling row under ARAL Program, never grade-scoped", () => {
-    // One page lists every ARAL learner the teacher tutors across grades, so the
+    // One page lists every ARAL learner the teacher teachers across grades, so the
     // href does not change with the grade payload and never collapses onto the
     // /teacher/aral picker. The old Learner Profiling row stays gone.
     for (const grades of [[], oneAral, twoAral, undefined] as (NavGrade[] | undefined)[]) {
@@ -511,7 +511,7 @@ describe("getNavGroups — admin", () => {
       "Learners",
       "Deleted learners",
       "Teachers",
-      "ARAL Tutors",
+      "ARAL Teachers",
       "School Heads",
       "Schools",
       "District Admins",
@@ -538,7 +538,7 @@ describe("getNavGroups — admin", () => {
     expect(byId).toMatchObject({
       "admin-learners": "/admin/management/learners",
       "admin-teachers": "/admin/management/teachers",
-      "admin-aral-tutors": "/admin/management/aral-tutors",
+      "admin-aral-teachers": "/admin/management/aral-teachers",
       "admin-school-heads": "/admin/management/school-heads",
       "admin-schools": "/admin/management/schools",
       "admin-district-admins": "/admin/management/district-admins",
@@ -585,7 +585,7 @@ describe("getNavGroups — admin", () => {
       ["/admin/management/schools/0b7f2c1e-1111-4222-8333-444455556666", "admin-schools"],
       ["/admin/management/learners", "admin-learners"],
       ["/admin/management/teachers", "admin-teachers"],
-      ["/admin/management/aral-tutors", "admin-aral-tutors"],
+      ["/admin/management/aral-teachers", "admin-aral-teachers"],
       ["/admin/management/school-heads", "admin-school-heads"],
       ["/admin/management/district-admins", "admin-district-admins"],
       ["/admin/school-setup/school-years", "admin-school-years"],
@@ -625,12 +625,12 @@ describe("getNavGroups — school head", () => {
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
       "Teachers",
-      "ARAL Tutors",
+      "ARAL Teachers",
     ]);
     expect(groups[1].items.map((i) => i.href)).toEqual([
       "/school-head/learners",
       "/school-head/teachers",
-      "/school-head/aral-tutors",
+      "/school-head/aral-teachers",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual([
       "School Setup",
@@ -653,8 +653,8 @@ describe("getNavGroups — school head", () => {
     expect(getNavGroups("SCHOOL_HEAD")[1].items.find((i) => i.id === "school-head-teachers")?.badge).toBeUndefined();
     const items = flattenNavGroups(groups);
     expect(resolveActiveItemId("/school-head/learners", items)).toBe("school-head-learners");
-    expect(resolveActiveItemId("/school-head/aral-tutors", items)).toBe("school-head-aral-tutors");
-    // The longer /aral-tutors path must not fall to the ARAL Program row.
+    expect(resolveActiveItemId("/school-head/aral-teachers", items)).toBe("school-head-aral-teachers");
+    // The longer /aral-teachers path must not fall to the ARAL Program row.
     expect(resolveActiveItemId("/school-head/aral", items)).toBe("school-head-aral");
     // Transfers moved onto the Learners page; the old route is a redirect stub
     // and no longer has a nav row of its own.
@@ -761,7 +761,9 @@ describe("getNavGroups — district admin", () => {
       "Monthly reading level",
       "Non-compliance",
       "Teacher and School Head profiling",
-      "ARAL learners and tutors",
+      "ARAL learners",
+      "ARAL teachers",
+      "Advisory",
     ]);
   });
 });

@@ -78,7 +78,7 @@ describe("ARAL Profile — asked for in one place only", () => {
     }
     const page = read("src/app/teacher/(app)/aral/profiling/page.tsx");
     expect(page).toContain("learners/${l.id}/update");
-    // Same tutor scope as saveAralProfile, so no button can only fail.
+    // Same teacher scope as saveAralProfile, so no button can only fail.
     expect(page).toContain("aralLearnerScope");
   });
 
@@ -107,7 +107,7 @@ describe("ARAL Profile — asked for in one place only", () => {
     expect(read("src/components/dashboard/teacher/hrefs.ts")).toContain(
       "/teacher/aral/profiling?status=pending"
     );
-    // The count uses the same tutor scope as the page it links to.
+    // The count uses the same teacher scope as the page it links to.
     expect(read("src/lib/dashboard/teacher-overview.ts")).toContain("aralLearnerScope(teacherId)");
 
     // The School Head dashboard nudge stays removed.
@@ -165,7 +165,7 @@ describe("ARAL Profile — the live workflows do not depend on one", () => {
 
   it("enrolling a learner into ARAL does not create or demand a profile", () => {
     // `enrollLearnersToAral` lives in the learner action module; it flips
-    // `isAralLearner` and designates a tutor, and must not reach for a survey.
+    // `isAralLearner` and designates a teacher, and must not reach for a survey.
     const source = read("src/lib/actions/learner.ts");
     const enroll = source.slice(source.indexOf("enrollLearnersToAral"));
     expect(enroll).not.toMatch(/aralProfile/i);
@@ -191,7 +191,7 @@ describe("ARAL Profile — the live workflows do not depend on one", () => {
           middleName: null,
           lastName: "Cruz",
           isAralLearner: true,
-          aralTutorName: "T. Santos",
+          aralTeacherName: "T. Santos",
           record: null,
           profile: null,
           sex: "MALE",
@@ -206,7 +206,7 @@ describe("ARAL Profile — the live workflows do not depend on one", () => {
           middleName: null,
           lastName: "Reyes",
           isAralLearner: true,
-          aralTutorName: "T. Santos",
+          aralTeacherName: "T. Santos",
           record: null,
           profile: null,
           sex: "FEMALE",

@@ -37,7 +37,7 @@ vi.mock("@/lib/auth/admin-scope", () => ({
 }));
 
 vi.mock("@/lib/teachers/scope", () => ({
-  teacherLearnerScope: (id: string) => ({ aralTutorId: id }),
+  teacherLearnerScope: (id: string) => ({ aralTeacherId: id }),
 }));
 
 vi.mock("@/lib/constants/enum-labels", () => ({
@@ -142,7 +142,7 @@ describe("globalSearch — tenancy", () => {
 
     expect(res.ok).toBe(true);
     expect(learnerFindMany.mock.calls[0]?.[0]).toMatchObject({
-      where: { schoolId: SCHOOL_A, aralTutorId: "t-1" },
+      where: { schoolId: SCHOOL_A, aralTeacherId: "t-1" },
     });
     expect(userFindMany).not.toHaveBeenCalled();
     expect(sectionFindMany).not.toHaveBeenCalled();

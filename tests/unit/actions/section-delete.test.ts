@@ -317,7 +317,7 @@ describe("deleteSection — teacher cache fan-out", () => {
 
     // With the id, not bare: this helper busts the tenant-scoped
     // `schoolTeachers(schoolId)` tag, so another school's id here would clear
-    // the wrong tenant's ARAL tutor list and leave this one stale.
+    // the wrong tenant's ARAL teacher list and leave this one stale.
     expect(revalidateSchoolHeadTeachers).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);
     expect(revalidatePath).toHaveBeenCalledWith(SCHOOL_HEAD_ROUTES.schoolGradeLevels);

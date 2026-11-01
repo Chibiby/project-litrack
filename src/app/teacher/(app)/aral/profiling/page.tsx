@@ -46,10 +46,10 @@ export const PROFILING_LIST_KEYS = ["page", "status", "q", "section"] as const;
 
 /**
  * ARAL Profiling — Sections C, D and E for every ARAL learner this teacher is the
- * designated tutor for, across all their grades.
+ * designated ARAL teacher for, across all their grades.
  *
- * Tutor scope (`aralLearnerScope`), not the wider care scope: `saveAralProfile`
- * only accepts the designated tutor, so listing anyone else would offer a button
+ * ARAL teacher scope (`aralLearnerScope`), not the wider care scope: `saveAralProfile`
+ * only accepts the designated ARAL teacher, so listing anyone else would offer a button
  * that can only fail. The dashboard's "Pending Profiles" count uses the same
  * scope, so the card and the Pending tab here always agree.
  */

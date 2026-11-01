@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { AralTutorCombobox } from "@/components/aral/aral-tutor-combobox";
+import { AralTeacherCombobox } from "@/components/aral/aral-teacher-combobox";
 import {
   Sheet,
   SheetContent,
@@ -29,11 +29,11 @@ export type EnrollCandidate = {
 };
 
 /**
- * Structurally the `AralTutorOption` that `listAralTutors` returns, declared here
+ * Structurally the `AralTeacherPickOption` that `listAralTeachers` returns, declared here
  * rather than imported: that module is `server-only`, and the shape travels in
  * this direction anyway — the server page fills a contract the picker states.
  */
-export type EnrollTutorOption = {
+export type EnrollTeacherOption = {
   id: string;
   name: string;
   /** "Grade 3 · Sampaguita", or null for a teacher who advises nothing. */
@@ -49,7 +49,7 @@ type Props = {
    * Whoever is enrolling appears as "Myself" instead of by name, so they are
    * filtered out of the by-name list rather than shown twice.
    */
-  tutors: EnrollTutorOption[];
+  teachers: EnrollTeacherOption[];
   selfId: string;
   disabled?: boolean;
 };
@@ -61,7 +61,7 @@ function plural(n: number): string {
 export function EnrollToAralDialog({
   gradeId,
   candidates,
-  tutors,
+  teachers,
   selfId,
   disabled,
 }: Props) {
@@ -70,7 +70,7 @@ export function EnrollToAralDialog({
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** "Myself" carries `selfId` as its value — see `handleEnroll` for why. */
-  const [tutorId, setTutorId] = useState(selfId);
+  const [teacherId, setTeacherId] = useState(selfId);
   const [pending, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
@@ -83,15 +83,15 @@ export function EnrollToAralDialog({
     );
   }, [candidates, q]);
 
-  const otherTutors = useMemo(
-    () => tutors.filter((t) => t.id !== selfId),
-    [tutors, selfId]
+  const otherTeachers = useMemo(
+    () => teachers.filter((t) => t.id !== selfId),
+    [teachers, selfId]
   );
 
-  const assignedToSelf = tutorId === selfId;
+  const assignedToSelf = teacherId === selfId;
   const chosenName = useMemo(
-    () => tutors.find((t) => t.id === tutorId)?.name ?? null,
-    [tutors, tutorId]
+    () => teachers.find((t) => t.id === teacherId)?.name ?? null,
+    [teachers, teacherId]
   );
 
   function toggle(id: string, checked: boolean) {
@@ -119,7 +119,7 @@ export function EnrollToAralDialog({
     if (!next) {
       setQ("");
       setSelected(new Set());
-      setTutorId(selfId);
+      setTeacherId(selfId);
     }
   }
 
@@ -129,10 +129,10 @@ export function EnrollToAralDialog({
       toast.error("Select at least one learner");
       return;
     }
-    // Keeping them yourself sends no tutor at all rather than your own id. The
+    // Keeping them yourself sends no ARAL teacher at all rather than your own id. The
     // schema documents omission as that default, and the wire then says what
     // happened — the teacher named nobody — instead of implying a choice.
-    const aralTeacherId = assignedToSelf ? undefined : tutorId;
+    const aralTeacherId = assignedToSelf ? undefined : teacherId;
     const who = assignedToSelf ? null : chosenName;
 
     startTransition(async () => {
@@ -193,17 +193,17 @@ export function EnrollToAralDialog({
 
         <div className="mt-4 space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="enroll-aral-tutor">ARAL tutor</Label>
-            <AralTutorCombobox
-              id="enroll-aral-tutor"
-              tutors={otherTutors}
+            <Label htmlFor="enroll-aral-teacher">ARAL teacher</Label>
+            <AralTeacherCombobox
+              id="enroll-aral-teacher"
+              teachers={otherTeachers}
               selfId={selfId}
-              value={tutorId}
-              onValueChange={setTutorId}
-              disabled={pending || otherTutors.length === 0}
+              value={teacherId}
+              onValueChange={setTeacherId}
+              disabled={pending || otherTeachers.length === 0}
             />
             <p className="text-xs text-muted-foreground">
-              {otherTutors.length === 0
+              {otherTeachers.length === 0
                 ? "You are the only teacher who can be designated right now."
                 : "Whoever tracks their weekly ARAL progress. Any teacher can be designated — they are told who assigned them."}
             </p>

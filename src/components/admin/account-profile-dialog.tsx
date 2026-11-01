@@ -19,6 +19,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { getAccountProfile, type AccountProfile } from "@/lib/actions/accounts";
 import { removeUserAvatar } from "@/lib/actions/avatar";
 import { callAction } from "@/lib/ui/call-action";
+import { designationLabel } from "@/lib/validators/profile.schema";
 import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import {
   ADVISORY_MODE_LABELS,
@@ -257,12 +258,12 @@ export function AccountProfileDialog({
                   <h3 className="flex items-center gap-2 font-semibold text-foreground">
                     ARAL involvement
                     {profile.aral.isAralVolunteer ? (
-                      <Badge variant="violet">ARAL volunteer</Badge>
+                      <Badge variant="violet">Non-DepEd ARAL teacher</Badge>
                     ) : null}
                   </h3>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-muted-foreground">
                     <dt>Designation</dt>
-                    <dd>{profile.aral.designation ?? "—"}</dd>
+                    <dd>{designationLabel(profile.aral.designation) ?? "—"}</dd>
                     <dt>Employment type</dt>
                     <dd>
                       {profile.aral.employmentType

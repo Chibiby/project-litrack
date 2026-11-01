@@ -328,7 +328,7 @@ export const commitLearnerImport = action("commitLearnerImport", async (input: {
     isAralLearner: data.isAralLearner ?? false,
     aralEnrolledAt: data.isAralLearner ? new Date() : null,
     // "Whoever enrolled them" — the same fallback `toggleAralEnrollment` uses,
-    // and the CSV carries no tutor column to override it with. Required, not
+    // and the CSV carries no ARAL teacher column to override it with. Required, not
     // cosmetic: ARAL pages scope on `aralTeacherId` alone (`aralLearnerScope`),
     // so an imported ARAL learner without one is visible to nobody, including
     // the teacher who just imported them.

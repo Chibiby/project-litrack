@@ -41,8 +41,8 @@ export function LearnerBulkActions({
   selectedCount: number;
   onArchive: () => Promise<void> | void;
   /**
-   * Opens the ARAL tutor picker for the selection. The menu does not enroll by
-   * itself: a learner needs a tutor before joining the program, and naming one
+   * Opens the ARAL teacher picker for the selection. The menu does not enroll by
+   * itself: a learner needs an ARAL teacher before joining the program, and naming one
    * is a choice, not a confirmation.
    */
   onEnrollAral: () => void;

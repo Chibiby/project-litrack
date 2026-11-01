@@ -19,9 +19,9 @@ import {
   useUnsavedChangesPrompt,
 } from "@/components/unsaved-changes-dialog";
 import {
-  AssignAralTutorDialog,
-  type AssignAralTutorTarget,
-} from "@/components/learners/assign-aral-tutor-dialog";
+  AssignAralTeacherDialog,
+  type AssignAralTeacherTarget,
+} from "@/components/learners/assign-aral-teacher-dialog";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { getLearnerProfile } from "@/lib/actions/learner-profile";
@@ -58,10 +58,10 @@ import {
  * ARAL, Edit. The ✕ in the header is the only way this dialog closes without
  * acting.
  *
- * Enroll as ARAL asks who will tutor the learner before it enrolls them, so it
- * opens the tutor picker instead of a bare confirmation. Removal is the one
+ * Enroll as ARAL asks who will be the learner's ARAL teacher before it enrolls them, so it
+ * opens the ARAL teacher picker instead of a bare confirmation. Removal is the one
  * direction with nothing to choose, and so the one that keeps a confirm.
- * Changing the tutor of a learner already in the program is that same question
+ * Changing the ARAL teacher of a learner already in the program is that same question
  * asked again, and it stands in the footer beside Transfer student: both move a
  * learner from one person's care to another's, and a teacher hunting for either
  * looks at the row of actions rather than inside a tab.
@@ -140,8 +140,8 @@ export function LearnerProfileModal({
   const [pending, startTransition] = useTransition();
   /** `edit` swaps the tabs and the action footer for the learner form. */
   const [mode, setMode] = useState<"view" | "edit">(initialMode);
-  /** Subject of the open ARAL tutor picker; `null` when it is closed. */
-  const [aralTarget, setAralTarget] = useState<AssignAralTutorTarget | null>(
+  /** Subject of the open ARAL teacher picker; `null` when it is closed. */
+  const [aralTarget, setAralTarget] = useState<AssignAralTeacherTarget | null>(
     null
   );
 
@@ -214,7 +214,7 @@ export function LearnerProfileModal({
   const showActions = !isSuperAdmin && error === null;
 
   /**
-   * Removal only. Enrolling goes through the tutor picker — a learner needs
+   * Removal only. Enrolling goes through the ARAL teacher picker — a learner needs
    * someone tracking their weekly progress before they join the program — which
    * leaves this direction the one with nothing to choose, and so the one a plain
    * confirmation still fits.
@@ -227,7 +227,7 @@ export function LearnerProfileModal({
       const res = await toggleAralLearner(fd);
       await settleActionResult(res, "Removed from ARAL");
       // The action clears the designation on the way out, so the local copy
-      // drops it too rather than printing a tutor for a learner who has left.
+      // drops it too rather than printing an ARAL teacher for a learner who has left.
       setLearner((prev) =>
         prev
           ? {
@@ -235,7 +235,7 @@ export function LearnerProfileModal({
               isAralLearner: false,
               aralEnrolledAt: null,
               aralTeacherId: null,
-              aralTutorName: null,
+              aralTeacherName: null,
             }
           : prev
       );
@@ -245,7 +245,7 @@ export function LearnerProfileModal({
   };
 
   /**
-   * Opens the tutor picker for this learner, in whichever direction they are
+   * Opens the ARAL teacher picker for this learner, in whichever direction they are
    * in: an enrolment for a learner outside the program, a reassignment for one
    * already in it. The picker asks the same question either way, so the ARAL tab
    * and the footer share one entry point rather than each having its own.
@@ -255,7 +255,7 @@ export function LearnerProfileModal({
     setAralTarget({
       learnerIds: [learner.id],
       learnerName: learner.fullName,
-      currentTutorId: learner.aralTeacherId,
+      currentTeacherId: learner.aralTeacherId,
       enrolling: !aralEnrolled,
     });
   };
@@ -268,7 +268,7 @@ export function LearnerProfileModal({
       variant="outline"
       disabled={learner === null || archived || pending}
       className="justify-center gap-2"
-      // Enrolling names a tutor first, so the button opens the picker; removal
+      // Enrolling names an ARAL teacher first, so the button opens the picker; removal
       // is confirmed by the wrapper below and needs no handler of its own.
       onClick={aralEnrolled ? undefined : openAralPicker}
     >
@@ -278,7 +278,7 @@ export function LearnerProfileModal({
   );
 
   /**
-   * Reassigning the tutor of a learner already in the program. It sits in the
+   * Reassigning the ARAL teacher of a learner already in the program. It sits in the
    * footer beside Transfer student because the two are the same kind of act —
    * moving a learner from one person's care to another's — and a teacher looking
    * for it goes to the row of actions, not to a tab.
@@ -286,7 +286,7 @@ export function LearnerProfileModal({
    * Absent for a learner outside ARAL: Enroll as ARAL already asks the question,
    * so a second button asking it again would be the same control twice.
    */
-  const transferTutorButton =
+  const transferTeacherButton =
     learner && aralEnrolled ? (
       <Button
         type="button"
@@ -296,7 +296,7 @@ export function LearnerProfileModal({
         onClick={openAralPicker}
       >
         <UserRoundCog className="h-4 w-4" aria-hidden />
-        Transfer tutor
+        Transfer ARAL teacher
       </Button>
     ) : null;
 
@@ -466,15 +466,15 @@ export function LearnerProfileModal({
                     </Button>
                   ) : null}
 
-                  {transferTutorButton}
+                  {transferTeacherButton}
 
                   {/* Only removal is a confirmation. Enrolment opens the picker
-                      from the button itself, because naming a tutor is a choice
+                      from the button itself, because naming an ARAL teacher is a choice
                       and a confirm sheet has nothing to offer it. */}
                   {learner && aralEnrolled ? (
                     <ConfirmAction
                       title={`Remove ${learner.fullName} from ARAL?`}
-                      description="Attendance, reading levels, the ARAL profile and MOSY decisions are kept. The learner leaves the ARAL roster and weekly grids, and their assigned ARAL tutor is cleared. You can mark them as ARAL again later, but a tutor has to be assigned again."
+                      description="Attendance, reading levels, the ARAL profile and MOSY decisions are kept. The learner leaves the ARAL roster and weekly grids, and their assigned ARAL teacher is cleared. You can mark them as ARAL again later, but an ARAL teacher has to be assigned again."
                       confirmLabel="Remove from ARAL"
                       variant="destructive"
                       disabled={archived || pending}
@@ -507,9 +507,9 @@ export function LearnerProfileModal({
         {/* Nested on purpose, the way this footer's confirm sheets already are:
             the picker belongs to one learner, so it closes with the dialog that
             opened it, and closing it leaves that dialog standing. A completed
-            write re-reads the row, so the tutor's name and the enrolment status
+            write re-reads the row, so the ARAL teacher's name and the enrolment status
             change in place rather than waiting for the next visit. */}
-        <AssignAralTutorDialog
+        <AssignAralTeacherDialog
           target={aralTarget}
           onClose={() => setAralTarget(null)}
           onDone={() => {

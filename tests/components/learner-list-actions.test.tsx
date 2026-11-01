@@ -53,11 +53,11 @@ vi.mock("@/lib/actions/learner", () => ({
   enrollRosterLearnersToAral: (...args: unknown[]) =>
     enrollRosterLearnersToAral(...(args as [])),
 }));
-// The tutor picker fetches this when it opens. Stubbed rather than left out:
+// The teacher picker fetches this when it opens. Stubbed rather than left out:
 // the module is a server action, so importing it for real would drag Prisma in.
-const listAralTutorOptions = vi.fn();
-vi.mock("@/lib/actions/aral-tutors", () => ({
-  listAralTutorOptions: () => listAralTutorOptions(),
+const listAralTeacherOptions = vi.fn();
+vi.mock("@/lib/actions/aral-teachers", () => ({
+  listAralTeacherOptions: () => listAralTeacherOptions(),
 }));
 vi.mock("@/components/nav-prefetcher", () => ({
   invalidateNavWarm: vi.fn(),
@@ -141,10 +141,10 @@ function bodyRows(): HTMLElement[] {
 beforeEach(() => {
   vi.clearAllMocks();
   getLearnerProfile.mockResolvedValue({ ok: false, error: "Not found" });
-  listAralTutorOptions.mockResolvedValue({
+  listAralTeacherOptions.mockResolvedValue({
     ok: true,
     data: {
-      tutors: [
+      teachers: [
         {
           id: "self",
           name: "Marivic Reyes",
@@ -263,20 +263,20 @@ describe("LearnerListClient — Actions column", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 
     // Ben already is, so the menu offers no second enrolment — changing his
-    // tutor lives on the profile dialog's ARAL tab instead.
+    // teacher lives on the profile dialog's ARAL tab instead.
     menu = await openRowMenu("Ben Cruz");
     expect(within(menu).queryByRole("menuitem", { name: "Enroll as ARAL" })).toBeNull();
   });
 
-  it("asks who will tutor before it enrolls anyone", async () => {
+  it("asks who will teacher before it enrolls anyone", async () => {
     renderRoster();
     const menu = await openRowMenu("Ana Santos");
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Enroll as ARAL" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog.textContent).toContain("Enroll Ana Santos in ARAL");
-    expect(dialog.textContent).toContain("ARAL tutor");
-    expect(listAralTutorOptions).toHaveBeenCalled();
+    expect(dialog.textContent).toContain("ARAL teacher");
+    expect(listAralTeacherOptions).toHaveBeenCalled();
 
     // The picker is the gate, not a formality: the spark opens a choice and
     // writes nothing until it is confirmed.
@@ -285,7 +285,7 @@ describe("LearnerListClient — Actions column", () => {
     expect(enrollRosterLearnersToAral).not.toHaveBeenCalled();
   });
 
-  it("enrolls with the chosen tutor once confirmed", async () => {
+  it("enrolls with the chosen teacher once confirmed", async () => {
     renderRoster();
     const menu = await openRowMenu("Ana Santos");
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Enroll as ARAL" }));
@@ -294,7 +294,7 @@ describe("LearnerListClient — Actions column", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Enroll" }));
 
-    // Keeping the learner yourself sends no tutor at all — the action reads an
+    // Keeping the learner yourself sends no teacher at all — the action reads an
     // omitted designation as "whoever enrolled them".
     await waitFor(() =>
       expect(enrollRosterLearnersToAral).toHaveBeenCalledWith({

@@ -188,7 +188,7 @@ export function ProfilePanel({ learner }: { learner: LearnerProfileData }) {
                 <StatusPill tone="neutral">Not enrolled</StatusPill>
               )}
             </Field>
-            <Field label="ARAL tutor">{orDash(learner.aralTutorName)}</Field>
+            <Field label="ARAL teacher">{orDash(learner.aralTeacherName)}</Field>
           </FieldGrid>
         </InfoCard>
       </div>

@@ -239,9 +239,9 @@ describe("buildMosyExportTable", () => {
     expect(t.rows).toBe(t.blocks![1]!.rows);
   });
 
-  it("summary lines include the tutor, filters and learner count, with no truncation note when complete", () => {
+  it("summary lines include the teacher, filters and learner count, with no truncation note when complete", () => {
     const t = buildMosyExportTable(input());
-    expect(t.summary).toContain("ARAL tutor: Marivic Santos");
+    expect(t.summary).toContain("ARAL teacher: Marivic Santos");
     expect(t.summary!.some((s) => s.startsWith("Filters applied: Grade & section: All"))).toBe(true);
     expect(t.summary).toContain("1 learner(s) listed");
     expect(t.summary!.some((s) => s.includes("Only the first"))).toBe(false);

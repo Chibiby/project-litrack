@@ -49,9 +49,9 @@ const rel = (f: string) => path.relative(SRC, f).replace(/\\/g, "/");
  * predicate.
  *
  * `teacherLearnerScope` asks "may this teacher act on the learner" — adviser OR
- * designated ARAL tutor. Every ARAL page and write path used it, so an adviser
+ * designated ARAL teacher. Every ARAL page and write path used it, so an adviser
  * saw and could encode the ARAL records of learners in their own class that
- * somebody else is the designated tutor for. `tests/unit/teachers-scope.test.ts`
+ * somebody else is the designated teacher for. `tests/unit/teachers-scope.test.ts`
  * guards the two predicates; this file guards which one each surface reaches for,
  * because the predicates were never wrong — the wiring was.
  *
@@ -90,7 +90,7 @@ describe("ARAL surfaces use the narrow learner scope", () => {
     const scoped: string[] = [];
     for (const file of aralSources()) {
       const text = readFileSync(file, "utf8");
-      if (/aralLearnerScope|teacherIsAralTutorFor/.test(text)) {
+      if (/aralLearnerScope|teacherIsAralTeacherFor/.test(text)) {
         scoped.push(rel(file));
       }
     }
@@ -133,7 +133,7 @@ describe("ARAL surfaces use the narrow learner scope", () => {
 });
 
 /**
- * The backfill migration hand-writes `aralTutorScope` in SQL, because a
+ * The backfill migration hand-writes `aralTeacherScope` in SQL, because a
  * migration cannot call TypeScript. Two copies of one rule drift, so this reads
  * both and checks they still say the same thing.
  *
@@ -141,19 +141,23 @@ describe("ARAL surfaces use the narrow learner scope", () => {
  * for meaning from here. It catches the failure that actually happens: a
  * condition added to the scope and forgotten in the SQL.
  */
-describe("the ARAL tutor backfill matches aralTutorScope", () => {
-  const MIGRATION = path.resolve(
-    __dirname,
-    "../../prisma/migrations/20260910000006_backfill_aral_tutor_designation/migration.sql"
+describe("the ARAL teacher backfill matches aralTeacherScope", () => {
+  // Applied migration folders are immutable, so the directory keeps its original
+  // name; find it by its version prefix rather than spelling the old word here.
+  const MIGRATIONS_DIR = path.resolve(__dirname, "../../prisma/migrations");
+  const MIGRATION = path.join(
+    MIGRATIONS_DIR,
+    readdirSync(MIGRATIONS_DIR).find((d) => d.startsWith("20260910000006_backfill_aral_"))!,
+    "migration.sql"
   );
 
   it("names every condition the eligibility scope carries", () => {
     const scope = readFileSync(
-      path.join(SRC, "lib/teachers/aral-tutor.ts"),
+      path.join(SRC, "lib/teachers/aral-teacher.ts"),
       "utf8"
     );
     const body = scope
-      .split("export function aralTutorScope")[1]
+      .split("export function aralTeacherScope")[1]
       ?.split("}")[0] ?? "";
     expect(body).toBeTruthy();
 
@@ -167,7 +171,7 @@ describe("the ARAL tutor backfill matches aralTutorScope", () => {
       ["approvalStatus", /u\."approvalStatus" = 'APPROVED'/],
     ];
     for (const [key, sqlForm] of expected) {
-      expect(body, `aralTutorScope no longer carries ${key}`).toContain(key);
+      expect(body, `aralTeacherScope no longer carries ${key}`).toContain(key);
       expect(sql, `the migration lost the ${key} condition`).toMatch(sqlForm);
     }
     // A sixth condition would mean the SQL is now missing one. `[,:]`, not just

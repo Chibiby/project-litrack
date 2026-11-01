@@ -28,8 +28,8 @@ vi.mock("@/lib/actions/learner", () => ({
   toggleAralLearner: vi.fn(),
   enrollRosterLearnersToAral: vi.fn(),
 }));
-vi.mock("@/lib/actions/aral-tutors", () => ({
-  listAralTutorOptions: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+vi.mock("@/lib/actions/aral-teachers", () => ({
+  listAralTeacherOptions: vi.fn().mockResolvedValue({ ok: true, data: [] }),
 }));
 vi.mock("@/components/nav-prefetcher", () => ({
   invalidateNavWarm: vi.fn(),
@@ -73,7 +73,7 @@ function learner(id: string, first: string, last: string) {
     adviserName: "Teacher One",
     isAralLearner: false,
     aralEnrolledAt: null,
-    aralTutorName: null,
+    aralTeacherName: null,
     aralTeacherId: null,
     archivedAt: null,
     createdAt: "2026-06-10",

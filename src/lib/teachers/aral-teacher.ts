@@ -6,7 +6,7 @@ import { schoolTeachers } from "@/lib/cache/tags";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 
 /**
- * Who may be designated the ARAL tutor for a learner.
+ * Who may be designated the ARAL teacher for a learner.
  *
  * ANY teacher at the school qualifies, DepEd plantilla or not, with or without an
  * advisory section. That is the point of the designation: it is the axis that lets
@@ -17,7 +17,7 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
  * validates against, the interface offers people the action then refuses — the
  * exact failure the grade dropdown used to produce.
  */
-export function aralTutorScope(schoolId: string): Prisma.UserWhereInput {
+export function aralTeacherScope(schoolId: string): Prisma.UserWhereInput {
   return {
     schoolId,
     role: "TEACHER",
@@ -27,7 +27,7 @@ export function aralTutorScope(schoolId: string): Prisma.UserWhereInput {
   };
 }
 
-export type AralTutorOption = {
+export type AralTeacherPickOption = {
   id: string;
   name: string;
   /** "Grade 3 · Sampaguita", or null for a teacher who advises nothing. */
@@ -46,7 +46,7 @@ export type AralTutorOption = {
  *
  * Cached here rather than at the call sites, so all four readers share one entry:
  * the ARAL dashboard, the enroll control on the two ARAL grade sheets, the School
- * Head ARAL tab, and the `listAralTutorOptions` action behind the on-demand
+ * Head ARAL tab, and the `listAralTeacherOptions` action behind the on-demand
  * picker. Keyed on `schoolId` alone because that is the whole of the `where`
  * besides fixed literals — nothing here is teacher-scoped, so no `teacherId` or
  * `isSuperAdmin` part would discriminate anything.
@@ -59,18 +59,18 @@ export type AralTutorOption = {
  * `revalidateSchoolTeachers`. Both halves of `advisoryLabel` are covered as a
  * result: who advises what, and what the section is called.
  *
- * Returns `AralTutorOption[]`, which holds no `Date`: the archived-section
+ * Returns `AralTeacherPickOption[]`, which holds no `Date`: the archived-section
  * filter now lives in the `where` on the list relation rather than in a
  * `deletedAt` this function has to select, so no timestamp escapes at all and
  * nothing can arrive back from the JSON round trip as a string with `Date`
  * methods called on it.
  */
-export async function listAralTutors(schoolId: string): Promise<AralTutorOption[]> {
+export async function listAralTeachers(schoolId: string): Promise<AralTeacherPickOption[]> {
   return cachedQuery(
     async () => {
       const teachers = await prisma.user.findMany({
         relationLoadStrategy: "join",
-        where: aralTutorScope(schoolId),
+        where: aralTeacherScope(schoolId),
         select: {
           id: true,
           fullName: true,
@@ -90,7 +90,7 @@ export async function listAralTutors(schoolId: string): Promise<AralTutorOption[
       });
 
       return teachers.map((t) => {
-        // Every section they advise, not the first. The person choosing a tutor
+        // Every section they advise, not the first. The person choosing an ARAL teacher
         // is picking a colleague, and "Grade 3 · Sampaguita" for a teacher who
         // also holds two other classes tells them less than the full list.
         const advisory =
@@ -113,7 +113,7 @@ export async function listAralTutors(schoolId: string): Promise<AralTutorOption[
       });
     },
     {
-      keyParts: ["aral-tutors-v1", schoolId],
+      keyParts: ["aral-teachers-v1", schoolId],
       tags: [schoolTeachers(schoolId)],
       profile: "volatile",
     }
@@ -121,12 +121,12 @@ export async function listAralTutors(schoolId: string): Promise<AralTutorOption[
 }
 
 /** True when this id is a teacher at this school who may hold a designation. */
-export async function isEligibleAralTutor(
+export async function isEligibleAralTeacher(
   teacherId: string,
   schoolId: string
 ): Promise<boolean> {
   const teacher = await prisma.user.findFirst({
-    where: { id: teacherId, ...aralTutorScope(schoolId) },
+    where: { id: teacherId, ...aralTeacherScope(schoolId) },
     select: { id: true },
   });
   return teacher != null;

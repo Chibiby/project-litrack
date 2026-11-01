@@ -40,8 +40,8 @@ vi.mock("@/lib/dashboard/aggregates", () => ({
 vi.mock("@/lib/cache/grade-sections", () => ({
   getGradeSections: vi.fn().mockResolvedValue([]),
 }));
-vi.mock("@/lib/teachers/aral-tutor", () => ({
-  listAralTutors: vi.fn().mockResolvedValue([]),
+vi.mock("@/lib/teachers/aral-teacher", () => ({
+  listAralTeachers: vi.fn().mockResolvedValue([]),
 }));
 
 const { default: AralDashboard, ARAL_LEARNERS_LIST_KEYS } = await import(

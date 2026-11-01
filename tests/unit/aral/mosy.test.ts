@@ -36,7 +36,7 @@ describe("mosyLevelLanguage", () => {
  * a patch are MOVE_OUT on a tagged learner and STAY on an untagged one.
  */
 
-const ACTOR = "tutor-1";
+const ACTOR = "teacher-1";
 const NOW = new Date("2026-09-29T02:00:00.000Z");
 const ENROLLED = new Date("2026-06-10T00:00:00.000Z");
 
@@ -412,7 +412,7 @@ describe("resolveMosySave — never untags on a level change", () => {
 });
 
 describe("resolveMosySave — MOVE_OUT on a tagged learner", () => {
-  it("untags, clears tutor and date, and captures the prior date", () => {
+  it("untags, clears teacher and date, and captures the prior date", () => {
     const res = expectOk(
       resolve({
         learner: tagged(),

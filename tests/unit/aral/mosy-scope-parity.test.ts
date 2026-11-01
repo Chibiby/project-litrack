@@ -18,8 +18,8 @@ const OLD_YEAR = "year-0";
 const A = "section-a";
 const B = "section-b";
 const C = "section-c";
-const T1 = "tutor-1";
-const T2 = "tutor-2";
+const T1 = "teacher-1";
+const T2 = "teacher-2";
 
 type Row = {
   schoolYearId: string;
@@ -85,7 +85,7 @@ const fx = (
 const FIXTURES: Fixture[] = [
   fx("tagged to T1, in A, no row", true, T1, A, []),
   fx("tagged to T2, in A, no row", true, T2, A, []),
-  fx("tagged no tutor, in A", true, null, A, []),
+  fx("tagged no teacher, in A", true, null, A, []),
   fx("tagged T1, in B, deferred", true, T1, B, [row(null, T1)]),
   fx("tagged T1, in A, STAY", true, T1, A, [row("STAY", T1)]),
   fx("tagged T1, in A, MOVE_OUT (re-enrolled since)", true, T1, A, [row("MOVE_OUT", T1)]),
@@ -93,7 +93,7 @@ const FIXTURES: Fixture[] = [
   fx("tagged, no section", true, T1, null, []),
   fx("untagged in A, T1 moved out", false, null, A, [row("MOVE_OUT", T1)]),
   fx("untagged in A, T2 moved out", false, null, A, [row("MOVE_OUT", T2)]),
-  fx("untagged in B, moved out with null tutor", false, null, B, [row("MOVE_OUT", null)]),
+  fx("untagged in B, moved out with null teacher", false, null, B, [row("MOVE_OUT", null)]),
   fx("untagged in C, moved out", false, null, C, [row("MOVE_OUT", T1)]),
   fx("untagged, no section, moved out", false, null, null, [row("MOVE_OUT", T1)]),
   fx("untagged in A, STAY row (toggled off later)", false, null, A, [row("STAY", T1)]),
@@ -140,7 +140,7 @@ describe("mosyLearnerScope <-> teacherOwnsMosyRow", () => {
     });
   });
 
-  it("never consults the ARAL tutor: no aralTeacherId or tutorId anywhere", () => {
+  it("never consults the ARAL teacher: no aralTeacherId or tutorId anywhere", () => {
     for (const [, s] of SCOPES) {
       const json = JSON.stringify(mosyLearnerScope(s, YEAR));
       expect(json).not.toContain("tutorId");
@@ -171,11 +171,11 @@ describe("mosyLearnerScope <-> teacherOwnsMosyRow", () => {
     expect(seen).not.toContain("untagged in A, no row");
   });
 
-  it("an adviser sees a section's learners whoever the tutor is, tagged or moved out by anyone", () => {
+  it("an adviser sees a section's learners whoever the teacher is, tagged or moved out by anyone", () => {
     const seen = FIXTURES.filter((f) => evalWhere(f, mosyLearnerScope([A], YEAR))).map((f) => f.name);
     expect(seen).toContain("tagged to T1, in A, no row");
     expect(seen).toContain("tagged to T2, in A, no row");
-    expect(seen).toContain("tagged no tutor, in A");
+    expect(seen).toContain("tagged no teacher, in A");
     expect(seen).toContain("untagged in A, T1 moved out");
     expect(seen).toContain("untagged in A, T2 moved out");
   });

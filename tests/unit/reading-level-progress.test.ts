@@ -255,7 +255,7 @@ describe("countMonthlyAssessmentProgress — grade-aware completeness (docs/read
     expect(result.completed).toBe(0);
   });
 
-  it("counts both grades correctly in one mixed-grade call (a teacher advising Kinder and ARAL-tutoring Grade 5)", async () => {
+  it("counts both grades correctly in one mixed-grade call (a teacher advising Kinder and ARAL-teaching Grade 5)", async () => {
     records = [
       // Complete for Kinder: English rightly not required.
       record({ id: "r-kinder", learnerId: "l-kinder", gradeLevelId: KINDER_GRADE.id, englishProfile: null }),

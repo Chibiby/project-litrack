@@ -9,11 +9,11 @@ import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
 import { cn } from "@/lib/utils";
 
 /**
- * Structurally the `AralTutorOption` that `listAralTutors` returns, declared
+ * Structurally the `AralTeacherPickOption` that `listAralTeachers` returns, declared
  * here rather than imported: that module is `server-only`, and the shape
  * travels in this direction anyway.
  */
-export type AralTutorOption = {
+export type AralTeacherPickOption = {
   id: string;
   name: string;
   /** "Grade 3 · Sampaguita", or null for a teacher who advises nothing. */
@@ -28,8 +28,8 @@ function fold(value: string): string {
     .toLowerCase();
 }
 
-function matches(tutor: AralTutorOption, tokens: string[]): boolean {
-  const haystack = fold(`${tutor.name} ${tutor.advisoryLabel ?? "ARAL only"}`);
+function matches(teacher: AralTeacherPickOption, tokens: string[]): boolean {
+  const haystack = fold(`${teacher.name} ${teacher.advisoryLabel ?? "ARAL only"}`);
   return tokens.every((t) => haystack.includes(t));
 }
 
@@ -37,20 +37,20 @@ function matches(tutor: AralTutorOption, tokens: string[]): boolean {
  * Every whitespace-separated token must appear somewhere in the name or
  * sublabel, so "banas" finds "Bañas" and "grade 5" finds "Grade 5 · Narra".
  */
-export function filterAralTutors(
-  tutors: AralTutorOption[],
+export function filterAralTeachers(
+  teachers: AralTeacherPickOption[],
   query: string
-): AralTutorOption[] {
+): AralTeacherPickOption[] {
   const tokens = fold(query).split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return tutors;
-  return tutors.filter((t) => matches(t, tokens));
+  if (tokens.length === 0) return teachers;
+  return teachers.filter((t) => matches(t, tokens));
 }
 
 type Props = {
   /** Every other teacher who may hold the designation — "Myself" excluded. */
-  tutors: AralTutorOption[];
+  teachers: AralTeacherPickOption[];
   selfId: string;
-  /** Selected tutor id — `selfId` means "Myself". */
+  /** Selected ARAL teacher id — `selfId` means "Myself". */
   value: string;
   onValueChange: (value: string) => void;
   disabled?: boolean;
@@ -58,12 +58,12 @@ type Props = {
 };
 
 /**
- * Searchable "who tutors this learner in ARAL" picker, shared by the enroll
+ * Searchable "who is this learner's ARAL teacher" picker, shared by the enroll
  * and reassign flows. "Myself" is always the first row and is never filtered
  * out — it is how a teacher un-delegates, and searching should not hide it.
  */
-export function AralTutorCombobox({
-  tutors,
+export function AralTeacherCombobox({
+  teachers,
   selfId,
   value,
   onValueChange,
@@ -75,28 +75,28 @@ export function AralTutorCombobox({
   const [activeIndex, setActiveIndex] = React.useState(0);
 
   const reactId = React.useId();
-  const baseId = id ?? `aral-tutor-${reactId}`;
+  const baseId = id ?? `aral-teacher-${reactId}`;
   const listId = `${baseId}-listbox`;
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
 
-  const filteredTutors = React.useMemo(
-    () => filterAralTutors(tutors, query),
-    [tutors, query]
+  const filteredTeachers = React.useMemo(
+    () => filterAralTeachers(teachers, query),
+    [teachers, query]
   );
 
   const assignedToSelf = value === selfId;
-  const chosenTutor = tutors.find((t) => t.id === value);
-  const label = assignedToSelf ? "Myself" : (chosenTutor?.name ?? "Myself");
+  const chosenTeacher = teachers.find((t) => t.id === value);
+  const label = assignedToSelf ? "Myself" : (chosenTeacher?.name ?? "Myself");
 
   // "Myself" survives any filter and always leads the list.
-  const rows: Array<{ kind: "self" } | { kind: "tutor"; tutor: AralTutorOption }> =
+  const rows: Array<{ kind: "self" } | { kind: "teacher"; teacher: AralTeacherPickOption }> =
     React.useMemo(
       () => [
         { kind: "self" as const },
-        ...filteredTutors.map((tutor) => ({ kind: "tutor" as const, tutor })),
+        ...filteredTeachers.map((teacher) => ({ kind: "teacher" as const, teacher })),
       ],
-      [filteredTutors]
+      [filteredTeachers]
     );
 
   // A filter change resets the highlighted row. Adjusted during render (React
@@ -147,7 +147,7 @@ export function AralTutorCombobox({
     } else if (event.key === "Enter") {
       event.preventDefault();
       const row = rows[activeIndex];
-      if (row) commit(row.kind === "self" ? selfId : row.tutor.id);
+      if (row) commit(row.kind === "self" ? selfId : row.teacher.id);
     } else if (event.key === "Escape") {
       event.preventDefault();
       setOpen(false);
@@ -201,7 +201,7 @@ export function AralTutorCombobox({
           className="max-h-64 overflow-y-scroll p-1 [scrollbar-gutter:stable]"
         >
           {rows.map((row, index) => {
-            const rowValue = row.kind === "self" ? selfId : row.tutor.id;
+            const rowValue = row.kind === "self" ? selfId : row.teacher.id;
             return (
               <div
                 key={rowValue}
@@ -220,11 +220,11 @@ export function AralTutorCombobox({
                 ) : (
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate">{row.tutor.name}</span>
-                      <EmploymentTypeChip employmentType={row.tutor.employmentType} />
+                      <span className="truncate">{row.teacher.name}</span>
+                      <EmploymentTypeChip employmentType={row.teacher.employmentType} />
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {row.tutor.advisoryLabel ?? "ARAL only"}
+                      {row.teacher.advisoryLabel ?? "ARAL only"}
                     </span>
                   </span>
                 )}
@@ -232,9 +232,9 @@ export function AralTutorCombobox({
               </div>
             );
           })}
-          {filteredTutors.length === 0 && query.trim() !== "" ? (
+          {filteredTeachers.length === 0 && query.trim() !== "" ? (
             <p className="p-4 text-center text-sm text-muted-foreground">
-              No tutor found
+              No teacher found
             </p>
           ) : null}
         </div>

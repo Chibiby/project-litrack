@@ -6,9 +6,9 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
  *
  * The behaviour pinned here is the `schoolTeachers` bust, because a rename is the
  * one `Section` write that changes a *cached* value while touching no `User` row.
- * `listAralTutors` is tagged `schoolTeachers(schoolId)` and builds each teacher's
+ * `listAralTeachers` is tagged `schoolTeachers(schoolId)` and builds each teacher's
  * `advisoryLabel` from `advisorySection.name`, so without
- * `revalidateSchoolTeachers` every ARAL tutor picker keeps showing the old section
+ * `revalidateSchoolTeachers` every ARAL teacher picker keeps showing the old section
  * name until the entry's TTL runs out. Nothing about that is visible from the
  * rename's own response — the action returns `{ ok: true }` either way, and the
  * Grade Levels page it revalidates shows the new name immediately — which is
@@ -142,13 +142,13 @@ describe("updateSection — cache fan-out on a rename", () => {
     });
     expect(sectionRows[0].name).toBe("Rosal");
 
-    // The case this file exists for. `listAralTutors` caches `advisoryLabel`,
+    // The case this file exists for. `listAralTeachers` caches `advisoryLabel`,
     // which embeds the section name, under `schoolTeachers(schoolId)`; the
     // dashboard bust below does not reach that tag. Remove the
     // `revalidateSchoolTeachers` line from the action and only this reddens.
     expect(revalidateSchoolTeachers).toHaveBeenCalledWith(SCHOOL_ID);
     // With the id, not bare: the tag is tenant-scoped, so another school's id
-    // would clear that tenant's tutor list and leave this one stale.
+    // would clear that tenant's teacher list and leave this one stale.
     expect(revalidateSchoolTeachers).toHaveBeenCalledTimes(1);
 
     expect(revalidateSchoolDashboard).toHaveBeenCalledWith(SCHOOL_ID);

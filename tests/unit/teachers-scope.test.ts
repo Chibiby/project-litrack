@@ -7,7 +7,7 @@ import {
   teacherAdvisoryGradeScope,
   teacherCanAccessLearner,
   teacherGradeScope,
-  teacherIsAralTutorFor,
+  teacherIsAralTeacherFor,
   teacherLearnerScope,
 } from "@/lib/teachers/scope";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
@@ -208,9 +208,9 @@ describe("deniesAdvisoryRoster", () => {
 
 /**
  * §11 of the ten concerns. `teacherLearnerScope` answers "may this teacher act
- * on the learner" — adviser OR designated ARAL tutor — and every ARAL page used
+ * on the learner" — adviser OR designated ARAL teacher — and every ARAL page used
  * it. So an adviser saw the ARAL learners in their own class on their own ARAL
- * pages even when somebody else was the designated tutor. That is the reported
+ * pages even when somebody else was the designated teacher. That is the reported
  * bug, and it is a real correctness bug: the ARAL programme's records were being
  * shown to, and writable by, a teacher who is not running it for that learner.
  *
@@ -223,7 +223,7 @@ describe("deniesAdvisoryRoster", () => {
  * other.
  */
 describe("aralLearnerScope", () => {
-  it("matches the designated ARAL tutor only — advising is not enough", () => {
+  it("matches the designated ARAL teacher only — advising is not enough", () => {
     expect(aralLearnerScope(TEACHER)).toEqual({ aralTeacherId: TEACHER });
   });
 
@@ -250,37 +250,37 @@ describe("aralLearnerScope", () => {
   });
 });
 
-describe("teacherIsAralTutorFor", () => {
-  it("admits the designated tutor", () => {
+describe("teacherIsAralTeacherFor", () => {
+  it("admits the designated teacher", () => {
     expect(
-      teacherIsAralTutorFor({ teacherId: OTHER, aralTeacherId: TEACHER }, TEACHER)
+      teacherIsAralTeacherFor({ teacherId: OTHER, aralTeacherId: TEACHER }, TEACHER)
     ).toBe(true);
   });
 
-  it("admits a tutor of a floating learner who has no adviser", () => {
+  it("admits a teacher of a floating learner who has no adviser", () => {
     expect(
-      teacherIsAralTutorFor({ teacherId: null, aralTeacherId: TEACHER }, TEACHER)
+      teacherIsAralTeacherFor({ teacherId: null, aralTeacherId: TEACHER }, TEACHER)
     ).toBe(true);
   });
 
   /** The regression. `teacherCanAccessLearner` says yes here; this must say no. */
-  it("refuses the adviser when somebody else is the designated tutor", () => {
+  it("refuses the adviser when somebody else is the designated teacher", () => {
     const learner = { teacherId: TEACHER, aralTeacherId: OTHER };
     expect(teacherCanAccessLearner(learner, TEACHER)).toBe(true);
-    expect(teacherIsAralTutorFor(learner, TEACHER)).toBe(false);
+    expect(teacherIsAralTeacherFor(learner, TEACHER)).toBe(false);
   });
 
-  it("refuses an adviser of a learner with no designated tutor at all", () => {
+  it("refuses an adviser of a learner with no designated teacher at all", () => {
     // Nobody is running ARAL for this learner yet. Advising them does not make
-    // the adviser the tutor by default — the designation is an explicit act.
+    // the adviser the teacher by default — the designation is an explicit act.
     expect(
-      teacherIsAralTutorFor({ teacherId: TEACHER, aralTeacherId: null }, TEACHER)
+      teacherIsAralTeacherFor({ teacherId: TEACHER, aralTeacherId: null }, TEACHER)
     ).toBe(false);
   });
 
   it("denies when both pointers are null — null must never match", () => {
     expect(
-      teacherIsAralTutorFor({ teacherId: null, aralTeacherId: null }, TEACHER)
+      teacherIsAralTeacherFor({ teacherId: null, aralTeacherId: null }, TEACHER)
     ).toBe(false);
   });
 });

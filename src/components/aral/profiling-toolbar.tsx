@@ -20,8 +20,8 @@ export type ProfilingSectionOption = { id: string; name: string };
 /**
  * ARAL Profiling's own search + Section + Status row. Not `AralSectionSelect`
  * from `aral-scope-select.tsx`: that component's `pathForGrade` signature
- * assumes one grade in the URL, but Profiling lists a tutor's learners across
- * every grade they are assigned to.
+ * assumes one grade in the URL, but Profiling lists an ARAL teacher's learners across
+ *every grade they are assigned to.
  *
  * URL-driven: `q`, `section` and `status` all live in the query string, and
  * every change here resets `page` to `1` while preserving `schoolId` and

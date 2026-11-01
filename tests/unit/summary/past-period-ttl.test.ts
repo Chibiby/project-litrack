@@ -111,7 +111,7 @@ describe("past period TTL", () => {
     }
   );
 
-  it.each(["learners", "compliance", "profiling", "aral", "end-of-term"] as const)(
+  it.each(["learners", "compliance", "profiling", "aral", "aral-teachers", "end-of-term"] as const)(
     "%s has no month period and keeps 300 s",
     async (id) => {
       const e = await run(id, {});

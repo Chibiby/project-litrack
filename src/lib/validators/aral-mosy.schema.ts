@@ -64,7 +64,7 @@ export type AralMosyDecisionInput = z.output<typeof aralMosyDecisionSchema>;
 
 /**
  * MOSY page export. Carries only the page's list filters and the file choice;
- * the school, school year and tutor scope come from the session, never from here.
+ * the school, school year and ARAL teacher scope come from the session, never from here.
  * `grade` / `section` are ids and are only shape-checked: the loader pins them to
  * the session's school, so a foreign id matches nothing.
  */

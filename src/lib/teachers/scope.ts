@@ -40,17 +40,17 @@ export function teacherLearnerScope(teacherId: string): Prisma.LearnerWhereInput
 }
 
 /**
- * True when `teacherId` is the learner's DESIGNATED ARAL tutor. Advising them is
+ * True when `teacherId` is the learner's DESIGNATED ARAL teacher. Advising them is
  * not enough.
  *
  * The narrow counterpart to `teacherCanAccessLearner`, and the boolean half of
  * `aralLearnerScope`. Use it on the ARAL write paths that load a learner by id
  * and guard it in memory; use `teacherCanAccessLearner` everywhere else.
  *
- * A learner with no designated tutor matches nobody — the designation is an
+ * A learner with no designated ARAL teacher matches nobody — the designation is an
  * explicit act, and an adviser does not acquire it by default.
  */
-export function teacherIsAralTutorFor(
+export function teacherIsAralTeacherFor(
   learner: LearnerTeacherRefs,
   teacherId: string
 ): boolean {
@@ -58,12 +58,12 @@ export function teacherIsAralTutorFor(
 }
 
 /**
- * `where` fragment for "learners this teacher is the DESIGNATED ARAL tutor for".
+ * `where` fragment for "learners this teacher is the DESIGNATED ARAL teacher for".
  *
  * ARAL pages and ARAL write paths only. `teacherLearnerScope` answers a different
  * question — "may this teacher act on the learner at all" — and answering it on
  * an ARAL page showed an adviser the ARAL records of learners in their class that
- * somebody else is the designated tutor for.
+ * somebody else is the designated ARAL teacher for.
  *
  * The two must stay separate. Narrowing `teacherLearnerScope` to this would close
  * the advisory roster, the exports, global search and the dashboard aggregates to
@@ -81,9 +81,9 @@ export function aralLearnerScope(teacherId: string): Prisma.LearnerWhereInput {
 /**
  * `where` fragment for the MOSY Report: "ARAL learners in the given advisory
  * sections, plus learners in those sections who were moved out of ARAL through
- * MOSY this school year (by any tutor)".
+ * MOSY this school year (by any ARAL teacher)".
  *
- * Advisory scope, not tutor scope: the MOSY Report belongs to the DepEd adviser of
+ * Advisory scope, not ARAL teacher scope: the MOSY Report belongs to the DepEd adviser of
  * the class, so `aralTeacherId` and the decision row's `tutorId` are deliberately
  * not consulted. A moved-out learner is untagged, so the this-year MOVE_OUT
  * decision row is what keeps them on the adviser's page.
@@ -166,7 +166,7 @@ export function teacherAdvisoryGradeScope(
  * `Section.adviserId` is what every access decision reads, so the mirror can only
  * ever agree with the advisory pointers or lag behind them.
  *
- * A teacher who advises nothing and tutors nobody matches no grades. That is the
+ * A teacher who advises nothing and is nobody's ARAL teacher matches no grades. That is the
  * intended outcome, not a gap — see `teacherAdvisoryGradeScope`.
  *
  * Owns the `OR` key, same caveat as `teacherLearnerScope`.
@@ -194,7 +194,7 @@ export type AdvisoryRosterDenial = "volunteer" | "floating" | null;
  * sheet, their sidebar rows) are closed to this user, or null when they are not.
  * A Non-DepEd ARAL Volunteer never advises; a DepEd teacher set to FLOATING has
  * declared they will not — a floating teacher has no advisory roster and no
- * end-of-term workflow at all, while their ARAL tutoring stays open, because
+ * end-of-term workflow at all, while their ARAL teaching stays open, because
  * `aralLearnerScope` has never required an advisory. Two facts, two sets of
  * words, one gate. Fails open on a missing mode, and never closes for a Super
  * Admin impersonating the shell.

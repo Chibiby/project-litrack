@@ -132,7 +132,7 @@ export interface NavOptions {
   isDeveloperAdmin?: boolean;
 }
 
-/** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher tutors. */
+/** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher is the ARAL teacher of. */
 export const ARAL_PROFILING_HREF = "/teacher/aral/profiling";
 
 /**
@@ -191,7 +191,7 @@ export function getNavGroups(
             { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
             { id: "admin-deleted-learners", label: "Deleted learners", href: ADMIN_ROUTES.deletedLearners, icon: UserX, heavy: true },
             { id: "admin-teachers", label: "Teachers", href: ADMIN_ROUTES.teachers, icon: Users, heavy: true },
-            { id: "admin-aral-tutors", label: "ARAL Tutors", href: ADMIN_ROUTES.aralTutors, icon: HandHelping },
+            { id: "admin-aral-teachers", label: "ARAL Teachers", href: ADMIN_ROUTES.aralTeachers, icon: HandHelping },
             { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },
             { id: "admin-schools", label: "Schools", href: ADMIN_ROUTES.schools, icon: School },
             { id: "admin-district-admins", label: "District Admins", href: ADMIN_ROUTES.districtAdmins, icon: MapPinned, heavy: true },
@@ -250,7 +250,7 @@ export function getNavGroups(
               icon: Users,
               ...(options.pendingTeacherCount ? { badge: options.pendingTeacherCount } : {}),
             },
-            { id: "school-head-aral-tutors", label: "ARAL Tutors", href: SCHOOL_HEAD_ROUTES.aralTutors, icon: HandHelping },
+            { id: "school-head-aral-teachers", label: "ARAL Teachers", href: SCHOOL_HEAD_ROUTES.aralTeachers, icon: HandHelping },
           ],
         },
         {
@@ -320,7 +320,7 @@ export function getNavGroups(
             //
             // Not `aralHref(grades, "terms-reports")`: `hasAral` is the wrong axis
             // for an advisory-gated sheet, so a DepEd adviser with zero ARAL
-            // learners is entitled to it and an ARAL-only tutor is not.
+            // learners is entitled to it and an ARAL-only teacher is not.
             {
               id: "teacher-terms-reports",
               label: "End of Terms Reports",
@@ -356,7 +356,7 @@ export function getNavGroups(
               href: aralHref(grades, "reading-level"),
               icon: BookOpen,
             },
-            // One page for every ARAL learner this teacher tutors, across grades,
+            // One page for every ARAL learner of this ARAL teacher, across grades,
             // so it is never grade-scoped and never collapses onto the picker.
             // Longest-prefix matching still awards it over `/teacher/aral`.
             {

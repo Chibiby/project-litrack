@@ -6,24 +6,24 @@ import { demoSchoolFilter } from "@/lib/settings/system-settings";
 import { GRADE_LEVEL_LABELS, EMPLOYMENT_TYPE_LABELS } from "@/lib/constants/enum-labels";
 import { formatListingNameFromRecord } from "@/lib/names";
 import { schoolWhereForScope, type AdminScope } from "@/lib/auth/admin-scope";
-import { aralTutorScope } from "@/lib/teachers/aral-tutor";
+import { aralTeacherScope } from "@/lib/teachers/aral-teacher";
 import { ACCOUNT_GRADE_VALUES, cleanFilterId, cleanFilterText } from "@/lib/admin/accounts";
-import { ARAL_TUTOR_SORTS, type AralTutorSort } from "@/lib/admin/aral-tutor-sorts";
+import { ARAL_TEACHER_SORTS, type AralTeacherSort } from "@/lib/admin/aral-teacher-sorts";
 import {
-  ARAL_TUTOR_DEPED,
-  ARAL_TUTOR_NON_DEPED,
-  classifyAralTutor,
+  ARAL_TEACHER_DEPED,
+  ARAL_TEACHER_NON_DEPED,
+  classifyAralTeacher,
 } from "@/lib/summary/queries/aral";
 
 /**
- * "ARAL Tutors": every live, approved, switched-on teacher who is the ARAL
+ * "ARAL Teachers": every live, approved, switched-on teacher who is the ARAL
  * teacher (`Learner.aralTeacherId`) of at least one live, un-archived ARAL
  * learner, DepEd or Non-DepEd volunteer alike. "Active" is the Teachers page's
  * definition (`isActive` + `approvalStatus APPROVED`), the same rule
- * `aralTutorScope` applies to the tutor picker.
+ * `aralTeacherScope` applies to the ARAL teacher picker.
  *
- * Used by /school-head/aral-tutors (scope `school`) and
- * /admin/management/aral-tutors (scope `admin`).
+ * Used by /school-head/aral-teachers (scope `school`) and
+ * /admin/management/aral-teachers (scope `admin`).
  *
  * Tenancy: `school` scope pins `schoolId` on both the teacher and the learner
  * side. `admin` scope is for pages already behind `requireUser("SUPER_ADMIN")`
@@ -35,9 +35,9 @@ import {
  * `learner.groupBy` for every row's counts and grades, one small grade lookup.
  */
 
-export const ARAL_TUTORS_PAGE_SIZE = 25;
+export const ARAL_TEACHERS_PAGE_SIZE = 25;
 
-export type AralTutorsScope =
+export type AralTeachersScope =
   | { kind: "school"; schoolId: string }
   | {
       kind: "admin";
@@ -47,9 +47,9 @@ export type AralTutorsScope =
       scope?: AdminScope;
     };
 
-export { ARAL_TUTOR_SORTS, type AralTutorSort };
+export { ARAL_TEACHER_SORTS, type AralTeacherSort };
 
-export type AralTutorsSearchParams = {
+export type AralTeachersSearchParams = {
   page?: string;
   q?: string;
   district?: string;
@@ -58,7 +58,7 @@ export type AralTutorsSearchParams = {
   sort?: string;
 };
 
-export type AralTutorsParams = {
+export type AralTeachersParams = {
   page: number;
   pageSize: number;
   skip: number;
@@ -67,19 +67,19 @@ export type AralTutorsParams = {
   /** Admin filters; the school-scope loader ignores both. */
   district?: string;
   schoolId?: string;
-  /** Tutors with at least one live ARAL learner in this grade. */
+  /** ARAL teachers with at least one live ARAL learner in this grade. */
   grade?: GradeLevelType;
-  sort: AralTutorSort;
+  sort: AralTeacherSort;
 };
 
 /** Invalid values are dropped, never thrown. */
-export function parseAralTutorsParams(
-  searchParams: AralTutorsSearchParams,
-  pageSize: number = ARAL_TUTORS_PAGE_SIZE
-): AralTutorsParams {
+export function parseAralTeachersParams(
+  searchParams: AralTeachersSearchParams,
+  pageSize: number = ARAL_TEACHERS_PAGE_SIZE
+): AralTeachersParams {
   const rawPage = Number.parseInt(searchParams.page ?? "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
-  const size = pageSize > 0 ? pageSize : ARAL_TUTORS_PAGE_SIZE;
+  const size = pageSize > 0 ? pageSize : ARAL_TEACHERS_PAGE_SIZE;
   return {
     page,
     pageSize: size,
@@ -89,18 +89,18 @@ export function parseAralTutorsParams(
     district: cleanFilterText(searchParams.district),
     schoolId: cleanFilterId(searchParams.schoolId),
     grade: ACCOUNT_GRADE_VALUES.find((g) => g === searchParams.grade),
-    sort: ARAL_TUTOR_SORTS.parse(searchParams.sort),
+    sort: ARAL_TEACHER_SORTS.parse(searchParams.sort),
   };
 }
 
-export function aralTutorsTotalPages(
+export function aralTeachersTotalPages(
   totalCount: number,
-  pageSize: number = ARAL_TUTORS_PAGE_SIZE
+  pageSize: number = ARAL_TEACHERS_PAGE_SIZE
 ): number {
   return totalCount <= 0 ? 1 : Math.ceil(totalCount / pageSize);
 }
 
-export type AralTutorRow = {
+export type AralTeacherRow = {
   id: string;
   /** Surname-first display form. */
   listingName: string;
@@ -112,26 +112,26 @@ export type AralTutorRow = {
   designation: string | null;
   /** "Grade 3 · Sampaguita, Grade 4 · Rizal", or null when they advise nothing. */
   advisorySummary: string | null;
-  /** Live, un-archived ARAL learners this teacher tutors. */
+  /** Live, un-archived ARAL learners this teacher is the ARAL teacher of. */
   aralLearnerCount: number;
   /** Grades those learners are in, Kinder first, with per-grade counts. */
   grades: { grade: GradeLevelType; label: string; count: number }[];
-  /** The tutor's school. Shown on the admin page; present on both. */
+  /** The ARAL teacher's school. Shown on the admin page; present on both. */
   school: { id: string; name: string };
 };
 
-export type AralTutorsPage = {
-  rows: AralTutorRow[];
+export type AralTeachersPage = {
+  rows: AralTeacherRow[];
   totalCount: number;
 };
 
-export type AralTutorsSummary = {
-  /** Tutors in scope (ignores search and the grade filter). */
-  tutors: number;
+export type AralTeachersSummary = {
+  /** ARAL teachers in scope (ignores search and the grade filter). */
+  teachers: number;
   /** Live ARAL learners in scope with an ARAL teacher. */
-  learnersWithTutor: number;
+  learnersWithTeacher: number;
   /** Live ARAL learners in scope with no ARAL teacher. */
-  learnersWithoutTutor: number;
+  learnersWithoutTeacher: number;
 };
 
 /** The learner rule: live, un-archived ARAL learners. */
@@ -141,9 +141,9 @@ const LIVE_ARAL_LEARNER = {
   isAralLearner: true,
 } as const;
 
-/** Where for the tutor teachers (page + count). Exported for tests. */
-export function aralTutorsWhere(
-  scope: AralTutorsScope,
+/** Where for the ARAL teachers (page + count). Exported for tests. */
+export function aralTeachersWhere(
+  scope: AralTeachersScope,
   q: string,
   demoVisible: boolean,
   grade?: GradeLevelType
@@ -152,7 +152,7 @@ export function aralTutorsWhere(
 
   if (scope.kind === "school") {
     // schoolId + TEACHER + live + isActive + APPROVED — the picker's own rule.
-    and.push(aralTutorScope(scope.schoolId));
+    and.push(aralTeacherScope(scope.schoolId));
     and.push({
       aralLearners: { some: { ...LIVE_ARAL_LEARNER, schoolId: scope.schoolId } },
     });
@@ -195,9 +195,9 @@ export function aralTutorsWhere(
   return { AND: and };
 }
 
-/** Where for the live ARAL learners of the same scope the tutor list covers. Exported for tests. */
+/** Where for the live ARAL learners of the same scope the ARAL teacher list covers. Exported for tests. */
 export function aralLearnersWhere(
-  scope: AralTutorsScope,
+  scope: AralTeachersScope,
   demoVisible: boolean
 ): Prisma.LearnerWhereInput {
   if (scope.kind === "school") return { ...LIVE_ARAL_LEARNER, schoolId: scope.schoolId };
@@ -215,25 +215,27 @@ export function aralLearnersWhere(
 }
 
 /**
- * The three summary cards: tutors, ARAL learners with a tutor, ARAL learners
- * without one. Three counts, same scope and demo rule as the list; search and
- * the grade filter do not narrow them.
+ * The three summary cards: ARAL teachers, ARAL learners with an ARAL teacher,
+ * ARAL learners without one. Three counts, same scope and demo rule as the
+ * list; search and the grade filter do not narrow them.
  */
-export async function getAralTutorsSummary(scope: AralTutorsScope): Promise<AralTutorsSummary> {
+export async function getAralTeachersSummary(
+  scope: AralTeachersScope
+): Promise<AralTeachersSummary> {
   if (scope.kind === "school" && !scope.schoolId) {
-    throw new Error("getAralTutorsSummary: school scope requires a schoolId");
+    throw new Error("getAralTeachersSummary: school scope requires a schoolId");
   }
   const demoVisible = scope.kind === "admin" ? await isDemoVisible() : true;
   const learnerWhere = aralLearnersWhere(scope, demoVisible);
-  const [tutors, totalLearners, withoutTutor] = await Promise.all([
-    prisma.user.count({ where: aralTutorsWhere(scope, "", demoVisible) }),
+  const [teachers, totalLearners, withoutTeacher] = await Promise.all([
+    prisma.user.count({ where: aralTeachersWhere(scope, "", demoVisible) }),
     prisma.learner.count({ where: learnerWhere }),
     prisma.learner.count({ where: { ...learnerWhere, aralTeacherId: null } }),
   ]);
   return {
-    tutors,
-    learnersWithTutor: Math.max(totalLearners - withoutTutor, 0),
-    learnersWithoutTutor: withoutTutor,
+    teachers,
+    learnersWithTeacher: Math.max(totalLearners - withoutTeacher, 0),
+    learnersWithoutTeacher: withoutTeacher,
   };
 }
 
@@ -243,22 +245,22 @@ function gradeRank(grade: GradeLevelType): number {
 }
 
 /**
- * One page of ARAL tutors, surname / first name / id order.
+ * One page of ARAL teachers, surname / first name / id order.
  *
  * `school` scope: the caller's schoolId must come from
  * `requireSchoolUser("SCHOOL_HEAD")` or `resolveSchoolContext`. Page params'
  * `district` / `schoolId` are ignored there.
  */
-export async function getAralTutorsPage(
-  scope: AralTutorsScope,
-  params: Pick<AralTutorsParams, "q" | "skip" | "take"> &
-    Partial<Pick<AralTutorsParams, "grade" | "sort">>
-): Promise<AralTutorsPage> {
+export async function getAralTeachersPage(
+  scope: AralTeachersScope,
+  params: Pick<AralTeachersParams, "q" | "skip" | "take"> &
+    Partial<Pick<AralTeachersParams, "grade" | "sort">>
+): Promise<AralTeachersPage> {
   if (scope.kind === "school" && !scope.schoolId) {
-    throw new Error("getAralTutorsPage: school scope requires a schoolId");
+    throw new Error("getAralTeachersPage: school scope requires a schoolId");
   }
   const demoVisible = scope.kind === "admin" ? await isDemoVisible() : true;
-  const where = aralTutorsWhere(scope, params.q, demoVisible, params.grade);
+  const where = aralTeachersWhere(scope, params.q, demoVisible, params.grade);
   const byName = [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }] as const;
 
   // "Most ARAL learners" orders by a live-learner count Prisma cannot sort a
@@ -351,7 +353,7 @@ export async function getAralTutorsPage(
     perTeacher.set(g.aralTeacherId, m);
   }
 
-  const rows: AralTutorRow[] = teachers.map((t) => {
+  const rows: AralTeacherRow[] = teachers.map((t) => {
     const byGrade = perTeacher.get(t.id) ?? new Map<GradeLevelType, number>();
     const grades = [...byGrade.entries()]
       .map(([grade, count]) => ({
@@ -360,12 +362,12 @@ export async function getAralTutorsPage(
         count,
       }))
       .sort((a, b) => gradeRank(a.grade) - gradeRank(b.grade));
-    const kind = classifyAralTutor(
+    const kind = classifyAralTeacher(
       t.teacherProfile?.employmentType ?? null,
       t.teacherProfile?.designation ?? null
     );
     const employment =
-      kind === ARAL_TUTOR_DEPED ? "DEPED" : kind === ARAL_TUTOR_NON_DEPED ? "NON_DEPED" : null;
+      kind === ARAL_TEACHER_DEPED ? "DEPED" : kind === ARAL_TEACHER_NON_DEPED ? "NON_DEPED" : null;
     return {
       id: t.id,
       listingName: formatListingNameFromRecord(t),
