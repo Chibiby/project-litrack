@@ -495,6 +495,7 @@ export function LoginForm({
                 disabled={teachersLocked}
                 title={teachersLocked ? TEACHERS_UNLOCK_HELP : undefined}
                 onClick={() => setRole("teacher")}
+                data-press="light"
                 className={cn(ROLE_OPTION, role === "teacher" ? ROLE_PICKED : ROLE_UNPICKED)}
               >
                 <GraduationCap aria-hidden />
@@ -504,6 +505,7 @@ export function LoginForm({
                 type="button"
                 aria-pressed={role === "school-head"}
                 onClick={() => setRole("school-head")}
+                data-press="light"
                 className={cn(ROLE_OPTION, role === "school-head" ? ROLE_PICKED : ROLE_UNPICKED)}
               >
                 <School aria-hidden />

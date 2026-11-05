@@ -239,3 +239,103 @@
     page-break-inside: avoid;
   }
 }
+
+/*
+ * "Draw the win" — the Saved state a save button shows after a successful
+ * save (src/lib/ui/press-feedback.ts). The button's own label goes
+ * transparent so its width never changes; the overlay draws a ring, then a
+ * tick, in the label's colour, with a soft glow.
+ */
+[data-press-saved-on] {
+  color: transparent !important;
+}
+.press-saved {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--press-saved-color, currentColor);
+  pointer-events: none;
+  animation: press-saved-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    press-saved-out 220ms ease-in 1380ms forwards;
+}
+.press-saved-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: press-saved-glow 600ms ease-out 420ms both;
+}
+.press-saved-ring {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transform: rotate(-90deg);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: press-saved-draw 420ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.press-saved-tick {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: press-saved-draw 320ms cubic-bezier(0.22, 1, 0.36, 1) 340ms forwards;
+}
+.press-saved-text {
+  animation: press-saved-text 260ms ease-out 380ms both;
+}
+@keyframes press-saved-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes press-saved-pop {
+  from {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes press-saved-glow {
+  from {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  40% {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 55%, transparent));
+  }
+  to {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+@keyframes press-saved-text {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes press-saved-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .press-saved,
+  .press-saved-icon,
+  .press-saved-ring,
+  .press-saved-tick,
+  .press-saved-text {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

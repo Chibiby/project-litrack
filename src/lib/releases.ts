@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.46.0",
+    date: "2026-11-06",
+    title: "Buttons respond to your press, and Save shows a tick when it worked",
+    announce: true,
+    fixes: [
+      "Buttons now dip a little when you press them and bounce back when you let go, with a soft light spreading from where you pressed.",
+      "When a save works, the Save button draws a circle and a tick and says Saved for a moment. If the save fails, there is no tick.",
+    ],
+  },
+  {
     version: "2.45.0",
     date: "2026-11-06",
     title: "A new sign-in screen, with clearer messages when something is missing",

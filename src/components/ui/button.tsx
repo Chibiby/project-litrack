@@ -93,10 +93,19 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       </>
     );
 
+    // Press feel (sink, ripple, spring) and the "Saved" tick are driven by
+    // the one client listener, PressFeedback, so this component stays usable
+    // from server components. A link-styled button has no press surface.
+    const press =
+      variant === "link" ? undefined : !variant || variant === "default" || variant === "destructive" ? "light" : "dark";
+    const save = !asChild && loadingText?.startsWith("Saving") ? "" : undefined;
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        data-press={press}
+        data-save={save}
         {...props}
         disabled={asChild ? disabled : disabled || loading}
         {...(showSpinner ? { "aria-busy": true } : null)}
