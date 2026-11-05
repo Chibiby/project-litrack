@@ -22,13 +22,24 @@ export function LoginShell({
       id="main-content"
       className={`relative isolate min-h-dvh overflow-x-hidden bg-sky-100${glass ? " login-glass" : ""}`}
     >
-      {/* Fixed to the viewport, so a phone scrolling a tall card sees the same
-          crop rather than an ever-zooming image. The art is drawn 12% taller
-          than the screen and pinned to the top, which drops the building to
-          about two thirds down (the mockup) and keeps the wordmark and
-          tagline in the sky; the extra pavement falls off the bottom. */}
-      <div aria-hidden data-login-art="" className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-x-0 top-0 h-[112%]">
+      {/* The art is drawn 12% taller than the screen and pinned to the top,
+          which drops the building to about two thirds down (the mockup) and
+          keeps the wordmark and tagline in the sky; the extra pavement falls
+          off the bottom.
+          Desktop: fixed to the viewport. Below that the page scrolls, so the
+          art scrolls with it instead: the glass card (LiquidGlassLayer) holds
+          a refracted copy of this art, and a fixed backdrop under a moving
+          card would force that copy to be realigned and redrawn on every
+          scroll frame, a frame behind the scroll. Sized in svh (the height
+          with the browser bar shown), which does not change as the bar
+          slides away, so the art never zooms mid-scroll; it grows only when
+          the page is taller than that. */}
+      <div
+        aria-hidden
+        data-login-art=""
+        className="absolute inset-x-0 top-0 -z-10 h-[max(112svh,100%)] overflow-hidden lg:fixed lg:inset-0 lg:h-auto"
+      >
+        <div className="absolute inset-0 lg:bottom-auto lg:h-[112%]">
           <Image
             src="/brand/login-bg.webp"
             alt=""

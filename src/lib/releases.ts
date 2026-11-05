@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.46.2",
+    date: "2026-11-06",
+    title: "The sign-in card stays still on phones as you scroll",
+    announce: false,
+    fixes: [
+      "On phones, the picture behind the sign-in card no longer slides inside the glass while you scroll. The background now scrolls with the page.",
+    ],
+  },
+  {
     version: "2.46.1",
     date: "2026-11-06",
     title: "The sign-in screen runs smoothly again",
