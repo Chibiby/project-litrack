@@ -2,8 +2,8 @@
  * Liquid Glass body of the /login card (see liquid-glass-layer.tsx).
  *
  * What separates it from plain frosted glass:
- * - the backdrop stays fairly clear (light frost) and bends along the rim
- *   (the SVG filter set inline on Chromium);
+ * - the art behind it stays fairly clear (light frost) and bends along the
+ *   rim (Chromium: an SVG filter on a copy of the art, see .pane);
  * - a specular rim: a thin edge whose brightness follows one light direction
  *   (top-left bright, bottom-right glint), plus a soft inner glow;
  * - a light tint, strong enough to keep the card's text readable.
@@ -15,6 +15,39 @@
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
+  /* Fallback frost, dropped once the lens pane takes over (below). */
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+.layer[data-lens="refract"] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/*
+ * The lens: a copy of the sign-in art, lined up with the real one and bent by
+ * the SVG filter set inline. Below the tint and the rim.
+ */
+.pane {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.art {
+  position: absolute;
+  overflow: hidden;
+}
+
+/* The tint and the inner glow, above the lens pane. */
+.layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
   background:
     linear-gradient(
       160deg,
@@ -30,9 +63,6 @@
     inset 0 -18px 30px -24px rgb(255 255 255 / 0.9);
   /* The drop shadow lives on the card (AuthCard), so a card that clips its
      content (the login step slide) does not clip it. */
-  /* Fallback frost, replaced by the inline SVG lens where it is supported. */
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
 }
 
 /* The light-catching edge: a 1.5px gradient stroke cut out with a mask. */
@@ -40,6 +70,7 @@
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 1;
   border-radius: inherit;
   padding: 1.5px;
   background: linear-gradient(
@@ -72,7 +103,7 @@
  * its contrast over the art.
  */
 @media (prefers-reduced-transparency: reduce) {
-  .layer {
+  .layer::before {
     background:
       linear-gradient(
         160deg,

@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.46.1",
+    date: "2026-11-06",
+    title: "The sign-in screen runs smoothly again",
+    announce: true,
+    fixes: [
+      "The sign-in screen no longer stutters while you type, press a button or watch something move. The glass card looks the same.",
+    ],
+  },
+  {
     version: "2.46.0",
     date: "2026-11-06",
     title: "Buttons respond to your press, and Save shows a tick when it worked",

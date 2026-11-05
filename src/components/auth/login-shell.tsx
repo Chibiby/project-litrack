@@ -27,7 +27,7 @@ export function LoginShell({
           than the screen and pinned to the top, which drops the building to
           about two thirds down (the mockup) and keeps the wordmark and
           tagline in the sky; the extra pavement falls off the bottom. */}
-      <div aria-hidden className="fixed inset-0 -z-10 overflow-hidden">
+      <div aria-hidden data-login-art="" className="fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-[112%]">
           <Image
             src="/brand/login-bg.webp"
