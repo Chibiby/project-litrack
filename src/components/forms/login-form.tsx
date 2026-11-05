@@ -7,12 +7,10 @@ import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { toast } from "sonner";
 import {
   ArrowRight,
-  BookOpen,
   Building2,
+  GraduationCap,
   School,
   ShieldCheck,
-  User,
-  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -344,7 +342,7 @@ export function LoginForm({
 
     return (
       <AuthCard>
-        <AuthCardHeader icon={BookOpen} title="Sign In" subtitle="Access your LITRACK account" />
+        <AuthCardHeader title="Sign In" subtitle="Access your LITRACK account" />
         <div className="mt-6 2xl:mt-8">
           {notice ? (
             <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 2xl:mb-6">
@@ -415,7 +413,7 @@ export function LoginForm({
                 onClick={() => setRole("teacher")}
                 className={cn(ROLE_OPTION, role === "teacher" ? ROLE_PICKED : ROLE_UNPICKED)}
               >
-                <User aria-hidden />
+                <GraduationCap aria-hidden />
                 Teachers
               </Button>
               <Button
@@ -425,7 +423,7 @@ export function LoginForm({
                 onClick={() => setRole("school-head")}
                 className={cn(ROLE_OPTION, role === "school-head" ? ROLE_PICKED : ROLE_UNPICKED)}
               >
-                <Users aria-hidden />
+                <School aria-hidden />
                 School Head
               </Button>
             </div>

@@ -9,11 +9,18 @@ import Image from "next/image";
  * Always light — see ALWAYS_LIGHT_PATHS in @/lib/theme — so the colours here
  * are fixed rather than theme tokens: the art is daytime either way.
  */
-export function LoginShell({ children }: { children: React.ReactNode }) {
+export function LoginShell({
+  children,
+  glass = false,
+}: {
+  children: React.ReactNode;
+  /** Frosted-glass sign-in card (see AuthCard's `.login-glass` styles). */
+  glass?: boolean;
+}) {
   return (
     <main
       id="main-content"
-      className="relative isolate min-h-dvh overflow-x-hidden bg-sky-100"
+      className={`relative isolate min-h-dvh overflow-x-hidden bg-sky-100${glass ? " login-glass" : ""}`}
     >
       {/* Fixed to the viewport, so a phone scrolling a tall card sees the same
           crop rather than an ever-zooming image. The art is drawn 12% taller
@@ -77,7 +84,7 @@ function LoginBrand() {
         <span className="text-indigo-950">LIT</span>
         <span className="text-violet-600">RACK</span>
       </h1>
-      <p className="mt-3 text-balance text-sm font-semibold text-slate-700 sm:text-base lg:mt-5 lg:text-xl xl:text-2xl">
+      <p className="mt-1 text-balance text-sm font-semibold text-slate-700 sm:text-base lg:mt-2 lg:text-xl xl:text-2xl">
         School reading-profiling system for the ARAL Program
       </p>
       <p className="mt-2 max-w-xl text-balance text-xs leading-relaxed text-slate-700 sm:text-sm lg:mt-6 lg:max-w-none lg:text-base xl:text-lg">
