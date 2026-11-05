@@ -36,7 +36,7 @@ export function AralPageHero({
           this text column and the mask doesn't fully hide it once the
           subtitle/description runs past one line, so give the text its own
           scrim to stay legible (z-index plus a soft background). */}
-      <div className="max-lg:relative max-lg:z-10 max-lg:w-fit max-lg:max-w-[68%] max-lg:rounded-xl max-lg:border max-lg:border-border/70 max-lg:bg-card/90 max-lg:px-2.5 max-lg:py-1.5 max-lg:shadow-card max-lg:backdrop-blur-sm">
+      <div className="max-lg:relative max-lg:z-10 max-lg:w-fit max-lg:max-w-[68%] max-lg:rounded-md max-lg:border max-lg:border-border/70 max-lg:bg-card/90 max-lg:px-2.5 max-lg:py-1.5 max-lg:shadow-card max-lg:backdrop-blur-sm">
         <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
           <EyebrowIcon className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
           {eyebrow}

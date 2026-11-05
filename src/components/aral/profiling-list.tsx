@@ -32,7 +32,7 @@ const HEAD_CLASS =
   "whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
 const PILL_CLASS =
-  "inline-flex items-center whitespace-nowrap rounded-lg bg-muted px-2 py-0.5 text-xs text-muted-foreground";
+  "inline-flex items-center whitespace-nowrap rounded-sm bg-muted px-2 py-0.5 text-xs text-muted-foreground";
 
 /**
  * ARAL Profiling's desktop table + phone card list, following the
@@ -66,7 +66,7 @@ export function ProfilingList({
   const rowNumber = (i: number) => (page - 1) * pageSize + i + 1;
 
   return (
-    <Surface as="section" className="overflow-hidden rounded-2xl">
+    <Surface as="section" className="overflow-hidden rounded-lg">
       <ListBusyRegion
         label="profiles"
         skeleton={

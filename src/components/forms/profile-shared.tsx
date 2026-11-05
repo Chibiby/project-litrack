@@ -30,7 +30,7 @@ export function FieldRadioGroup({
   return (
     <div className="space-y-2 max-lg:space-y-0.5">
       {options.map((opt) => (
-        <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-lg max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
+        <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-md max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
           <input
             type="radio"
             name={name}
@@ -63,7 +63,7 @@ export function FieldCheckboxList({
   return (
     <div className="space-y-2 max-lg:space-y-0.5">
       {options.map((opt) => (
-        <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-lg max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
+        <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-md max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
           <input
             type="checkbox"
             name={`${name}[]`}

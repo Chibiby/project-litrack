@@ -4,9 +4,9 @@ import { Surface } from "@/components/ui/surface";
 /** One headline tile while its figure streams; the shape of `StatCard`. */
 export function DistrictStatSkeleton() {
   return (
-    <Surface as="section" className="rounded-2xl p-4 sm:p-5" data-slot="stat-card-skeleton" aria-hidden>
+    <Surface as="section" className="rounded-lg p-4 sm:p-5" data-slot="stat-card-skeleton" aria-hidden>
       <div className="flex items-center gap-3">
-        <Skeleton className="size-10 rounded-xl sm:size-11" />
+        <Skeleton className="size-10 rounded-md sm:size-11" />
         <Skeleton className="h-4 w-24" />
       </div>
       <Skeleton className="mt-3 h-9 w-16" />
@@ -19,9 +19,9 @@ export function DistrictStatSkeleton() {
 /** The attention rail while tickets and compliance load. */
 export function DistrictAttentionSkeleton() {
   return (
-    <Surface as="section" className="rounded-2xl p-4 sm:p-5" aria-hidden>
+    <Surface as="section" className="rounded-lg p-4 sm:p-5" aria-hidden>
       <div className="flex items-center gap-3">
-        <Skeleton className="size-10 rounded-xl" />
+        <Skeleton className="size-10 rounded-md" />
         <Skeleton className="h-5 w-40" />
       </div>
       <div className="mt-4 space-y-3">
@@ -35,14 +35,14 @@ export function DistrictAttentionSkeleton() {
 
 function DistrictsPanelSkeleton() {
   return (
-    <Surface as="section" className="rounded-2xl p-4 sm:p-5" aria-hidden>
+    <Surface as="section" className="rounded-lg p-4 sm:p-5" aria-hidden>
       <div className="flex items-center gap-3">
-        <Skeleton className="size-10 rounded-xl" />
+        <Skeleton className="size-10 rounded-md" />
         <Skeleton className="h-5 w-36" />
       </div>
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {Array.from({ length: 2 }).map((_, i) => (
-          <Skeleton key={i} className="h-28 w-full rounded-xl" />
+          <Skeleton key={i} className="h-28 w-full rounded-lg" />
         ))}
       </div>
     </Surface>
@@ -60,7 +60,7 @@ export function DistrictOverviewSkeleton() {
     <div aria-busy="true" aria-live="polite" className="flex flex-col gap-4">
       <span className="sr-only">Loading your overview</span>
 
-      <Skeleton className="mb-2 mt-2 h-60 w-full rounded-2xl lg:h-[19rem]" aria-hidden />
+      <Skeleton className="mb-2 mt-2 h-60 w-full rounded-lg lg:h-[19rem]" aria-hidden />
 
       <div className="relative z-10 grid grid-cols-1 gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -72,14 +72,14 @@ export function DistrictOverviewSkeleton() {
           <DistrictsPanelSkeleton />
         </div>
         <div className="flex min-w-0 flex-col gap-4 xl:-mt-4">
-          <Skeleton className="hidden h-72 w-full rounded-2xl xl:block" aria-hidden />
+          <Skeleton className="hidden h-72 w-full rounded-lg xl:block" aria-hidden />
           <DistrictAttentionSkeleton />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
         {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+          <Skeleton key={i} className="h-24 w-full rounded-lg" />
         ))}
       </div>
     </div>

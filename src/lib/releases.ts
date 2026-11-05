@@ -135,6 +135,20 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.45.0",
+    date: "2026-11-06",
+    title: "A new sign-in screen, with clearer messages when something is missing",
+    announce: true,
+    fixes: [
+      "The sign-in card is now clear glass over the school picture, and the fields, buttons and links are easier to read.",
+      "Choosing Teachers or School Head is one switch, and the button to go on now just says Next. Each step slides in from the side, and going back slides the other way.",
+      "If a field is empty or the email is incomplete, the message now shows under that field and the field gives a small shake. Nothing is checked until you press the button.",
+      "The Division and District Admin sign-in page has the same look, with the same messages under each field.",
+      "On phones, the logos at the top are smaller, so the sign-in card starts higher on the screen.",
+      "Corners on cards, buttons, fields and dialogs now follow one set of sizes across LITRACK.",
+    ],
+  },
+  {
     version: "2.44.1",
     date: "2026-11-02",
     title: "Division Summary PDFs are readable, and exports start as PDF",

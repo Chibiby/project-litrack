@@ -108,7 +108,7 @@ export function ProfilePhotoCard({
   }
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-lg">
       <CardHeader>
         <CardTitle className="text-base">Profile photo</CardTitle>
       </CardHeader>

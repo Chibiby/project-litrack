@@ -36,11 +36,11 @@ export function UpcomingTasksPanel({
   viewAllHref: string;
 }) {
   return (
-    <Surface as="section" className="flex flex-col rounded-2xl">
+    <Surface as="section" className="flex flex-col rounded-lg">
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
         >
           <ClipboardCheck className="size-5" />
         </span>
@@ -63,7 +63,7 @@ export function UpcomingTasksPanel({
             <PrefetchLink
               href={t.href}
               prefetch
-              className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="-mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 aria-hidden
@@ -134,11 +134,11 @@ export function QuickActionsPanel({
   ];
 
   return (
-    <Surface as="section" className="rounded-2xl">
+    <Surface as="section" className="rounded-lg">
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
         >
           <Zap className="size-5" />
         </span>
@@ -154,7 +154,7 @@ export function QuickActionsPanel({
               href={a.href}
               prefetch
               className={cn(
-                "flex h-full items-center gap-2.5 rounded-xl px-3 py-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:px-4",
+                "flex h-full items-center gap-2.5 rounded-lg px-3 py-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:px-4",
                 a.tone
               )}
             >

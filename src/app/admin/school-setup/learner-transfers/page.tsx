@@ -83,7 +83,7 @@ async function AdminTransferBody({
         </Callout>
       ) : null}
 
-      <Surface as="section" className="min-w-0 max-w-2xl rounded-2xl">
+      <Surface as="section" className="min-w-0 max-w-2xl rounded-lg">
         <SurfaceHeader>
           <h2 className="text-base font-semibold">Transfer a learner</h2>
         </SurfaceHeader>

@@ -308,7 +308,7 @@ export function TermSubjectDefaultsManager({
                 {state.archived.map((subject) => (
                   <li
                     key={subject.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border/80 px-3 py-2"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-border/80 px-3 py-2"
                   >
                     <span className="text-sm text-muted-foreground">
                       {subject.name}
@@ -355,7 +355,7 @@ function TermSubjectDefaultRow({
   onMoveDown: () => void;
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 px-3 py-2">
+    <li className="flex flex-wrap items-center gap-2 rounded-md border border-border/80 px-3 py-2">
       <div className="flex items-center gap-1">
         <Button
           type="button"

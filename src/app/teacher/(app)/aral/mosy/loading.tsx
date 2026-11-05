@@ -9,7 +9,7 @@ export default function TeacherAralMosyLoading() {
       <div className="w-full space-y-4 p-4 lg:p-6">
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-5">
           {Array.from({ length: 5 }, (_, i) => (
-            <Skeleton key={i} className="h-24 rounded-2xl" />
+            <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
         <TableSectionSkeleton rows={8} columns={8} />

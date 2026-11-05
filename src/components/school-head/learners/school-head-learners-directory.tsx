@@ -126,7 +126,7 @@ export function SchoolHeadLearnersDirectory({
             type="button"
             size="icon"
             variant="outline"
-            className="size-11 rounded-xl lg:size-9"
+            className="size-11 rounded-md lg:size-9"
             aria-label={`Actions for ${row.listingName}`}
           >
             <MoreVertical className="size-4" aria-hidden />

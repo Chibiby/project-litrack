@@ -17,11 +17,11 @@ function SummaryTile({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-2 rounded-xl p-3 sm:p-4", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-2 rounded-lg p-3 sm:p-4", className)}>
       <div className="flex items-center gap-2">
         <span
           aria-hidden
-          className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", iconClassName)}
+          className={cn("flex size-8 shrink-0 items-center justify-center rounded-sm", iconClassName)}
         >
           <Icon className="size-4" />
         </span>
@@ -81,7 +81,7 @@ export function TeacherProfileSummary({
   completionPercent: number;
 }) {
   return (
-    <Surface as="section" aria-labelledby="teacher-quick-summary" className="rounded-2xl p-4 sm:p-5">
+    <Surface as="section" aria-labelledby="teacher-quick-summary" className="rounded-lg p-4 sm:p-5">
       <h2 id="teacher-quick-summary" className="text-base font-semibold text-foreground">
         Quick Summary
       </h2>

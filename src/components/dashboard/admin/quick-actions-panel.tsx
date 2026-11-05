@@ -54,11 +54,11 @@ const SUMMARY_ACTION = {
 export function AdminQuickActionsPanel({ isDeveloperAdmin }: { isDeveloperAdmin: boolean }) {
   const actions = [...BASE_ACTIONS, isDeveloperAdmin ? AUDIT_ACTION : SUMMARY_ACTION];
   return (
-    <Surface as="section" className="rounded-2xl">
+    <Surface as="section" className="rounded-lg">
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
         >
           <Zap className="size-5" />
         </span>
@@ -74,7 +74,7 @@ export function AdminQuickActionsPanel({ isDeveloperAdmin }: { isDeveloperAdmin:
               href={a.href}
               prefetch
               className={cn(
-                "flex h-full min-h-12 items-center gap-2.5 rounded-xl px-3 py-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:px-4",
+                "flex h-full min-h-12 items-center gap-2.5 rounded-lg px-3 py-3.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:gap-3 sm:px-4",
                 a.tone
               )}
             >

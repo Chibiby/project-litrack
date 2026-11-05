@@ -35,7 +35,7 @@ export function SchoolHeadPageSkeleton({
       <span className="sr-only">Loading page</span>
 
       {hero ? (
-        <Skeleton className="mb-6 mt-2 h-60 w-full rounded-2xl lg:h-[19rem]" aria-hidden />
+        <Skeleton className="mb-6 mt-2 h-60 w-full rounded-lg lg:h-[19rem]" aria-hidden />
       ) : (
         <div className="mb-6" aria-hidden>
           <Skeleton className="h-7 w-52" />

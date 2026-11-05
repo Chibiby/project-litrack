@@ -131,7 +131,7 @@ export function withSection(s: RosterUrlState, section: string): RosterUrlState 
 }
 
 const TAB_BASE =
-  "h-11 shrink-0 gap-1.5 rounded-xl px-3 text-[13px] font-medium sm:gap-2 sm:px-4 sm:text-sm lg:h-9";
+  "h-11 shrink-0 gap-1.5 rounded-md px-3 text-[13px] font-medium sm:gap-2 sm:px-4 sm:text-sm lg:h-9";
 const TAB_ON =
   "border-transparent bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30 hover:from-violet-600 hover:to-violet-600 hover:text-white";
 
@@ -342,7 +342,7 @@ export function LearnerListToolbar(props: ToolbarProps) {
       label="Search learners by name"
       placeholder="Search by name or keyword…"
       className="min-w-[12rem] flex-1 xl:min-w-0 xl:max-w-xs 2xl:max-w-sm"
-      inputClassName="h-11 rounded-xl lg:h-11"
+      inputClassName="h-11 rounded-md lg:h-11"
     />
   );
 
@@ -358,7 +358,7 @@ export function LearnerListToolbar(props: ToolbarProps) {
               <Button
                 type="button"
                 variant="outline"
-                className="h-11 shrink-0 gap-2 rounded-xl"
+                className="h-11 shrink-0 gap-2 rounded-md"
               >
                 <SlidersHorizontal className="size-4" aria-hidden />
                 More Filters
@@ -377,13 +377,13 @@ export function LearnerListToolbar(props: ToolbarProps) {
               type="button"
               variant="outline"
               size="icon"
-              className="size-11 shrink-0 rounded-xl xl:hidden"
+              className="size-11 shrink-0 rounded-md xl:hidden"
               aria-label="Filters"
             >
               <SlidersHorizontal className="size-4" aria-hidden />
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl">
+          <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-xl">
             <SheetHeader>
               <SheetTitle>Filters</SheetTitle>
               <SheetDescription>Narrow the learner list.</SheetDescription>

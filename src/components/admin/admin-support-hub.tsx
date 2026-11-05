@@ -60,7 +60,7 @@ export function AdminSupportHub({
 
   return (
     <div className="min-w-0 space-y-3">
-      <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card px-2 shadow-card">
+      <div className="overflow-x-auto rounded-lg border border-border/80 bg-card px-2 shadow-card">
         <div className="flex w-max min-w-full gap-1" role="tablist" aria-label="Support sections">
           <Button
             type="button"
@@ -116,7 +116,7 @@ export function AdminSupportHub({
           />
         </div>
       ) : tab === "tickets" ? (
-        <div id="admin-support-tickets" role="tabpanel" className="min-w-0 rounded-2xl border border-border/80 bg-card p-3 shadow-card sm:p-4">
+        <div id="admin-support-tickets" role="tabpanel" className="min-w-0 rounded-lg border border-border/80 bg-card p-3 shadow-card sm:p-4">
           <SupportInbox tickets={tickets} />
         </div>
       ) : <div id="admin-support-email" role="tabpanel"><AdminEmailComposer recipients={emailRecipients} configured={emailConfigured} /></div>}

@@ -10,7 +10,7 @@ export default function AdminAccountsLoading() {
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5">
             {Array.from({ length: 5 }, (_, index) => (
-              <div key={index} className="skeleton-shimmer h-24 rounded-2xl border" />
+              <div key={index} className="skeleton-shimmer h-24 rounded-lg border" />
             ))}
           </div>
           <TableSectionSkeleton rows={10} columns={7} />

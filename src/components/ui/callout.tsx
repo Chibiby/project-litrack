@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
  * is simply part of the page.
  */
 const calloutVariants = cva(
-  "flex items-start gap-3 rounded-xl border px-4 py-3 text-sm",
+  "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm",
   {
     variants: {
       variant: {

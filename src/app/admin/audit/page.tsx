@@ -40,7 +40,7 @@ async function AdminAuditTable() {
     id ? (schoolName.get(id) ?? id.slice(0, 8)) : "—";
 
   return (
-    <Surface as="section" className="min-w-0 rounded-2xl">
+    <Surface as="section" className="min-w-0 rounded-lg">
       <SurfaceHeader className="items-center">
         <h2 className="text-base font-semibold">Last 150 events</h2>
         <span className="text-xs text-muted-foreground">Times in UTC</span>

@@ -306,7 +306,7 @@ export function AralWeeklyAttendancePanel({
       </div>
 
       <section
-        className="mb-4 rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30"
+        className="mb-4 rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30"
         aria-label="Week status"
       >
         <div
@@ -547,9 +547,9 @@ function InfoCard({
   body: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30">
+    <div className="flex gap-3 rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30">
       <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200"
+        className="flex size-9 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200"
         aria-hidden
       >
         {icon}

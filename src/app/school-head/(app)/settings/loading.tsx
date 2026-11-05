@@ -19,7 +19,7 @@ export default function SchoolHeadSettingsLoading() {
       <SchoolHeadPageSkeleton hero>
         <div className="grid gap-4 lg:gap-6 xl:grid-cols-2" aria-hidden>
           {Array.from({ length: 2 }).map((_, i) => (
-            <Surface key={i} className="space-y-4 rounded-2xl p-5">
+            <Surface key={i} className="space-y-4 rounded-lg p-5">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-9 w-full" />
               <Skeleton className="h-9 w-full" />

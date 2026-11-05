@@ -63,7 +63,7 @@ const TRANSITION_TOAST: Record<MosyTransition, string> = {
 };
 
 const CHOICE_CARD =
-  "flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[[data-state=checked]]:border-violet has-[[data-state=checked]]:bg-violet-soft";
+  "flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[[data-state=checked]]:border-violet has-[[data-state=checked]]:bg-violet-soft";
 
 function MosyDecisionForm({
   state,

@@ -157,7 +157,7 @@ export function DistrictAdminsSummaryCards({
         />
       </SummaryGrid>
       {summary.uncoveredDistricts.length > 0 ? (
-        <Surface as="section" aria-label="Districts without a district admin" className="rounded-2xl p-3 sm:p-4">
+        <Surface as="section" aria-label="Districts without a district admin" className="rounded-lg p-3 sm:p-4">
           <h2 className="text-sm font-semibold">Districts without an active district admin</h2>
           <ul className="mt-2 flex flex-wrap gap-2">
             {summary.uncoveredDistricts.map((district) => (

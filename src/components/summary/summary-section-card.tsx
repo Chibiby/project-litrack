@@ -102,12 +102,12 @@ export function SummarySectionCard({
     <section
       id={sectionAnchorId(section.id)}
       aria-labelledby={`${sectionAnchorId(section.id)}-title`}
-      className="min-w-0 scroll-mt-24 rounded-2xl border border-border/80 bg-card text-card-foreground shadow-card"
+      className="min-w-0 scroll-mt-24 rounded-lg border border-border/80 bg-card text-card-foreground shadow-card"
     >
       <div className="flex items-start gap-3 border-b border-border/60 px-4 py-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
         >
           <Icon className="size-5" />
         </span>

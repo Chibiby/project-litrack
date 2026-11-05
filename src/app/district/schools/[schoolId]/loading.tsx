@@ -14,10 +14,10 @@ export default function DistrictSchoolLoading() {
           <Skeleton className="h-11 w-full sm:w-32 lg:h-9" />
         </div>
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <ListCardSkeleton items={4} className="rounded-2xl" />
+          <ListCardSkeleton items={4} className="rounded-lg" />
           <div className="grid grid-cols-1 content-start gap-6 md:grid-cols-2 xl:grid-cols-1">
-            <ListCardSkeleton items={1} className="rounded-2xl" />
-            <ListCardSkeleton items={1} className="rounded-2xl" />
+            <ListCardSkeleton items={1} className="rounded-lg" />
+            <ListCardSkeleton items={1} className="rounded-lg" />
           </div>
         </div>
       </div>

@@ -330,9 +330,9 @@ export function LearnerProfileModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:rounded-2xl">
+      <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:rounded-xl">
         <header className="flex shrink-0 items-start gap-3 border-b border-border px-5 py-4 pr-14 sm:px-6">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
             {editing ? (
               <Pencil className="h-5 w-5" aria-hidden />
             ) : (
@@ -549,7 +549,7 @@ function PanelFor({
 function ProfileSkeleton() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
-      <div className="flex flex-col items-center gap-4 rounded-xl border border-border/80 bg-muted/30 px-4 py-6">
+      <div className="flex flex-col items-center gap-4 rounded-lg border border-border/80 bg-muted/30 px-4 py-6">
         <Skeleton className="size-24 rounded-full" />
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-3 w-28" />

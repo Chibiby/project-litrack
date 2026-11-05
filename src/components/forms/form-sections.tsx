@@ -201,7 +201,7 @@ export function FormSections({
   idPrefix: string;
 }) {
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
       {sections.map((section, index) => {
         const progress = sectionProgress(section, values);
         const isOpen = section.key === openKey;

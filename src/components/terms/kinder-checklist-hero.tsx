@@ -122,7 +122,7 @@ export function KinderChecklistHero({
  */
 function KinderLanguageNote() {
   return (
-    <p className="mt-3 flex items-start gap-2 rounded-xl border border-border/80 bg-muted/40 px-3 py-2 text-xs leading-snug text-muted-foreground sm:text-sm">
+    <p className="mt-3 flex items-start gap-2 rounded-md border border-border/80 bg-muted/40 px-3 py-2 text-xs leading-snug text-muted-foreground sm:text-sm">
       <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
       Terms 1 and 2 are evaluated in Filipino; Term 3 is evaluated in English.
     </p>

@@ -45,10 +45,10 @@ export default async function DistrictAnnouncementsPage() {
         // Stacked until xl: the composer's district and school pickers need
         // more width than half of a laptop's content column gives them.
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-          <Suspense fallback={<ListCardSkeleton items={4} className="rounded-2xl" />}>
+          <Suspense fallback={<ListCardSkeleton items={4} className="rounded-lg" />}>
             <ComposeCard scope={scope} />
           </Suspense>
-          <Suspense fallback={<ListCardSkeleton items={4} className="rounded-2xl" />}>
+          <Suspense fallback={<ListCardSkeleton items={4} className="rounded-lg" />}>
             <SentCard />
           </Suspense>
         </div>
@@ -65,7 +65,7 @@ async function ComposeCard({ scope }: { scope: AdminScope }) {
       : [...new Set(schools.flatMap((school) => (school.district ? [school.district] : [])))].sort();
 
   return (
-    <Surface as="section" aria-labelledby="district-compose-title" className="min-w-0 rounded-2xl">
+    <Surface as="section" aria-labelledby="district-compose-title" className="min-w-0 rounded-lg">
       <SurfaceHeader className="block px-4 sm:px-5">
         <h2 id="district-compose-title" className="text-base font-semibold">
           Send an announcement
@@ -102,7 +102,7 @@ async function SentCard() {
   const broadcasts = await listMyBroadcasts();
 
   return (
-    <Surface as="section" aria-labelledby="district-sent-title" className="min-w-0 rounded-2xl">
+    <Surface as="section" aria-labelledby="district-sent-title" className="min-w-0 rounded-lg">
       <SurfaceHeader className="px-4 sm:px-5">
         <h2 id="district-sent-title" className="text-base font-semibold">
           Sent

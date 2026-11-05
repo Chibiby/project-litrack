@@ -183,7 +183,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
   return (
     <div className="max-w-2xl space-y-6">
       {error ? (
-        <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       ) : null}
@@ -193,7 +193,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
         </p>
       ) : null}
 
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <CardTitle>Demo session</CardTitle>
         </CardHeader>
@@ -253,7 +253,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <CardTitle>Demo data</CardTitle>
         </CardHeader>

@@ -48,7 +48,7 @@ export function AttendancePanel({ learner }: { learner: LearnerProfileData }) {
           <p className="mb-2 text-sm font-medium text-muted-foreground">
             Week of {formatDateKey(week)}
           </p>
-          <div className="overflow-hidden rounded-xl border border-border/80">
+          <div className="overflow-hidden rounded-lg border border-border/80">
             <Table>
               <TableHeader>
                 <TableRow>

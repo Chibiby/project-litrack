@@ -616,7 +616,7 @@ export function LearnerForm({
             name="ethnicity"
             value={ethnicity}
             onChange={(e) => changeEthnicity(e.target.value)}
-            className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm lg:h-10"
+            className="flex h-11 w-full rounded-md border border-input bg-card px-3 text-sm lg:h-10"
           >
             <option value="">Not specified</option>
             {toOptions(ETHNICITY_LABELS).map((o) => (
@@ -668,7 +668,7 @@ export function LearnerForm({
                 name="secondaryEthnicity"
                 value={secondaryEthnicity}
                 onChange={(e) => setSecondaryEthnicity(e.target.value)}
-                className="flex h-11 w-full rounded-lg border border-input bg-card px-3 text-sm lg:h-10"
+                className="flex h-11 w-full rounded-md border border-input bg-card px-3 text-sm lg:h-10"
               >
                 <option value="">Not specified</option>
                 {toOptions(ETHNICITY_LABELS)
@@ -701,7 +701,7 @@ export function LearnerForm({
           ) : null}
         </div>
 
-        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {isEdit ? "Placement" : "Joining"}
           </p>
@@ -921,7 +921,7 @@ export function LearnerForm({
         {duplicatePending && !isEdit && (
           <div
             role="alert"
-            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
+            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
           >
             <p className="font-medium">
               A learner with the same name and age already exists in this school.

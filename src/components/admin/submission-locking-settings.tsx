@@ -53,13 +53,13 @@ export function SubmissionLockingSettings({ enabled }: { enabled: boolean }) {
       {error ? (
         <p
           role="alert"
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </p>
       ) : null}
 
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             {on ? (
@@ -134,13 +134,13 @@ export function MosySubmissionLockSettings({ enabled }: { enabled: boolean }) {
       {error ? (
         <p
           role="alert"
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </p>
       ) : null}
 
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             {on ? (
@@ -213,13 +213,13 @@ export function ReadingLevelUnlockSettings({ enabled }: { enabled: boolean }) {
       {error ? (
         <p
           role="alert"
-          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </p>
       ) : null}
 
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             {on ? (

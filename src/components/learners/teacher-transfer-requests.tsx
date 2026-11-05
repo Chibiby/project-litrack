@@ -84,7 +84,7 @@ export function TeacherTransferRequests({
   if (requests.length === 0) return null;
 
   return (
-    <Surface as="section" aria-labelledby="your-transfer-requests" className="space-y-2 rounded-2xl px-3 py-3 sm:px-4">
+    <Surface as="section" aria-labelledby="your-transfer-requests" className="space-y-2 rounded-lg px-3 py-3 sm:px-4">
       <h2 id="your-transfer-requests" className="text-sm font-semibold text-foreground">
         Your transfer requests
       </h2>

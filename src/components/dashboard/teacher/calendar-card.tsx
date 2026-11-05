@@ -33,7 +33,7 @@ export function CalendarCard({
   }).format(parseLocalDateKey(todayKey));
 
   return (
-    <Surface as="section" aria-label="Calendar" className="overflow-hidden rounded-2xl">
+    <Surface as="section" aria-label="Calendar" className="overflow-hidden rounded-lg">
       <svg
         viewBox="0 0 280 64"
         aria-hidden

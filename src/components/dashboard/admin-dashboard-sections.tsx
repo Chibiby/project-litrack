@@ -57,7 +57,7 @@ export async function AdminChartsSection() {
       <ChartCard
         title="School status"
         description="Active vs inactive schools"
-        className="min-w-0 rounded-2xl"
+        className="min-w-0 rounded-lg"
       >
         {!hasSchools ? (
           <EmptyState
@@ -74,7 +74,7 @@ export async function AdminChartsSection() {
       <ChartCard
         title="Attendance recorded (7 days)"
         description="Learners marked per day, all schools"
-        className="min-w-0 rounded-2xl"
+        className="min-w-0 rounded-lg"
       >
         {!hasActivity ? (
           <EmptyState
@@ -144,7 +144,7 @@ export async function AdminIpAdvisorySection() {
           title="Schools with IP learners"
           description="Top 5 by count"
           action={viewAll}
-          className="min-w-0 rounded-2xl"
+          className="min-w-0 rounded-lg"
           contentClassName="p-0 sm:p-2"
         >
           {schools.length === 0 ? (
@@ -192,7 +192,7 @@ export async function AdminIpAdvisorySection() {
           title="IP learners by group"
           description="A learner with two IP groups counts in both"
           action={viewAll}
-          className="min-w-0 rounded-2xl"
+          className="min-w-0 rounded-lg"
         >
           {kinds.length === 0 ? (
             <EmptyState
@@ -218,7 +218,7 @@ export async function AdminRecentSchoolsSection() {
   }
 
   return (
-    <Surface as="section" className="rounded-2xl">
+    <Surface as="section" className="rounded-lg">
       <SurfaceHeader className="flex-col gap-1 sm:flex-row sm:items-start">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
@@ -249,7 +249,7 @@ export async function AdminRecentSchoolsSection() {
               <li key={school.id} className="min-w-0">
                 <PrefetchLink
                   href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
-                  className="flex min-h-12 items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-h-12 items-center gap-3 rounded-lg border border-border/70 px-3 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium text-foreground lg:truncate">

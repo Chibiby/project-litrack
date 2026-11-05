@@ -74,7 +74,7 @@ export function ProfilePanel({ learner }: { learner: LearnerProfileData }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
       {/* Identity rail */}
-      <div className="flex flex-col items-center gap-4 rounded-xl border border-border/80 bg-muted/30 px-4 py-6 lg:items-start">
+      <div className="flex flex-col items-center gap-4 rounded-lg border border-border/80 bg-muted/30 px-4 py-6 lg:items-start">
         <LearnerAvatar
           id={learner.id}
           fullName={learner.fullName}

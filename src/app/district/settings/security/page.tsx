@@ -13,7 +13,7 @@ export default async function DistrictSettingsSecurityPage() {
     <AppShell title="Security" role={user.role} userName={user.fullName || user.email} hideTitle>
       <DistrictSettingsShell active="security">
         <div className="min-w-0 max-w-xl">
-          <PasswordForm mode="change" className="rounded-2xl" />
+          <PasswordForm mode="change" className="rounded-lg" />
         </div>
       </DistrictSettingsShell>
     </AppShell>

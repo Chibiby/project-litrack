@@ -77,7 +77,7 @@ export default async function DatabasePage() {
       role={user.role}
       userName={user.fullName || user.email}
     >
-      <div className="rounded-2xl border border-border/80 bg-muted/40 px-4 py-3 text-sm">
+      <div className="rounded-lg border border-border/80 bg-muted/40 px-4 py-3 text-sm">
         <p className="font-medium">What these backups are</p>
         <p className="mt-1 text-muted-foreground">
           Each backup is a complete copy of the data in every school, taken through the app and

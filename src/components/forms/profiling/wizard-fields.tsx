@@ -243,7 +243,7 @@ export function FormCheckboxChips<T extends FieldValues>({
                 return (
                   <label
                     key={opt.value}
-                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-1 py-1 hover:bg-muted/40"
+                    className="flex cursor-pointer items-start gap-3 rounded-md border border-transparent px-1 py-1 hover:bg-muted/40"
                   >
                     <Checkbox
                       checked={checked}

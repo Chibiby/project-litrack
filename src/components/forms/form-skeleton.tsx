@@ -20,7 +20,7 @@ export function FormSectionsSkeleton({
   return (
     <div className="min-h-0 flex-1 space-y-4 px-5 py-5 sm:px-6" aria-hidden>
       {showBar ? <Skeleton className="h-1.5 w-full rounded-full" /> : null}
-      <div className="divide-y divide-border rounded-xl border border-border">
+      <div className="divide-y divide-border rounded-lg border border-border">
         {Array.from({ length: sectionCount }, (_, i) => (
           <div key={i} className="flex items-center gap-3 px-4 py-3">
             <Skeleton className="size-7 shrink-0 rounded-full" />

@@ -278,7 +278,7 @@ export function TermsReportPanel({
         resultCount={totalCount}
         label="Search learners by name"
         placeholder="Search learner by name..."
-        inputClassName="h-11 rounded-xl text-sm lg:h-10 xl:h-11"
+        inputClassName="h-11 rounded-md text-sm lg:h-10 xl:h-11"
       />
       {dirty && searchValue !== pushedQ ? (
         <p role="status" className="mt-1 text-xs text-muted-foreground">
@@ -337,7 +337,7 @@ export function TermsReportPanel({
       onClick={handleExport}
       loading={exportPending}
       loadingText="Preparing Excel…"
-      className="h-11 shrink-0 rounded-xl px-3 lg:h-10 xl:h-11 xl:px-5"
+      className="h-11 shrink-0 rounded-md px-3 lg:h-10 xl:h-11 xl:px-5"
       aria-label="Export to Excel"
     >
       <Download className="size-5" aria-hidden />
@@ -351,7 +351,7 @@ export function TermsReportPanel({
       onClick={handleSave}
       loading={savePending}
       loadingText="Saving…"
-      className="h-11 shrink-0 rounded-xl bg-violet-600 px-4 text-white hover:bg-violet-700 lg:h-10 xl:h-11 xl:px-5 dark:bg-violet-500 dark:hover:bg-violet-400"
+      className="h-11 shrink-0 rounded-md bg-violet-600 px-4 text-white hover:bg-violet-700 lg:h-10 xl:h-11 xl:px-5 dark:bg-violet-500 dark:hover:bg-violet-400"
     >
       <Save className="size-5" aria-hidden />
       Save grades
@@ -374,7 +374,7 @@ export function TermsReportPanel({
       />
       {/* Phones and tablets, to the mockup: search and actions. The advisory
           dropdown lives in the page hero's top-right corner instead. */}
-      <Surface className="flex flex-col gap-2 rounded-2xl p-2.5 xl:hidden">
+      <Surface className="flex flex-col gap-2 rounded-lg p-2.5 xl:hidden">
         {/* Phones: search gets its own row, or the placeholder clips beside
             the export/save buttons; sm and up keep the single row. */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -393,7 +393,7 @@ export function TermsReportPanel({
               <Button
                 type="button"
                 variant="outline"
-                className="relative h-11 w-full justify-center gap-2 rounded-xl"
+                className="relative h-11 w-full justify-center gap-2 rounded-md"
               >
                 <Filter className="size-4" aria-hidden />
                 Filters
@@ -414,7 +414,7 @@ export function TermsReportPanel({
         <UnsavedChangesBadge dirty={dirty} />
       </Surface>
 
-      <Surface className="overflow-hidden rounded-2xl">
+      <Surface className="overflow-hidden rounded-lg">
         {/* Desktop: one toolbar row across the top of the table. */}
         <div className="hidden flex-wrap items-center gap-3 border-b border-border/60 p-3 xl:flex">
           {searchBox}

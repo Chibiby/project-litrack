@@ -112,7 +112,7 @@ async function LearnersBreakdowns({ params }: { params: LearnersHubParams }) {
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-      <Surface as="section" className="min-w-0 rounded-2xl">
+      <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceHeader>
           <h2 className="text-base font-semibold">Learners by grade</h2>
           <span className="text-xs text-muted-foreground">{scope}</span>
@@ -148,7 +148,7 @@ async function LearnersBreakdowns({ params }: { params: LearnersHubParams }) {
         )}
       </Surface>
 
-      <Surface as="section" className="min-w-0 rounded-2xl">
+      <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceHeader>
           <h2 className="text-base font-semibold">IP learners by group</h2>
           <span className="text-xs text-muted-foreground">
@@ -198,7 +198,7 @@ async function SchoolsWithIp() {
   const schools = topSchoolsWithIp(data?.schools ?? [], Number.POSITIVE_INFINITY);
 
   return (
-    <Surface as="section" className="min-w-0 rounded-2xl">
+    <Surface as="section" className="min-w-0 rounded-lg">
       <SurfaceHeader>
         <h2 className="text-base font-semibold">Schools with IP learners</h2>
         <span className="text-xs text-muted-foreground">Whole division · ignores the filters above</span>

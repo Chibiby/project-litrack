@@ -196,7 +196,7 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
           title={TITLE}
           subtitle={SUBTITLE}
         />
-        <Surface as="section" className="mt-4 rounded-2xl p-4">
+        <Surface as="section" className="mt-4 rounded-lg p-4">
           <EmptyState
             title="No active school year yet"
             description="Ask your School Head to set one before recording MOSY decisions."
@@ -220,7 +220,7 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
             title={TITLE}
             subtitle={SUBTITLE}
           />
-          <Surface as="section" className="mt-4 rounded-2xl p-4">
+          <Surface as="section" className="mt-4 rounded-lg p-4">
             <EmptyState title="MOSY Report is not available" description={access.message} />
           </Surface>
         </AppShell>
@@ -271,7 +271,7 @@ export default async function AralMosyPage({ searchParams }: PageProps) {
           fallback={
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-5">
               {Array.from({ length: 5 }, (_, i) => (
-                <Skeleton key={i} className="h-24 rounded-2xl" />
+                <Skeleton key={i} className="h-24 rounded-lg" />
               ))}
             </div>
           }

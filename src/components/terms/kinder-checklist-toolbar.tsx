@@ -108,7 +108,7 @@ export function KinderChecklistExportControls({
         loading={busy === "excel"}
         loadingText="Preparing Excel…"
         disabled={disabled || pending}
-        className="h-11 shrink-0 rounded-xl px-3 lg:h-10"
+        className="h-11 shrink-0 rounded-md px-3 lg:h-10"
       >
         <Download className="size-4" aria-hidden />
         <span className="hidden sm:inline">Download Excel</span>
@@ -120,7 +120,7 @@ export function KinderChecklistExportControls({
         loading={busy === "print"}
         loadingText="Preparing…"
         disabled={disabled || pending}
-        className="h-11 shrink-0 rounded-xl px-3 lg:h-10"
+        className="h-11 shrink-0 rounded-md px-3 lg:h-10"
       >
         <Printer className="size-4" aria-hidden />
         <span className="hidden sm:inline">Print / Save PDF</span>
@@ -172,7 +172,7 @@ export function KinderChecklistToolbar({
   const showAdvisoryChooser = advisories.length > 1;
 
   return (
-    <Surface className="flex flex-col gap-3 rounded-2xl p-3 sm:flex-row sm:flex-wrap sm:items-end sm:p-4">
+    <Surface className="flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:flex-wrap sm:items-end sm:p-4">
       <div className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-xs">
         <span className="text-xs font-medium text-muted-foreground" id="kinder-checklist-learner-label">
           Learner

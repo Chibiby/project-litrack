@@ -40,6 +40,32 @@ describe("AdminLoginForm failures", () => {
     expect(password.value).toBe("Passw0rd123");
   });
 
+  it("says nothing until Sign in is pressed, then clears a field's warning as it is fixed", async () => {
+    render(<AdminLoginForm />);
+    const username = screen.getByLabelText(/Username/) as HTMLInputElement;
+    const password = screen.getByLabelText(/Password/) as HTMLInputElement;
+
+    // Leaving empty fields, or typing and erasing, raises no warning.
+    fireEvent.focus(username);
+    fireEvent.blur(username);
+    fireEvent.change(password, { target: { value: "x" } });
+    fireEvent.change(password, { target: { value: "" } });
+    fireEvent.blur(password);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Username required")).toBeNull();
+    expect(screen.queryByText("Password required")).toBeNull();
+
+    fireEvent.submit(username.closest("form")!);
+    expect(await screen.findByText("Username required")).toBeTruthy();
+    expect(screen.getByText("Password required")).toBeTruthy();
+
+    // Typing in one field takes only its warning away, and raises nothing new.
+    fireEvent.change(username, { target: { value: "division.admin" } });
+    await waitFor(() => expect(screen.queryByText("Username required")).toBeNull());
+    expect(screen.getByText("Password required")).toBeTruthy();
+    expect(username.getAttribute("aria-invalid")).not.toBe("true");
+  });
+
   it("offline: no server call and the No internet message shows", async () => {
     Object.defineProperty(window.navigator, "onLine", { value: false, configurable: true });
     try {

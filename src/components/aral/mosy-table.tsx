@@ -129,7 +129,7 @@ export function MosyTable({
   const rowNumber = (i: number) => (page - 1) * pageSize + i + 1;
 
   return (
-    <Surface as="section" className="overflow-hidden rounded-2xl">
+    <Surface as="section" className="overflow-hidden rounded-lg">
       <ListBusyRegion
         label="MOSY report"
         skeleton={<TableSectionSkeleton rows={8} columns={9} showToolbar={false} />}

@@ -61,7 +61,7 @@ export function InfoCard({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border/80 bg-card shadow-sm",
+        "rounded-lg border border-border/80 bg-card shadow-sm",
         className
       )}
     >
@@ -112,7 +112,7 @@ export function RailRow({
 }) {
   return (
     <div className="flex items-start gap-3 text-sm">
-      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-sm bg-muted text-muted-foreground">
         <Icon className="h-4 w-4" aria-hidden />
       </span>
       <span className="min-w-0">

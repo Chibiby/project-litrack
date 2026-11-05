@@ -19,7 +19,7 @@ const ROWS: NavRow[] = [
 
 function SettingsNavCard({ active }: { active: TeacherSettingsSection }) {
   return (
-    <Surface as="section" className="rounded-2xl p-4">
+    <Surface as="section" className="rounded-lg p-4">
       <h2 className="text-base font-semibold text-foreground">Settings</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">Manage your account and preferences.</p>
       <nav aria-label="Settings" className="mt-3">
@@ -33,7 +33,7 @@ function SettingsNavCard({ active }: { active: TeacherSettingsSection }) {
                 <li key={row.key}>
                   <div
                     aria-disabled="true"
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground/70"
+                    className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground/70"
                   >
                     <Icon aria-hidden className="size-4 shrink-0" />
                     <span className="flex-1 truncate">{row.label}</span>
@@ -56,7 +56,7 @@ function SettingsNavCard({ active }: { active: TeacherSettingsSection }) {
                   prefetch
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isActive
                       ? "bg-primary/10 text-primary"
                       : "text-foreground hover:bg-muted"

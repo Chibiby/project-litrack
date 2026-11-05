@@ -111,7 +111,7 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
             total={0}
             pct={0}
           />
-          <div className="mt-4 flex flex-col items-start gap-3 rounded-2xl border border-dashed border-border/80 bg-muted/30 p-6">
+          <div className="mt-4 flex flex-col items-start gap-3 rounded-lg border border-dashed border-border/80 bg-muted/30 p-6">
             <p className="text-sm text-muted-foreground">
               You advise {advisories.length} Kindergarten sections. Choose one to continue.
             </p>

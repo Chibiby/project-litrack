@@ -62,7 +62,7 @@ async function requireSchools(page: Page): Promise<void> {
 
 /** The trigger is a `button role="combobox"`; a second combobox (the District Select) also exists, so go by label. */
 function schoolTrigger(page: Page) {
-  return page.getByLabel("School Name");
+  return page.getByLabel("School", { exact: true });
 }
 
 function districtTrigger(page: Page) {
@@ -213,7 +213,7 @@ test.describe("School Head district login", () => {
     await page.getByRole("option").first().click();
     await page.getByRole("button", { name: "School Head" }).click();
 
-    await expect(page.getByRole("heading", { name: "School Head sign in" })).toBeVisible();
+    await expect(page.getByText("Sign in as School Head")).toBeVisible();
     await expect(page.locator('input[name="password"]')).toBeVisible();
     await expect(
       page.getByText(/First time signing in\? Enter your School ID/),

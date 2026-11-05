@@ -180,7 +180,7 @@ export function TransferLearnersDialog({
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : close())}>
       <DialogContent className="flex max-h-[92vh] flex-col gap-4 overflow-hidden sm:max-w-lg">
         <DialogHeader>
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <span className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
             <ArrowRightLeft className="h-5 w-5" aria-hidden />
           </span>
           <DialogTitle className="mt-3">{title}</DialogTitle>
@@ -238,7 +238,7 @@ export function TransferLearnersDialog({
           ) : null}
 
           {canChoose && chosen ? (
-            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-foreground" aria-live="polite">
+            <p className="rounded-md bg-muted/50 px-3 py-2 text-sm text-foreground" aria-live="polite">
               {isRequest
                 ? `Sends ${plural(moving, "request")} to your School Head. The learners stay in your section until it is approved.`
                 : `Moves ${plural(moving, "learner")} to ${chosen.name}. Their adviser becomes ${
@@ -334,7 +334,7 @@ function SectionChoice({
                 key={d.id}
                 htmlFor={itemId}
                 className={cn(
-                  "flex items-start gap-3 rounded-lg border border-border px-3 py-2.5",
+                  "flex items-start gap-3 rounded-md border border-border px-3 py-2.5",
                   blocked ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/50",
                   value === d.id && "border-primary bg-primary/5"
                 )}
@@ -382,7 +382,7 @@ function LeftOutList({
   othersGo: boolean;
 }) {
   return (
-    <section aria-label="Left out" className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2">
+    <section aria-label="Left out" className="rounded-md border border-border/80 bg-muted/30 px-3 py-2">
       <h3 className="text-sm font-medium text-foreground">Left out ({rows.length})</h3>
       <p className="text-xs text-muted-foreground">
         {othersGo ? "These stay where they are. The rest go ahead." : "These stay where they are."}

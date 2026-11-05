@@ -140,12 +140,12 @@ export function ExportControls({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 print:hidden sm:flex-row sm:flex-wrap sm:items-end">
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 print:hidden sm:flex-row sm:flex-wrap sm:items-end">
       {grades && grades.length > 0 && (
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">Grade filter</span>
           <select
-            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={selectedGrade}
             onChange={(e) => handleGradeChange(e.target.value)}
             aria-label="Filter by grade"
@@ -164,7 +164,7 @@ export function ExportControls({
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">Section filter</span>
           <select
-            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             value={selectedSection}
             onChange={(e) => setSelectedSection(e.target.value)}
             aria-label="Filter by section"

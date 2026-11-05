@@ -128,7 +128,7 @@ export function MosyToolbar({
             }
           }}
           placeholder="Search learner name…"
-          className="h-11 rounded-xl pl-9 lg:h-9"
+          className="h-11 rounded-md pl-9 lg:h-9"
           aria-label="Search learners by name"
         />
       </div>

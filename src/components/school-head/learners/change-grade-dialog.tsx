@@ -53,7 +53,7 @@ export type ChangeGradeLearner = {
   floating: boolean;
 };
 
-const SELECT_CLASS = "flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm";
+const SELECT_CLASS = "flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm";
 
 /**
  * Moves one learner to another grade (or to Floating, or out of it), choosing
@@ -159,7 +159,7 @@ export function ChangeGradeDialog({
     <Dialog open={learner !== null} onOpenChange={(next) => (next ? undefined : close())}>
       <DialogContent className="flex max-h-[92vh] flex-col gap-4 overflow-hidden sm:max-w-lg">
         <DialogHeader>
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <span className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
             <GraduationCap className="h-5 w-5" aria-hidden />
           </span>
           <DialogTitle className="mt-3">Change grade{learner ? ` for ${learner.name}` : ""}</DialogTitle>

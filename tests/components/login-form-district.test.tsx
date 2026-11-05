@@ -26,7 +26,7 @@ const SCHOOLS = [
 
 // Radix's SelectTrigger ALSO renders role="combobox", so once the district filter
 // exists there are two on this screen. Query by label, never by role alone.
-const schoolTrigger = () => screen.getByLabelText("School Name");
+const schoolTrigger = () => screen.getByLabelText("School");
 const districtTrigger = () => screen.getByLabelText("District");
 const openSchoolList = () => fireEvent.click(schoolTrigger());
 
@@ -73,15 +73,15 @@ describe("LoginForm district filter", () => {
     // This repo has no @testing-library/jest-dom — use native DOM assertions only.
     expect(screen.getByRole("button", { name: "Teachers" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "School Head" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("button", { name: /^Next: enter/ }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("opens the teacher sign-in once a school is picked and Continue is pressed", () => {
     render(<LoginForm schools={SCHOOLS} />);
     openSchoolList();
     fireEvent.click(screen.getByText("Alabel Central ES"));
-    fireEvent.click(screen.getByRole("button", { name: /^Next: enter/ }));
-    expect(screen.getByText("Teacher sign in")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Sign in to your teacher account")).toBeTruthy();
   });
 
   it("moves to School Head and locks Teachers for a school not yet open to teachers", () => {
@@ -92,7 +92,7 @@ describe("LoginForm district filter", () => {
     expect(teachers.hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "School Head" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText(/Teachers unlock once the School Head/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^Next: enter/ }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(false);
   });
 
   it("links to the Super Admin sign-in from the card", () => {
@@ -105,7 +105,7 @@ describe("LoginForm district filter", () => {
     openSchoolList();
     fireEvent.click(screen.getByText("Alabel Central ES"));
     fireEvent.click(screen.getByRole("button", { name: "School Head" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Next: enter/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByLabelText("School ID or password")).toBeTruthy();
     expect(screen.getByText(/First time signing in\? Enter your School ID/)).toBeTruthy();
   });

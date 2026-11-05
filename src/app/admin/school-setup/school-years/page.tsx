@@ -51,7 +51,7 @@ export default async function AdminSchoolYearsPage() {
         />
       }
     >
-      <Surface as="section" className="min-w-0 rounded-2xl">
+      <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceHeader>
           <h2 className="text-base font-semibold">All school years</h2>
         </SurfaceHeader>

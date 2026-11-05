@@ -74,7 +74,7 @@ async function DistrictTransferBody({
         </Callout>
       ) : null}
 
-      <Surface as="section" aria-labelledby="district-transfer-title" className="min-w-0 max-w-2xl rounded-2xl">
+      <Surface as="section" aria-labelledby="district-transfer-title" className="min-w-0 max-w-2xl rounded-lg">
         <SurfaceHeader className="px-4 sm:px-5">
           <h2 id="district-transfer-title" className="text-base font-semibold">
             Transfer learner
@@ -140,7 +140,7 @@ export default async function DistrictTransfersPage({ searchParams }: PageProps)
               office.
             </Callout>
           ) : null}
-          <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} className="max-w-2xl rounded-2xl" />}>
+          <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} className="max-w-2xl rounded-lg" />}>
             <DistrictTransferBody
               scope={scope}
               fromParam={params.from?.trim() ?? ""}

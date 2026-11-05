@@ -121,7 +121,7 @@ export async function TeacherDashboardBody({
           bannerSrc={bannerSrc}
           quote={pickQuote()}
         />
-        <Surface as="section" className="mt-4 rounded-2xl px-5 py-10 text-center">
+        <Surface as="section" className="mt-4 rounded-lg px-5 py-10 text-center">
           <h1 className="text-base font-semibold text-foreground">
             {FLOATING_TEACHER_CARD.title}
           </h1>
@@ -253,12 +253,12 @@ function GradeChartCard({
   gradeCount: number;
 }) {
   return (
-    <Surface as="section" className={cn("flex-col rounded-2xl", className)}>
+    <Surface as="section" className={cn("flex-col rounded-lg", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden
-            className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+            className="flex size-11 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
           >
             <BarChart3 className="size-5" />
           </span>
@@ -269,7 +269,7 @@ function GradeChartCard({
             <p className="text-sm text-muted-foreground">Distribution of your learners</p>
           </div>
         </div>
-        <span className="shrink-0 rounded-lg border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground">
+        <span className="shrink-0 rounded-md border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground">
           {schoolYearLabel ? `SY ${schoolYearLabel}` : "No active school year"}
         </span>
       </div>
@@ -288,7 +288,7 @@ function GradeChartCard({
           )}
         </div>
         <div className="shrink-0 md:w-64 xl:w-auto 2xl:w-64">
-          <div className="flex items-center gap-3 rounded-xl bg-violet-50 p-4 dark:bg-violet-950/40">
+          <div className="flex items-center gap-3 rounded-lg bg-violet-50 p-4 dark:bg-violet-950/40">
             <Users aria-hidden className="size-8 shrink-0 text-violet-600 dark:text-violet-300" />
             <div>
               <p className="text-lg font-bold text-violet-900 dark:text-violet-100">

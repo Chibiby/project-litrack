@@ -777,7 +777,7 @@ function BulkItem({ label, onClick }: { label: string; onClick: () => void }) {
       type="button"
       variant="ghost"
       onClick={onClick}
-      className="flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+      className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
     >
       {label}
     </Button>

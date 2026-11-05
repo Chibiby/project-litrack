@@ -52,7 +52,7 @@ or a redirect-to-login being misread as a pass.
 | `learner-transfer.spec.ts` | Transfer a learner to Floating within the same school | head | `LITRACK_E2E_TRANSFER_LEARNER_QUERY` |
 | `tablet-viewport-smoke.spec.ts` | 768x1024 and 1024x768: no page-level horizontal overflow; buttons ≥44px tall below 1024px width, on the teacher dashboard, ARAL grid, and learner list | teacher | `LITRACK_E2E_ARAL_GRADE_ID` |
 | `not-found.spec.ts` (existing) | Public/role 404 and /forbidden pages | none | — |
-| `school-head-login.spec.ts` (existing) | District/School Name picker on `/login` | none | — |
+| `school-head-login.spec.ts` (existing) | District/School picker on `/login` | none | — |
 | `smoke.spec.ts` (existing) | Login/admin-login/forgot-password pages render | none | — |
 
 Full list of env vars this suite reads, beyond the existing `LITRACK_E2E_USER` /

@@ -184,7 +184,7 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
 
   return (
     <div className="space-y-4">
-      <Surface as="section" aria-label={`Find ${plural}`} className="rounded-2xl p-3 sm:p-4">
+      <Surface as="section" aria-label={`Find ${plural}`} className="rounded-lg p-3 sm:p-4">
         <ListFilterBar
           basePath={basePath}
           q={list.q}
@@ -201,7 +201,7 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
           }
         />
       </Surface>
-      <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
+      <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-lg">
         <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
           <h2 className="text-base font-semibold">
             {copy.plural}{" "}
@@ -310,7 +310,7 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
                 {rows.map((row) => (
                   <article
                     key={row.id}
-                    className="min-w-0 rounded-xl border border-border/80 bg-card p-4"
+                    className="min-w-0 rounded-lg border border-border/80 bg-card p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">

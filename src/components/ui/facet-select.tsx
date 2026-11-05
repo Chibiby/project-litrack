@@ -36,7 +36,7 @@ export function FacetSelect({
         id={id}
         aria-label={label}
         className={cn(
-          "h-auto w-full gap-2 rounded-xl py-1.5 [&>span]:line-clamp-none",
+          "h-auto w-full gap-2 rounded-md py-1.5 [&>span]:line-clamp-none",
           className
         )}
       >

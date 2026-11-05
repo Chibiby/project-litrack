@@ -53,7 +53,7 @@ export function CreateSectionForm({
           name="gradeLevelId"
           required
           disabled={pending}
-          className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+          className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
         >
           <option value="">Select grade</option>
           {grades.map((g) => (

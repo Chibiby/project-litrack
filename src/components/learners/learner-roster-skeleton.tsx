@@ -19,9 +19,9 @@ import { TableSectionSkeleton } from "@/components/loading";
  */
 function StatCardSkeleton() {
   return (
-    <Surface as="section" className="rounded-2xl p-4 sm:p-5" data-slot="stat-card-skeleton">
+    <Surface as="section" className="rounded-lg p-4 sm:p-5" data-slot="stat-card-skeleton">
       <div className="flex items-center gap-3">
-        <Skeleton className="size-11 rounded-xl" />
+        <Skeleton className="size-11 rounded-md" />
         <Skeleton className="h-4 w-28" />
       </div>
       <Skeleton className="mt-4 h-9 w-14" />
@@ -57,7 +57,7 @@ export function LearnerRosterSkeleton() {
 
       {/* The v2 hero band: same box as the Learners PageHero (15rem, lg 17rem). */}
       <Skeleton
-        className="mt-2 h-[15rem] rounded-2xl lg:h-[17rem]"
+        className="mt-2 h-[15rem] rounded-lg lg:h-[17rem]"
         data-slot="roster-header-skeleton"
       />
 
@@ -67,11 +67,11 @@ export function LearnerRosterSkeleton() {
 
       <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:justify-between">
         <div className="flex gap-2">
-          <Skeleton className="h-10 w-36 rounded-xl" />
-          <Skeleton className="h-10 w-40 rounded-xl" />
-          <Skeleton className="hidden h-10 w-36 rounded-xl sm:block" />
+          <Skeleton className="h-10 w-36 rounded-md" />
+          <Skeleton className="h-10 w-40 rounded-md" />
+          <Skeleton className="hidden h-10 w-36 rounded-md sm:block" />
         </div>
-        <Skeleton className="h-10 w-full rounded-xl sm:w-96" />
+        <Skeleton className="h-10 w-full rounded-md sm:w-96" />
       </div>
 
       <div className="mt-4">

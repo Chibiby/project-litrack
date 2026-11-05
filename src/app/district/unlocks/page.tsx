@@ -43,7 +43,7 @@ export default async function DistrictUnlocksPage() {
       {hasNoDistricts(scope) ? (
         <NoDistrictsState />
       ) : (
-        <Suspense fallback={<ListCardSkeleton items={5} className="max-w-5xl rounded-2xl" />}>
+        <Suspense fallback={<ListCardSkeleton items={5} className="max-w-5xl rounded-lg" />}>
           <DistrictUnlockBody scope={scope} />
         </Suspense>
       )}

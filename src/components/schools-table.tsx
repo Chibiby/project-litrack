@@ -784,7 +784,7 @@ function SchoolsTableInner({
               key={school.id}
               className={cn(
                 "min-w-0 border bg-card p-4",
-                isAdminColumns ? "rounded-2xl border-border/80 shadow-card" : "rounded-xl shadow-sm"
+                isAdminColumns ? "rounded-lg border-border/80 shadow-card" : "rounded-lg shadow-sm"
               )}
             >
               <div className="flex items-start justify-between gap-3">

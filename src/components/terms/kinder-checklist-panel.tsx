@@ -135,7 +135,7 @@ function DomainSection({
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className="overflow-hidden rounded-2xl border border-border/80 bg-card"
+      className="overflow-hidden rounded-lg border border-border/80 bg-card"
     >
       <CollapsibleTrigger asChild>
         <Button

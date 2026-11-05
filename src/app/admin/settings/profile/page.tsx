@@ -14,7 +14,7 @@ export default async function AdminSettingsProfilePage() {
         name={user.fullName || `${user.firstName} ${user.lastName}`}
         avatarPath={user.avatarPath}
       />
-      <Card className="rounded-2xl">
+      <Card className="rounded-lg">
         <CardHeader>
           <CardTitle className="text-base">Account details</CardTitle>
         </CardHeader>

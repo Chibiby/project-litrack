@@ -266,10 +266,10 @@ describe("sign-up — no ARAL volunteer checkbox", () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText("School Name"));
+    fireEvent.click(screen.getByLabelText("School"));
     fireEvent.click(screen.getByText("Alabel Central ES"));
     fireEvent.click(screen.getByRole("button", { name: "Teachers" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Next: enter/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     expect(screen.queryByLabelText(/Non-DepEd ARAL Volunteer/)).toBeNull();

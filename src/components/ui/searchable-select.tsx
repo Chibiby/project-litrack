@@ -212,7 +212,7 @@ export function SearchableSelect({
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => commit(option)}
                 className={cn(
-                  "flex cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-2 text-sm",
+                  "flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-2 text-sm",
                   index === activeIndex && "bg-accent text-accent-foreground"
                 )}
               >

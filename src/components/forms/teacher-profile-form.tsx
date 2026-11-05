@@ -1378,7 +1378,7 @@ export function TeacherProfileForm({
                     */}
                     <div className="space-y-1.5">
                       <p className="text-sm font-medium">Designation</p>
-                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
                         <span className="text-sm font-medium">
                           {designationKind === "__OTHER__"
                             ? values.designationOther || "—"
@@ -1397,7 +1397,7 @@ export function TeacherProfileForm({
 
               <SettingsFormCard title="Teaching assignment" icon={Briefcase}>
                 <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
                     <span className="text-sm font-medium">
                       {designationKind === ARAL_VOLUNTEER_DESIGNATION
                         ? `${ARAL_VOLUNTEER_LABEL} — no teaching assignment`
@@ -1937,11 +1937,11 @@ function SettingsFormCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-lg">
       <CardHeader className="flex-row items-center gap-3 space-y-0 p-5">
         <span
           aria-hidden
-          className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+          className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
         >
           <Icon className="size-4" />
         </span>

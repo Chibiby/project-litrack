@@ -75,12 +75,12 @@ export function SummaryFacetIndex({
             <Link
               href={`${basePath}/${facet.id}${query ? `?${query}` : ""}`}
               prefetch={true}
-              className="group flex h-full items-start gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
+              className="group flex h-full items-start gap-3 rounded-lg border border-border/80 bg-card p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
             >
               <span
                 aria-hidden
                 className={cn(
-                  "flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-11",
+                  "flex size-10 shrink-0 items-center justify-center rounded-md sm:size-11",
                   SUMMARY_FACET_TILE[facet.id]
                 )}
               >

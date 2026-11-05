@@ -388,7 +388,7 @@ export function SchoolDetailView({
   return (
     <div className="space-y-6">
       {/* Profile */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-4">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold">Profile</h2>
@@ -435,7 +435,7 @@ export function SchoolDetailView({
           `router.push`, no `useListNavigate`: there is no server round trip
           for this table, so it stays outside the list-navigation machinery
           entirely. */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Users className="h-5 w-5" aria-hidden />
@@ -597,7 +597,7 @@ export function SchoolDetailView({
       </Suspense>
 
       {/* Danger zone, scoped to this school */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 border-destructive/40 space-y-3">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 border-destructive/40 space-y-3">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-destructive">
               <AlertTriangle className="h-5 w-5" aria-hidden />
@@ -710,7 +710,7 @@ function SchoolLearnersPanelBody({
   };
 
   return (
-    <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
+    <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <GraduationCap className="h-5 w-5" aria-hidden />

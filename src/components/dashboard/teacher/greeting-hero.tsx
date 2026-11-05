@@ -67,7 +67,7 @@ export function GreetingHero({
       // than at xl+. A scrim fading out toward the art keeps the greeting
       // readable without touching the shared art geometry or changing
       // anything at xl and up.
-      contentClassName="lg:max-xl:bg-gradient-to-r lg:max-xl:from-card/95 lg:max-xl:via-card/70 lg:max-xl:to-transparent lg:max-xl:rounded-2xl"
+      contentClassName="lg:max-xl:bg-gradient-to-r lg:max-xl:from-card/95 lg:max-xl:via-card/70 lg:max-xl:to-transparent lg:max-xl:rounded-lg"
     >
       <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 lg:block">
         {greeting},
@@ -85,7 +85,7 @@ export function GreetingHero({
         &ldquo;{quote.text}&rdquo;
         <footer className="not-italic">— {quote.author}</footer>
       </blockquote>
-      <p className="mt-4 inline-flex w-fit items-center gap-2 rounded-xl border border-border/80 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground lg:hidden">
+      <p className="mt-4 inline-flex w-fit items-center gap-2 rounded-md border border-border/80 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground lg:hidden">
         <CalendarDays aria-hidden className="size-4 text-muted-foreground" />
         {dateLabel}
       </p>

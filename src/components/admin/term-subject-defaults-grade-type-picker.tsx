@@ -32,7 +32,7 @@ export function TermSubjectDefaultsGradeTypePicker({
         id="term-subject-defaults-grade-type"
         value={selectedGradeType}
         onChange={(e) => router.push(hrefFor(e.target.value))}
-        className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+        className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
       >
         {gradeTypes.map((g) => (
           <option key={g.id} value={g.id}>

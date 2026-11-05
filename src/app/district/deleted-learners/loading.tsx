@@ -6,7 +6,7 @@ export default function DistrictDeletedLearnersLoading() {
   return (
     <RouteLoadingOverlay>
       <SchoolHeadPageSkeleton hero>
-        <TableSectionSkeleton rows={8} columns={6} className="rounded-2xl" />
+        <TableSectionSkeleton rows={8} columns={6} className="rounded-lg" />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
   );

@@ -80,7 +80,7 @@ export function MetricCard({
   );
 
   const classes = cn(
-    "relative block rounded-xl border p-5 transition-shadow",
+    "relative block rounded-lg border p-5 transition-shadow",
     styles.card,
     href && "hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     className

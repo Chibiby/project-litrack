@@ -41,9 +41,9 @@ const SCHOOLS = [{ id: "1", name: "Alabel Central ES", district: null, teachersO
 
 function openTeacherSignIn() {
   render(<LoginForm schools={SCHOOLS} />);
-  fireEvent.click(screen.getByLabelText("School Name"));
+  fireEvent.click(screen.getByLabelText("School"));
   fireEvent.click(screen.getByText("Alabel Central ES"));
-  fireEvent.click(screen.getByRole("button", { name: /^Next: enter/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
 }
 
 function typeAndSubmit() {
@@ -56,6 +56,27 @@ const emailInput = () => screen.getByLabelText("Email") as HTMLInputElement;
 const passwordInput = () => screen.getByLabelText("Password") as HTMLInputElement;
 
 describe("LoginForm failures", () => {
+  it("checks only on Sign in: inline messages, nothing sent, cleared while fixing", async () => {
+    openTeacherSignIn();
+    const form = emailInput().closest("form")!;
+    // The browser's own pop-up checks are off; ours show inline.
+    expect(form.noValidate).toBe(true);
+
+    fireEvent.change(emailInput(), { target: { value: "asd" } });
+    fireEvent.blur(emailInput());
+    expect(screen.queryByText(/full email address/)).toBeNull();
+
+    fireEvent.submit(form);
+    expect(await screen.findByText("Enter a full email address, like name@school.edu")).toBeTruthy();
+    expect(screen.getByText("Enter your password")).toBeTruthy();
+    expect(emailInput().getAttribute("aria-invalid")).toBe("true");
+    expect(loginTeacher).not.toHaveBeenCalled();
+
+    fireEvent.change(emailInput(), { target: { value: "asd@school.edu" } });
+    await waitFor(() => expect(screen.queryByText(/full email address/)).toBeNull());
+    expect(screen.getByText("Enter your password")).toBeTruthy();
+  });
+
   it("offline: sends nothing, says so, keeps the typed email", async () => {
     openTeacherSignIn();
     Object.defineProperty(window.navigator, "onLine", { value: false, configurable: true });

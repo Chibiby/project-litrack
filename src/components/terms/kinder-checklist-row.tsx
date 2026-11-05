@@ -192,7 +192,7 @@ export function KinderChecklistCard({
   onRemarkChange,
 }: KinderChecklistRowProps) {
   return (
-    <Surface className="flex flex-col gap-3 rounded-xl p-3">
+    <Surface className="flex flex-col gap-3 rounded-lg p-3">
       <p className="text-sm font-medium text-foreground">
         <span className="mr-1.5 text-muted-foreground">{rowNumber}.</span>
         {competencyText}

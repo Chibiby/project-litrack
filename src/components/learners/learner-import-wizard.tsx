@@ -246,7 +246,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-10 text-center hover:bg-muted/50">
+            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-6 py-10 text-center hover:bg-muted/50">
               <FileUp className="h-8 w-8 text-muted-foreground" />
               <span className="text-sm font-medium">Choose CSV file</span>
               <span className="text-xs text-muted-foreground">

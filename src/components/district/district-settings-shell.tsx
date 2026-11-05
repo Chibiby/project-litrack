@@ -14,7 +14,7 @@ const ROWS: { key: DistrictSettingsSection; label: string; icon: LucideIcon; hre
 
 function SettingsNavCard({ active }: { active: DistrictSettingsSection }) {
   return (
-    <Surface as="section" className="rounded-2xl p-4">
+    <Surface as="section" className="rounded-lg p-4">
       <h2 className="text-base font-semibold text-foreground">Settings</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">Manage your account.</p>
       <nav aria-label="Settings" className="mt-3">
@@ -29,7 +29,7 @@ function SettingsNavCard({ active }: { active: DistrictSettingsSection }) {
                   prefetch
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-10",
+                    "relative flex min-h-11 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-10",
                     isActive ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"
                   )}
                 >

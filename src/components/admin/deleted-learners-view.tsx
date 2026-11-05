@@ -103,7 +103,7 @@ export function DeletedLearnersView({
 
   return (
     <div className="space-y-6">
-      <Surface as="section" className="rounded-2xl p-3 sm:p-4">
+      <Surface as="section" className="rounded-lg p-3 sm:p-4">
         <form
           className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
           onSubmit={(event) => event.preventDefault()}
@@ -162,7 +162,7 @@ export function DeletedLearnersView({
         as="section"
         aria-label="Deleted learners"
         aria-busy={pending || undefined}
-        className="min-w-0 space-y-3 rounded-2xl p-4 sm:p-5"
+        className="min-w-0 space-y-3 rounded-lg p-4 sm:p-5"
       >
         {rows.length === 0 ? (
           filtered ? (

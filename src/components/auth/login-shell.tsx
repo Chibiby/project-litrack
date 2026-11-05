@@ -66,9 +66,9 @@ function LoginBrand() {
           height={512}
           priority
           sizes="(min-width: 1024px) 128px, 80px"
-          className="h-24 w-auto sm:h-28 lg:h-40"
+          className="h-16 w-auto sm:h-24 lg:h-40"
         />
-        <span aria-hidden className="h-16 w-px bg-muted-foreground/40 sm:h-20 lg:h-24" />
+        <span aria-hidden className="h-11 w-px bg-muted-foreground/40 sm:h-16 lg:h-24" />
         <Image
           src="/partner-logos.webp"
           alt="Partner organizations: DepEd, Bagong Pilipinas, and Division of Sarangani"
@@ -76,7 +76,7 @@ function LoginBrand() {
           height={216}
           priority
           sizes="(min-width: 1024px) 352px, 220px"
-          className="h-auto w-[13rem] sm:w-[16rem] lg:w-[22rem]"
+          className="h-auto w-[9rem] sm:w-[14rem] lg:w-[22rem]"
         />
       </div>
 

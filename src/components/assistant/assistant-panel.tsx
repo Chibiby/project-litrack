@@ -273,7 +273,7 @@ export function AssistantPanel({
       role="dialog"
       aria-modal="false"
       aria-label="LITRACK Assistant"
-      className="flex h-[560px] max-h-[calc(100dvh-6rem)] w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+      className="flex h-[560px] max-h-[calc(100dvh-6rem)] w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border bg-card shadow-2xl"
     >
       <header className="flex items-center gap-3 border-b px-4 py-3">
         <span
@@ -464,7 +464,7 @@ export function AssistantPanel({
               entries.map((entry) =>
                 entry.kind === "user" ? (
                   <div key={entry.id} className="flex justify-end">
-                    <p className="max-w-[80%] rounded-2xl rounded-br-sm bg-violet px-3.5 py-2 text-[13px] leading-relaxed text-violet-foreground">
+                    <p className="max-w-[80%] rounded-lg rounded-br-sm bg-violet px-3.5 py-2 text-[13px] leading-relaxed text-violet-foreground">
                       {entry.text}
                     </p>
                   </div>
@@ -547,7 +547,7 @@ function BotEntry({
   if (entry.state === "asking") {
     return (
       <div
-        className="flex w-fit items-center gap-1 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-3"
+        className="flex w-fit items-center gap-1 rounded-lg rounded-bl-sm bg-muted px-3.5 py-3"
         role="status"
       >
         <span className="sr-only">Thinking…</span>
@@ -568,7 +568,7 @@ function BotEntry({
 
   if (entry.state === "failed") {
     return (
-      <div className="max-w-[85%] space-y-2 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2.5">
+      <div className="max-w-[85%] space-y-2 rounded-lg rounded-bl-sm bg-muted px-3.5 py-2.5">
         <p className="text-[13px] leading-relaxed">{entry.text}</p>
         {canEscalate && (
           <Button
@@ -588,7 +588,7 @@ function BotEntry({
 
   return (
     <div className="space-y-2">
-      <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2.5 text-[13px] leading-relaxed">
+      <div className="max-w-[85%] whitespace-pre-line rounded-lg rounded-bl-sm bg-muted px-3.5 py-2.5 text-[13px] leading-relaxed">
         {entry.text}
       </div>
       {/* The prose came from the model; these are the app's own routes, picked

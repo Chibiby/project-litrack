@@ -302,7 +302,7 @@ export function ReportsHub({
           page, which is what it used to do. */}
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-2">
+      <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-2">
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -318,7 +318,7 @@ export function ReportsHub({
               aria-disabled={!!reason}
               title={reason}
               className={cn(
-                "inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                "inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition-colors",
                 active
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -333,7 +333,7 @@ export function ReportsHub({
       </div>
 
       {/* Filters */}
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className="rounded-lg border border-border bg-card p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(6,minmax(0,1fr))_auto_auto] xl:items-end">
           <Field label="School Year">
             <Select value={schoolYearId} onValueChange={setSchoolYearId}>
@@ -443,7 +443,7 @@ export function ReportsHub({
               key={card.kind}
               aria-disabled={!!lockReason}
               className={cn(
-                "flex flex-col rounded-xl border border-border bg-card p-4",
+                "flex flex-col rounded-lg border border-border bg-card p-4",
                 lockReason && "opacity-60"
               )}
             >
@@ -479,12 +479,12 @@ export function ReportsHub({
               <div className="flex-1" />
 
               {lockReason ? (
-                <div className="mt-4 flex items-start gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                <div className="mt-4 flex items-start gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                   <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
                   {lockReason}
                 </div>
               ) : card.soon ? (
-                <div className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                <div className="mt-4 flex items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                   <PencilRuler className="h-3.5 w-3.5" aria-hidden />
                   Create Custom
                   <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
@@ -515,7 +515,7 @@ export function ReportsHub({
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">
           {/* Quick Generate */}
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-card p-4">
             <p className="font-semibold">Quick Generate</p>
             <p className="text-xs text-muted-foreground">
               One-click reports for your most used data.
@@ -547,7 +547,7 @@ export function ReportsHub({
           </div>
 
           {/* Recent Reports */}
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-card p-4">
             <p className="font-semibold">Recent Reports</p>
             <p className="text-xs text-muted-foreground">
               Your recently generated reports
@@ -653,7 +653,7 @@ export function ReportsHub({
 
         {/* Right rail */}
         <div className="space-y-4">
-          <div className="rounded-xl border border-border bg-violet-50/60 p-4 dark:bg-violet-950/20">
+          <div className="rounded-lg border border-border bg-violet-50/60 p-4 dark:bg-violet-950/20">
             <p className="flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300">
               <Lightbulb className="h-4 w-4" aria-hidden />
               Report Tips
@@ -678,7 +678,7 @@ export function ReportsHub({
             </ul>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-card p-4">
             <p className="flex items-center gap-2 font-semibold">
               <HelpCircle className="h-4 w-4" aria-hidden />
               Need Help?
@@ -768,7 +768,7 @@ function DateRangeFilter({
         <Button
           type="button"
           variant="outline"
-          className="flex h-11 w-full items-center justify-start gap-2 rounded-lg border-input bg-background px-3 text-left text-sm font-normal lg:h-10"
+          className="flex h-11 w-full items-center justify-start gap-2 rounded-md border-input bg-background px-3 text-left text-sm font-normal lg:h-10"
         >
           <CalendarDays
             aria-hidden

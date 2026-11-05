@@ -113,7 +113,7 @@ export default async function DistrictSchoolPage({ params }: PageProps) {
       }
     >
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <Surface as="section" aria-labelledby="school-details-title" className="min-w-0 rounded-2xl">
+        <Surface as="section" aria-labelledby="school-details-title" className="min-w-0 rounded-lg">
           <PanelHeader
             id="school-details-title"
             icon={Building2}
@@ -132,7 +132,7 @@ export default async function DistrictSchoolPage({ params }: PageProps) {
         {/* Two-up on tablets, where the details form spans the page above;
             a single rail beside the form from xl. */}
         <div className="grid min-w-0 grid-cols-1 content-start gap-6 md:grid-cols-2 xl:grid-cols-1">
-          <Surface as="section" aria-labelledby="school-status-title" className="min-w-0 rounded-2xl">
+          <Surface as="section" aria-labelledby="school-status-title" className="min-w-0 rounded-lg">
             <PanelHeader
               id="school-status-title"
               icon={Power}
@@ -155,7 +155,7 @@ export default async function DistrictSchoolPage({ params }: PageProps) {
             </div>
           </Surface>
 
-          <Surface as="section" aria-labelledby="school-head-title" className="min-w-0 rounded-2xl">
+          <Surface as="section" aria-labelledby="school-head-title" className="min-w-0 rounded-lg">
             <PanelHeader id="school-head-title" icon={KeyRound} tone="amber" title="School Head sign-in" />
             <div className="p-4 sm:p-5">
               <SchoolHeadReset schoolId={school.id} schoolName={school.name} />
@@ -165,7 +165,7 @@ export default async function DistrictSchoolPage({ params }: PageProps) {
           <Surface
             as="section"
             aria-labelledby="school-figures-title"
-            className="min-w-0 rounded-2xl md:col-span-2 xl:col-span-1"
+            className="min-w-0 rounded-lg md:col-span-2 xl:col-span-1"
           >
             <PanelHeader id="school-figures-title" icon={BarChart3} tone="primary" title="This school's figures" />
             <ul className="grid grid-cols-1 p-2 sm:p-3 md:grid-cols-2 xl:grid-cols-1">

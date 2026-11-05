@@ -103,7 +103,7 @@ async function RemovedSchoolsBody() {
           Could not load removed schools right now. The database may be unavailable.
         </p>
       ) : null}
-      <Surface as="section" className="min-w-0 rounded-2xl">
+      <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceBody className="p-3 sm:p-5">
           <RemovedSchoolsTable schools={rows} />
         </SurfaceBody>
@@ -155,7 +155,7 @@ async function SchoolsTableBody({ searchParams }: { searchParams: SchoolsSearchP
         </p>
       ) : null}
 
-      <Surface as="section" className="min-w-0 rounded-2xl">
+      <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceBody className="p-3 sm:p-5">
           <SchoolsTable
             schools={tableData}

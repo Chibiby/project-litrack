@@ -252,7 +252,7 @@ function AttendanceCellPicker({
               variant="ghost"
               onClick={() => pick(option)}
               className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent",
+                "flex w-full items-center gap-2.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent",
                 status === option && "bg-accent"
               )}
             >

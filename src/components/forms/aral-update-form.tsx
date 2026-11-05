@@ -127,7 +127,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
             <p className="text-sm font-medium mb-2">Suggested Reading Interventions</p>
             <div className="space-y-2 max-lg:space-y-0.5">
               {interventionOptions.map((opt) => (
-                <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-lg max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
+                <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-md max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
                   <input
                     type="checkbox"
                     name="suggestedInterventions[]"
@@ -163,7 +163,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
             <p className="text-sm font-medium mb-2">Recommendation for Further Assessment</p>
             <div className="space-y-2 max-lg:space-y-0.5">
               {furtherOptions.map((opt) => (
-                <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-lg max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
+                <label key={opt.value} className="flex items-start gap-3 cursor-pointer max-lg:-mx-2 max-lg:min-h-10 max-lg:rounded-md max-lg:px-2 max-lg:py-2 max-lg:active:bg-muted/60">
                   <input
                     type="checkbox"
                     name="furtherAssessment[]"

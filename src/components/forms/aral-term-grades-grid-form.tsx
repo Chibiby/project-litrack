@@ -478,7 +478,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
           aria-invalid={trimmed !== "" && !valid}
           title={failing ? `Below the passing mark of ${PASSING_SCORE}` : undefined}
           className={cn(
-            "rounded-lg px-1 text-center tabular-nums",
+            "rounded-md px-1 text-center tabular-nums",
             className,
             failing && TONE_FAILING
           )}

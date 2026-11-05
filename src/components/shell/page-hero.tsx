@@ -84,7 +84,7 @@ export function PageHero({
       <div
         aria-hidden
         className={cn(
-          "absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 lg:[&>img]:bottom-auto lg:[&>img]:top-[-8.83%] lg:[&>img]:h-[136.04%] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80",
+          "absolute inset-0 -z-10 overflow-hidden rounded-xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 lg:[&>img]:bottom-auto lg:[&>img]:top-[-8.83%] lg:[&>img]:h-[136.04%] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80",
           phoneMaskClassName
         )}
       >
@@ -110,7 +110,7 @@ export function PageHero({
       </div>
       {topRight ? (
         <div className="absolute right-3 top-3 z-20 sm:right-4 sm:top-4 lg:right-6 lg:top-6">
-          <div className="rounded-xl border border-border/70 bg-card/95 p-1 shadow-card backdrop-blur-sm sm:rounded-2xl">
+          <div className="rounded-lg border border-border/70 bg-card/95 p-1 shadow-card backdrop-blur-sm">
             {topRight}
           </div>
         </div>
@@ -145,7 +145,7 @@ export function CompactPageHeader({
   topRight?: React.ReactNode;
 }) {
   return (
-    <section className="mt-2 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-5">
+    <section className="mt-2 flex flex-col gap-3 rounded-lg border border-border/70 bg-card px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-5">
       <div className="min-w-0">
         {eyebrow ? (
           <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:text-sm">

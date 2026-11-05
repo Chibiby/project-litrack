@@ -165,7 +165,7 @@ export function BroadcastComposer({
             <Label
               key={option.kind}
               htmlFor={`broadcast-target-${option.kind}`}
-              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-input bg-card px-3 font-normal sm:min-h-10"
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-input bg-card px-3 font-normal sm:min-h-10"
             >
               <RadioGroupItem
                 value={option.kind}

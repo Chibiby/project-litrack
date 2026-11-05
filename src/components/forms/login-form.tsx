@@ -9,6 +9,8 @@ import {
   ArrowRight,
   Building2,
   GraduationCap,
+  LockKeyhole,
+  Mail,
   School,
   ShieldCheck,
 } from "lucide-react";
@@ -25,13 +27,25 @@ import {
   AUTH_PRIMARY_BUTTON,
   AuthCard,
   AuthCardHeader,
+  FIELD_ICON,
+  FLOAT_INPUT,
+  FLOAT_LABEL,
+  GLASS_FIELD,
 } from "@/components/auth/auth-card";
 import { cn } from "@/lib/utils";
+import { useShakeInvalid } from "@/hooks/use-shake-invalid";
 import { loginSchoolHead, loginTeacher, registerTeacher } from "@/lib/actions/auth";
 import { callAction } from "@/lib/ui/call-action";
 import type { ActionFailure } from "@/lib/errors/result";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
-import { strongPassword } from "@/lib/validators/auth.schema";
+import {
+  checkSchoolHeadLogin,
+  checkTeacherLogin,
+  checkTeacherRegister,
+  firstLoginFieldError,
+  type LoginFieldErrors,
+  type LoginFieldKey,
+} from "@/lib/auth/login-field-checks";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
 import {
   ALL_DISTRICTS,
@@ -80,9 +94,8 @@ async function markSplashOnRedirect<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-type FieldKey = "email" | "password" | "confirmPassword";
-type FieldErrors = Partial<Record<FieldKey, string>>;
-const FIELD_ORDER: FieldKey[] = ["email", "password", "confirmPassword"];
+type FieldKey = LoginFieldKey;
+type FieldErrors = LoginFieldErrors;
 
 const ERROR_TEXT = "text-sm font-medium text-destructive";
 
@@ -95,16 +108,65 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-/** The Teachers / School Head toggle: the violet pill when picked, outlined when not. */
+type NavDir = "forward" | "back" | null;
+
+/** Length of the step slide; keep in step with [animation-duration:…] below. */
+const STEP_SLIDE_MS = 420;
+
+/**
+ * Step change inside the card, like a navigation push and pop: a step reached
+ * by going forward (Next, Create account) slides in from the right; one reached
+ * by going back (Change school, Sign in) slides in from the left. It travels
+ * the card's full width with iOS's push curve (fast start, long settle), so on
+ * a phone it reads as a page moving rather than a twitch. Reduce Motion shows
+ * the step at once.
+ */
+function stepSlide(dir: NavDir): string {
+  if (!dir) return "";
+  return cn(
+    // tailwindcss-animate ignores arbitrary duration-[…]/ease-[…] (they only set
+    // transitions), so the animation's own properties are set directly.
+    "animate-in fade-in-50 [animation-duration:420ms] [animation-timing-function:cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none",
+    dir === "forward" ? "slide-in-from-right-full" : "slide-in-from-left-full",
+  );
+}
+
+/**
+ * Focus a new step's first field (marked data-autofocus) only once its slide has
+ * finished, and never on touch screens. Focusing during the slide opened the
+ * phone keyboard and made the browser scroll toward a field that was still
+ * moving, which shook the whole step; on phones the user taps the field instead.
+ */
+function focusStepField(step: HTMLElement | null) {
+  const field = step?.querySelector<HTMLElement>("[data-autofocus]");
+  if (!field || window.matchMedia?.("(pointer: coarse)").matches) return;
+  const focus = () => {
+    if (field.isConnected) field.focus({ preventScroll: true });
+  };
+  // A timer, not animationend: a tab in the background never finishes the
+  // animation, and the field must still get focus.
+  const animated = Boolean(step!.getAnimations?.().length);
+  if (animated) window.setTimeout(focus, STEP_SLIDE_MS);
+  else focus();
+}
+
+/**
+ * The Teachers / School Head switch: one track holding both options, the
+ * picked one as the violet pill. Track lg (12px) with p-1 (4px) → options
+ * md (8px), so the corners stay concentric (docs/design-radius.md).
+ */
+const ROLE_SWITCH =
+  "grid grid-cols-2 gap-1 rounded-lg border border-white/60 bg-card/25 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]";
 const ROLE_OPTION =
-  "h-12 w-full rounded-xl text-base font-medium 2xl:h-14 [&_svg]:size-5";
-const ROLE_PICKED = cn("border-transparent hover:text-white", AUTH_PILL);
-const ROLE_UNPICKED =
-  "border-slate-200 bg-card text-indigo-950 hover:border-violet-200 hover:bg-violet-50 hover:text-indigo-950";
+  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 2xl:h-12 [&_svg]:size-5";
+const ROLE_PICKED = AUTH_PILL;
+const ROLE_UNPICKED = "text-slate-700 hover:bg-card/45 hover:text-indigo-950";
 
 /** The tall, icon-led trigger both pickers share on the first step. */
-const PICKER_TRIGGER =
-  "h-12 gap-3 rounded-xl border-slate-200 bg-card px-4 text-base text-indigo-950 md:text-base 2xl:h-14";
+const PICKER_TRIGGER = cn(
+  GLASS_FIELD,
+  "h-12 gap-3 rounded-md px-4 text-base text-indigo-950 lg:h-12 lg:text-base 2xl:h-14",
+);
 
 export function LoginForm({
   schools,
@@ -117,6 +179,9 @@ export function LoginForm({
   notice?: string;
 }) {
   const [screen, setScreen] = useState<Screen>("select-role");
+  // Which way the last step change went, so the new step slides in from the
+  // matching side (null on first load: nothing slides).
+  const [navDir, setNavDir] = useState<NavDir>(null);
   const [role, setRole] = useState<Role>("teacher");
   const router = useRouter();
   const [schoolId, setSchoolId] = useState("");
@@ -146,10 +211,17 @@ export function LoginForm({
   const [formError, setFormError] = useState<string | null>(null);
   /** Input to focus once the failed attempt has finished and inputs are enabled again. */
   const focusRequest = useRef<string | null>(null);
+  /** Shakes the fields an attempt marked invalid (ref sits on the step's content). */
+  const { ref: stepRef, shake } = useShakeInvalid();
 
   useEffect(() => {
     if (loginError) toast.error(loginError);
   }, [loginError]);
+
+  // A new sign-in step focuses its first field after its slide (see focusStepField).
+  useEffect(() => {
+    focusStepField(stepRef.current);
+  }, [screen, teacherIntent, stepRef]);
 
   useEffect(() => {
     if (pending || !focusRequest.current) return;
@@ -158,6 +230,7 @@ export function LoginForm({
   }, [pending, fieldErrors, formError]);
 
   const fieldDomId = (key: FieldKey): string => {
+    if (key === "firstName" || key === "lastName") return key;
     if (screen === "school-head") return "password";
     if (teacherIntent === "login") return key === "email" ? "email" : "teacherPassword";
     if (key === "email") return "registerEmail";
@@ -182,6 +255,8 @@ export function LoginForm({
   const showFailure = (failure: Pick<ActionFailure, "code" | "error" | "fieldErrors">) => {
     const fromServer = failure.fieldErrors ?? {};
     const next: FieldErrors = {};
+    if (fromServer.firstName) next.firstName = fromServer.firstName;
+    if (fromServer.lastName) next.lastName = fromServer.lastName;
     if (fromServer.email) next.email = fromServer.email;
     if (fromServer.password) next.password = fromServer.password;
     if (fromServer.confirmPassword) next.confirmPassword = fromServer.confirmPassword;
@@ -189,15 +264,25 @@ export function LoginForm({
       if (failure.code === "AUTH_TEACHER_NOT_FOUND") next.email = failure.error;
       if (failure.code === "AUTH_INCORRECT_PASSWORD") next.password = failure.error;
     }
-    const first = FIELD_ORDER.find((key) => next[key]);
-    if (first) {
-      setFieldErrors(next);
-      setFormError(null);
-      focusRequest.current = fieldDomId(first);
-    } else {
+    if (!showFieldErrors(next)) {
       setFieldErrors({});
       setFormError(Object.values(fromServer)[0] ?? failure.error);
     }
+  };
+
+  /**
+   * Shows field warnings inline (focus the first, shake them all). Returns
+   * false when there are none. Used for the checks run when a button is
+   * pressed and for field errors the server sends back.
+   */
+  const showFieldErrors = (errors: FieldErrors): boolean => {
+    const first = firstLoginFieldError(errors);
+    if (!first) return false;
+    setFieldErrors(errors);
+    setFormError(null);
+    focusRequest.current = fieldDomId(first);
+    shake();
+    return true;
   };
 
   const handleSchoolChange = (value: string) => {
@@ -233,11 +318,13 @@ export function LoginForm({
   const goBackToSchoolSelect = () => {
     resetTeacherFlow();
     clearErrors();
+    setNavDir("back");
     setScreen("select-role");
   };
 
   const switchTeacherIntent = (intent: TeacherIntent) => {
     clearErrors();
+    setNavDir(intent === "register" ? "forward" : "back");
     setTeacherIntent(intent);
     setPassword("");
     setConfirmPassword("");
@@ -257,6 +344,7 @@ export function LoginForm({
 
   const handleTeacherLogin = () => {
     clearErrors();
+    if (showFieldErrors(checkTeacherLogin({ email, password }))) return;
     startTransition(async () => {
       const formData = new FormData();
       formData.set("schoolId", schoolId);
@@ -275,17 +363,11 @@ export function LoginForm({
   const handleRegisterTeacher = () => {
     if (pending || registerLock.current) return;
     clearErrors();
-
-    if (password !== confirmPassword) {
-      setFieldErrors({ confirmPassword: "Passwords do not match" });
-      focusRequest.current = "confirmPassword";
-      return;
-    }
-
-    const strength = strongPassword.safeParse(password);
-    if (!strength.success) {
-      setFieldErrors({ password: strength.error.errors[0]?.message ?? PASSWORD_HINT });
-      focusRequest.current = "registerPassword";
+    if (
+      showFieldErrors(
+        checkTeacherRegister({ firstName, lastName, email, password, confirmPassword }),
+      )
+    ) {
       return;
     }
 
@@ -316,6 +398,7 @@ export function LoginForm({
     formData.set("schoolId", schoolId);
     formData.set("password", password);
     clearErrors();
+    if (showFieldErrors(checkSchoolHeadLogin({ password }))) return;
 
     startTransition(async () => {
       const res = await markSplashOnRedirect(() => callAction(() => loginSchoolHead(formData)));
@@ -335,17 +418,19 @@ export function LoginForm({
       if (!canContinue) return;
       clearErrors();
       resetTeacherFlow();
+      setNavDir("forward");
       setScreen(role === "teacher" ? "teacher" : "school-head");
     };
     const continueHint =
       !schoolId && schools.length > 0 ? "Select your school to continue." : null;
 
     return (
-      <AuthCard>
-        <AuthCardHeader title="Sign In" subtitle="Access your LITRACK account" />
-        <div className="mt-6 2xl:mt-8">
+      <AuthCard className="overflow-hidden pt-10 sm:pt-12 2xl:pt-16">
+        <div key="select-role" className={stepSlide(navDir)}>
+        <AuthCardHeader title="Sign In" subtitle="Choose your district and school" />
+        <div className="mt-4 2xl:mt-5">
           {notice ? (
-            <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 2xl:mb-6">
+            <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 2xl:mb-6">
               {notice}
             </p>
           ) : null}
@@ -376,13 +461,13 @@ export function LoginForm({
           ) : null}
           <div className={cn("space-y-1.5", districts.length > 0 && "mt-3")}>
             <Label htmlFor="login-school" className={AUTH_LABEL}>
-              School Name
+              School
             </Label>
             {schools.length === 0 ? (
               // The notice above already says the list failed to load; "No schools
               // found" would contradict it.
               notice ? null : (
-                <p className="rounded-xl border border-slate-200 bg-muted/60 p-4 text-center text-sm text-slate-600">
+                <p className="rounded-lg border border-slate-200 bg-muted/60 p-4 text-center text-sm text-slate-600">
                   No schools found. Contact admin.
                 </p>
               )
@@ -403,10 +488,9 @@ export function LoginForm({
           </div>
 
           <div className="mt-6 space-y-2 2xl:mt-7">
-            <div role="group" aria-label="Sign in as" className="grid grid-cols-2 gap-3">
-              <Button
+            <div role="group" aria-label="Sign in as" className={ROLE_SWITCH}>
+              <button
                 type="button"
-                variant="outline"
                 aria-pressed={role === "teacher"}
                 disabled={teachersLocked}
                 title={teachersLocked ? TEACHERS_UNLOCK_HELP : undefined}
@@ -415,17 +499,16 @@ export function LoginForm({
               >
                 <GraduationCap aria-hidden />
                 Teachers
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
-                variant="outline"
                 aria-pressed={role === "school-head"}
                 onClick={() => setRole("school-head")}
                 className={cn(ROLE_OPTION, role === "school-head" ? ROLE_PICKED : ROLE_UNPICKED)}
               >
                 <School aria-hidden />
                 School Head
-              </Button>
+              </button>
             </div>
             {teachersLocked ? (
               <p className="text-sm text-slate-600">{TEACHERS_UNLOCK_HELP}</p>
@@ -439,8 +522,8 @@ export function LoginForm({
             onClick={handleContinue}
             className={cn(AUTH_PRIMARY_BUTTON, "mt-6 2xl:mt-7")}
           >
+            Next
             <ArrowRight aria-hidden />
-            {role === "teacher" ? "Next: enter email and password" : "Next: enter password"}
           </Button>
           {continueHint ? (
             <p id="login-continue-hint" className="mt-2 text-center text-sm text-slate-600">
@@ -448,31 +531,19 @@ export function LoginForm({
             </p>
           ) : null}
 
-          <div className="mt-6 flex items-center gap-3 text-sm text-slate-500 2xl:mt-7" aria-hidden>
-            <span className="h-px flex-1 bg-border" />
-            or
-            <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <p className="mt-4 text-center">
-            <Link
-              href="/forgot-password"
-              className={cn("text-sm", AUTH_LINK)}
-            >
+          <p className="mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm 2xl:mt-7">
+            <Link href="/forgot-password" className={AUTH_LINK}>
               Forgot password?
             </Link>
-          </p>
-
-          <Button
-            asChild
-            variant="outline"
-            className="mt-3 h-11 w-full rounded-xl border-violet-100 bg-violet-50 text-sm font-medium text-indigo-950 hover:bg-violet-100 hover:text-indigo-950 lg:h-10 2xl:h-11 2xl:text-base [&_svg]:size-4 [&_svg]:text-violet-600"
-          >
-            <Link href="/admin/login">
-              <ShieldCheck aria-hidden />
+            <span aria-hidden className="text-slate-400">
+              ·
+            </span>
+            <Link href="/admin/login" className={cn("inline-flex items-center gap-1", AUTH_LINK)}>
+              <ShieldCheck aria-hidden className="size-4" />
               Admin Login
             </Link>
-          </Button>
+          </p>
+        </div>
         </div>
       </AuthCard>
     );
@@ -480,20 +551,30 @@ export function LoginForm({
 
   const schoolName = schools.find((s) => s.id === schoolId)?.name;
 
+  // Every step keeps the card's centred title; the line under it says what
+  // this step is for.
+  const header =
+    screen === "school-head"
+      ? { title: "Sign In", subtitle: "Sign in as School Head" }
+      : teacherIntent === "login"
+        ? { title: "Sign In", subtitle: "Sign in to your teacher account" }
+        : { title: "Create Account", subtitle: "Create your teacher account" };
+
   return (
-    <AuthCard>
-      <div className="space-y-4">
+    <AuthCard className="overflow-hidden pt-10 sm:pt-12 2xl:pt-16">
+      <div ref={stepRef} key={`${screen}-${teacherIntent}`} className={cn("space-y-4", stepSlide(navDir))}>
         <Button
           type="button"
           variant="link"
           size="sm"
-          className="mb-1 h-auto min-h-11 p-0 text-sm text-slate-600 hover:text-indigo-950"
+          className="-mt-4 mb-1 h-auto min-h-11 p-0 text-sm text-slate-600 hover:text-indigo-950 sm:-mt-6"
           onClick={goBackToSchoolSelect}
         >
           ← Change school
         </Button>
+        <AuthCardHeader title={header.title} subtitle={header.subtitle} />
         {schoolName ? (
-          <p className="flex items-center gap-2 text-sm font-medium text-slate-600">
+          <p className="flex items-center justify-center gap-2 text-sm font-medium text-slate-600">
             <School className="size-4 shrink-0" aria-hidden />
             <span className="truncate">{schoolName}</span>
           </p>
@@ -502,22 +583,26 @@ export function LoginForm({
         {screen === "school-head" ? (
           <>
             <form
+              noValidate
               className="space-y-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSchoolHeadSubmit();
               }}
             >
-              <h2 className="text-2xl font-bold tracking-tight text-indigo-950">
-                School Head sign in
-              </h2>
               <div className="space-y-2">
-                <Label htmlFor="password">School ID or password</Label>
+                <div className="group relative" data-shake data-filled={password !== ""}>
+                  <LockKeyhole className={cn(FIELD_ICON, "z-10")} aria-hidden />
+                  <Label htmlFor="password" className={cn(FLOAT_LABEL, "z-10")}>
+                    School ID or password
+                  </Label>
                 <PasswordInput
                   id="password"
                   name="password"
+                  className={FLOAT_INPUT}
+                  toggleSize="lg"
                   required
-                  autoFocus
+                  data-autofocus
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => {
@@ -527,6 +612,7 @@ export function LoginForm({
                   aria-invalid={fieldErrors.password ? true : undefined}
                   aria-describedby={fieldErrors.password ? "password-error" : undefined}
                 />
+                </div>
                 <FieldError id="password-error" message={fieldErrors.password} />
                 <p className="text-xs text-muted-foreground">
                   First time signing in? Enter your School ID. You&apos;ll choose your own password next.
@@ -550,41 +636,16 @@ export function LoginForm({
           </>
         ) : (
           <div className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-indigo-950">
-              {teacherIntent === "login" ? "Teacher sign in" : "Create teacher account"}
-            </h2>
             {teacherIntent === "register" ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-center text-xs text-muted-foreground">
                 Set your password now — no verification code needed. Your School Head approves the
                 account before you can sign in.
               </p>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={teacherIntent === "login" ? "default" : "ghost"}
-                className="w-full"
-                disabled={pending}
-                onClick={() => switchTeacherIntent("login")}
-              >
-                Sign in
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={teacherIntent === "register" ? "default" : "ghost"}
-                className="w-full"
-                disabled={pending}
-                onClick={() => switchTeacherIntent("register")}
-              >
-                Create account
-              </Button>
-            </div>
-
             {teacherIntent === "login" ? (
               <form
+                noValidate
                 className="space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -592,31 +653,42 @@ export function LoginForm({
                 }}
               >
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    autoFocus
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      clearFieldError("email");
-                    }}
-                    disabled={pending}
-                    placeholder="you@school.edu"
-                    aria-invalid={fieldErrors.email ? true : undefined}
-                    aria-describedby={fieldErrors.email ? "email-error" : undefined}
-                  />
+                  <div className="group relative" data-shake data-filled={email !== ""}>
+                    <Mail className={FIELD_ICON} aria-hidden />
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      className={cn(FLOAT_INPUT, "pr-5")}
+                      required
+                      data-autofocus
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        clearFieldError("email");
+                      }}
+                      disabled={pending}
+                      aria-invalid={fieldErrors.email ? true : undefined}
+                      aria-describedby={fieldErrors.email ? "email-error" : undefined}
+                    />
+                    <Label htmlFor="email" className={FLOAT_LABEL}>
+                      Email
+                    </Label>
+                  </div>
                   <FieldError id="email-error" message={fieldErrors.email} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="teacherPassword">Password</Label>
+                  <div className="group relative" data-shake data-filled={password !== ""}>
+                    <LockKeyhole className={cn(FIELD_ICON, "z-10")} aria-hidden />
+                    <Label htmlFor="teacherPassword" className={cn(FLOAT_LABEL, "z-10")}>
+                      Password
+                    </Label>
                   <PasswordInput
                     id="teacherPassword"
                     name="password"
+                    className={FLOAT_INPUT}
+                    toggleSize="lg"
                     required
                     autoComplete="current-password"
                     value={password}
@@ -628,6 +700,7 @@ export function LoginForm({
                     aria-invalid={fieldErrors.password ? true : undefined}
                     aria-describedby={fieldErrors.password ? "teacherPassword-error" : undefined}
                   />
+                  </div>
                   <FieldError id="teacherPassword-error" message={fieldErrors.password} />
                 </div>
                 <FieldError id="login-form-error" message={formError ?? undefined} />
@@ -639,39 +712,59 @@ export function LoginForm({
                 >
                   Sign in
                 </Button>
-                <p className="text-center">
-                  <Link href="/forgot-password" className={cn("text-sm", AUTH_LINK)}>
+                <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm">
+                  <Link href="/forgot-password" className={AUTH_LINK}>
                     Forgot password?
                   </Link>
+                  <span aria-hidden className="text-slate-400">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => switchTeacherIntent("register")}
+                    className={cn(AUTH_LINK, "disabled:opacity-50")}
+                  >
+                    Create account
+                  </button>
                 </p>
               </form>
             ) : (
               <form
+                noValidate
                 className="space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleRegisterTeacher();
                 }}
               >
-                <div className="space-y-2">
+                <div className="space-y-2" data-shake>
                   <Label htmlFor="firstName">First name</Label>
                   <Input
                     id="firstName"
+                    className={GLASS_FIELD}
                     name="firstName"
                     required
-                    autoFocus
+                    data-autofocus
                     autoComplete="given-name"
                     autoCapitalize="words"
                     maxLength={100}
                     value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
+                    onChange={(e) => {
+                      setFirstName(e.target.value);
+                      clearFieldError("firstName");
+                    }}
                     disabled={pending}
+                    aria-invalid={fieldErrors.firstName ? true : undefined}
+                    aria-describedby={fieldErrors.firstName ? "firstName-error" : undefined}
                   />
+                  <FieldError id="firstName-error" message={fieldErrors.firstName} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="middleName">Middle name (optional)</Label>
                   <Input
                     id="middleName"
+                    className={GLASS_FIELD}
                     name="middleName"
                     autoComplete="additional-name"
                     autoCapitalize="words"
@@ -681,24 +774,32 @@ export function LoginForm({
                     disabled={pending}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-shake>
                   <Label htmlFor="lastName">Last name</Label>
                   <Input
                     id="lastName"
+                    className={GLASS_FIELD}
                     name="lastName"
                     required
                     autoComplete="family-name"
                     autoCapitalize="words"
                     maxLength={100}
                     value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
+                    onChange={(e) => {
+                      setLastName(e.target.value);
+                      clearFieldError("lastName");
+                    }}
                     disabled={pending}
+                    aria-invalid={fieldErrors.lastName ? true : undefined}
+                    aria-describedby={fieldErrors.lastName ? "lastName-error" : undefined}
                   />
+                  <FieldError id="lastName-error" message={fieldErrors.lastName} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-shake>
                   <Label htmlFor="registerEmail">Email</Label>
                   <Input
                     id="registerEmail"
+                    className={GLASS_FIELD}
                     name="email"
                     type="email"
                     required
@@ -715,10 +816,11 @@ export function LoginForm({
                   />
                   <FieldError id="registerEmail-error" message={fieldErrors.email} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-shake>
                   <Label htmlFor="registerPassword">Password</Label>
                   <PasswordInput
                     id="registerPassword"
+                    className={GLASS_FIELD}
                     name="password"
                     required
                     minLength={8}
@@ -739,10 +841,11 @@ export function LoginForm({
                     {PASSWORD_HINT}
                   </p>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-shake>
                   <Label htmlFor="confirmPassword">Confirm password</Label>
                   <PasswordInput
                     id="confirmPassword"
+                    className={GLASS_FIELD}
                     name="confirmPassword"
                     required
                     minLength={8}
@@ -769,6 +872,17 @@ export function LoginForm({
                 >
                   Create account
                 </Button>
+                <p className="text-center text-sm text-slate-600">
+                  Already have an account?{" "}
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => switchTeacherIntent("login")}
+                    className={cn(AUTH_LINK, "disabled:opacity-50")}
+                  >
+                    Sign in
+                  </button>
+                </p>
               </form>
             )}
           </div>

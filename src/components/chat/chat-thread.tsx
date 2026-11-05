@@ -411,7 +411,7 @@ function ChatBubble({
         )}
         <div
           className={cn(
-            "inline-block whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-left text-[13px] leading-relaxed",
+            "inline-block whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-left text-[13px] leading-relaxed",
             mine
               ? "rounded-br-sm bg-violet text-violet-foreground"
               : "rounded-bl-sm bg-muted text-foreground"

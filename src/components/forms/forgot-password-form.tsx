@@ -64,7 +64,7 @@ export function ForgotPasswordForm() {
 
   if (done) {
     return (
-      <Card className="rounded-xl border border-border/80 shadow-sm">
+      <Card className="rounded-lg border border-border/80 shadow-sm">
         <CardContent className="space-y-4 pt-6">
           <h2 className="text-lg font-semibold">Check your email</h2>
           <p className="text-sm text-muted-foreground">{SUCCESS_MESSAGE}</p>
@@ -86,7 +86,7 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="rounded-xl border border-border/80 shadow-sm">
+    <Card className="rounded-lg border border-border/80 shadow-sm">
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">Reset password</h2>
         <p className="text-sm text-muted-foreground">

@@ -84,7 +84,7 @@ export function ProfileWizardChrome({
               <li key={step.id} className="min-w-0 flex-1">
                 <div
                   className={cn(
-                    "flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs",
+                    "flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs",
                     active && "border-primary bg-primary/10 text-primary",
                     done && !active && "border-border bg-muted/40 text-foreground",
                     !done && !active && "border-transparent text-muted-foreground"

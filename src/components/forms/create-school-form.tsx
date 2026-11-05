@@ -22,7 +22,7 @@ export function CreateSchoolForm() {
 
   if (initialPassword) {
     return (
-      <Card className="rounded-xl border border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40">
+      <Card className="rounded-lg border border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-start gap-2 text-amber-950 dark:text-amber-100">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -34,7 +34,7 @@ export function CreateSchoolForm() {
               </p>
             </div>
           </div>
-          <div className="rounded-lg border bg-card p-3 font-mono text-sm break-all">
+          <div className="rounded-md border bg-card p-3 font-mono text-sm break-all">
             {initialPassword}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -60,7 +60,7 @@ export function CreateSchoolForm() {
   }
 
   return (
-    <Card className="rounded-xl border border-border/80 shadow-sm">
+    <Card className="rounded-lg border border-border/80 shadow-sm">
       <CardContent className="pt-6">
         <form
           action={(fd) =>

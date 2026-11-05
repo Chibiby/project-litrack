@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function ChartPlaceholder({ height = 220 }: { height?: number | string }) {
   return (
-    <Skeleton className="w-full rounded-md" style={{ height }} aria-hidden />
+    <Skeleton className="w-full rounded-lg" style={{ height }} aria-hidden />
   );
 }
 

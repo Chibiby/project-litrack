@@ -65,7 +65,7 @@ export function AdminEmailComposer({ recipients, configured }: { recipients: Adm
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm sm:p-6">
+    <div className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
       <div className="mb-5 flex items-start gap-3">
         <span className="flex size-10 items-center justify-center rounded-lg bg-violet-soft text-violet"><Mail className="size-5" /></span>
         <div><h2 className="font-semibold">Send email</h2><p className="text-sm text-muted-foreground">Each recipient receives a separate private copy.</p></div>

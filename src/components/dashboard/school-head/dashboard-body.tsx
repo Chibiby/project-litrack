@@ -300,7 +300,7 @@ export async function loadSchoolHeadDashboard({
         <SchoolHeadIpSection schoolId={view.schoolId} isSuperAdminView={view.isSuperAdminView} />
       </Suspense>
 
-      <Suspense fallback={<ListCardSkeleton items={5} className="mb-6 rounded-2xl" />}>
+      <Suspense fallback={<ListCardSkeleton items={5} className="mb-6 rounded-lg" />}>
         <SchoolHeadRecentActivitySection
           schoolId={view.schoolId}
           isSuperAdminView={view.isSuperAdminView}

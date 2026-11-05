@@ -41,7 +41,7 @@ export default async function DistrictSupportPage() {
       {hasNoDistricts(scope) ? (
         <NoDistrictsState />
       ) : (
-        <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} className="rounded-2xl" />}>
+        <Suspense fallback={<TableSectionSkeleton rows={6} columns={3} className="rounded-lg" />}>
           <DistrictTicketQueue scope={scope} />
         </Suspense>
       )}
@@ -52,7 +52,7 @@ export default async function DistrictSupportPage() {
 async function DistrictTicketQueue({ scope }: { scope: AdminScope }) {
   const tickets = await listInboxTickets(scope);
   return (
-    <Surface as="section" aria-label="Support requests" className="min-w-0 rounded-2xl p-3 sm:p-4 lg:p-5">
+    <Surface as="section" aria-label="Support requests" className="min-w-0 rounded-lg p-3 sm:p-4 lg:p-5">
       <SupportInbox tickets={tickets} districtScoped />
     </Surface>
   );

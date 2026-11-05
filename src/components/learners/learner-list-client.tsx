@@ -485,7 +485,7 @@ function LearnerListPanel({
             type="button"
             size="icon"
             variant="outline"
-            className="size-11 shrink-0 rounded-xl lg:size-9"
+            className="size-11 shrink-0 rounded-md lg:size-9"
             disabled={pending}
             aria-label={`More actions for ${l.fullName}`}
           >
@@ -525,7 +525,7 @@ function LearnerListPanel({
       type="button"
       size="sm"
       variant="outline"
-      className="rounded-xl"
+      className="rounded-md"
       disabled={pending}
       onClick={() => handleRestoreOne(l.id)}
       aria-label={`Restore ${l.fullName}`}
@@ -542,7 +542,7 @@ function LearnerListPanel({
         type="button"
         size="sm"
         variant="outline"
-        className="rounded-xl text-destructive hover:text-destructive"
+        className="rounded-md text-destructive hover:text-destructive"
         disabled={pending}
         onClick={() => setPurgeTarget({ id: l.id, fullName: l.fullName })}
         aria-label={`Delete ${l.fullName} permanently`}
@@ -564,7 +564,7 @@ function LearnerListPanel({
         addControl={addControl}
       />
 
-      <Surface as="section" className="overflow-hidden rounded-2xl">
+      <Surface as="section" className="overflow-hidden rounded-lg">
         <LearnerListToolbar
           basePath={basePath}
           state={urlState}
@@ -703,7 +703,7 @@ function LearnerListPanel({
                         </TableCell>
                         <TableCell>
                           {adv && l.section ? (
-                            <span className="inline-flex whitespace-nowrap rounded-lg bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
+                            <span className="inline-flex whitespace-nowrap rounded-sm bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
                               {shortGrade(l.gradeType)} - {l.section.name}
                             </span>
                           ) : (
@@ -737,7 +737,7 @@ function LearnerListPanel({
                                 type="button"
                                 size="icon"
                                 variant="outline"
-                                className="size-11 rounded-xl lg:size-9"
+                                className="size-11 rounded-md lg:size-9"
                                 onClick={() => setProfileLearnerId(l.id)}
                               >
                                 <Eye className="size-4" aria-hidden />

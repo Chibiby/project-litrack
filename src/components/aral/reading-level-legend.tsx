@@ -17,7 +17,7 @@ export function ReadingLevelLegend({ gradeType }: { gradeType: string }) {
   return (
     <section
       aria-label="Reading Level Guide"
-      className="mt-4 rounded-xl border border-border bg-card p-4"
+      className="mt-4 rounded-lg border border-border bg-card p-4"
     >
       <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
         <BookOpen className="size-4 shrink-0" aria-hidden />

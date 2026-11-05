@@ -83,7 +83,7 @@ export function AdvisoryChooser({
               key={p.sectionId}
               htmlFor={`advisory-chooser-${p.sectionId}`}
               className={cn(
-                "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium transition-colors",
+                "flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-medium transition-colors",
                 selectedSectionId === p.sectionId
                   ? "border-primary bg-primary/5"
                   : "border-border hover:bg-muted/50"

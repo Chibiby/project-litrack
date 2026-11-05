@@ -78,7 +78,7 @@ export function TermsReportHero({
           this text column and the mask doesn't fully hide it, so give the
           text its own scrim to stay legible (z-index plus a
           soft background). */}
-      <div className="max-lg:relative max-lg:z-10 max-lg:w-fit max-lg:max-w-[68%] max-lg:rounded-xl max-lg:border max-lg:border-border/70 max-lg:bg-card/90 max-lg:px-2.5 max-lg:py-1.5 max-lg:shadow-card max-lg:backdrop-blur-sm">
+      <div className="max-lg:relative max-lg:z-10 max-lg:w-fit max-lg:max-w-[68%] max-lg:rounded-lg max-lg:border max-lg:border-border/70 max-lg:bg-card/90 max-lg:px-2.5 max-lg:py-1.5 max-lg:shadow-card max-lg:backdrop-blur-sm">
         <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
           <FileText className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
           End of Terms Reports
@@ -106,7 +106,7 @@ export function TermsReportHero({
               scroll={false}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-w-0 flex-col rounded-lg border px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:rounded-xl sm:px-4 sm:py-2",
+                "flex min-w-0 flex-col rounded-lg border px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:py-2",
                 active
                   ? "border-transparent bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30"
                   : "border-border bg-card/90 text-foreground hover:bg-card"

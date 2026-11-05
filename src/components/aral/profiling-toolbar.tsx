@@ -85,7 +85,7 @@ export function ProfilingToolbar({
         label="Search learners by name"
         placeholder="Search learner name…"
         className="min-w-[12rem] flex-1 sm:max-w-xs"
-        inputClassName="rounded-xl lg:h-9"
+        inputClassName="rounded-md lg:h-9"
       />
 
       <Select

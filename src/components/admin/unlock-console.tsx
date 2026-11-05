@@ -258,7 +258,7 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
       </CardHeader>
       <CardContent className="space-y-6">
         {error ? (
-          <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
           </p>
         ) : null}

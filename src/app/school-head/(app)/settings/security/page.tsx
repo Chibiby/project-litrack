@@ -31,11 +31,11 @@ export default async function SchoolHeadSettingsSecurityPage() {
     >
       <SchoolHeadSettingsShell active="security" bannerSrc={teacherBannerSrc(gender)}>
         <div className="grid items-start gap-4 lg:gap-6 xl:grid-cols-2">
-          <PasswordForm mode="change" className="rounded-2xl" dryRun={dryRun} />
+          <PasswordForm mode="change" className="rounded-lg" dryRun={dryRun} />
           <ChangeEmailForm
             currentEmail={user.email}
             isSynthetic={isSyntheticEmail(user.email)}
-            className="rounded-2xl"
+            className="rounded-lg"
             dryRun={dryRun}
           />
         </div>

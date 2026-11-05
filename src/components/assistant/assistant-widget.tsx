@@ -21,7 +21,7 @@ const AssistantPanel = dynamic(() => loadPanel().then((m) => m.AssistantPanel), 
   loading: () => (
     <div
       aria-hidden
-      className="flex h-[560px] max-h-[calc(100dvh-6rem)] w-[360px] max-w-[calc(100vw-2rem)] items-center justify-center rounded-2xl border bg-card shadow-2xl"
+      className="flex h-[560px] max-h-[calc(100dvh-6rem)] w-[360px] max-w-[calc(100vw-2rem)] items-center justify-center rounded-xl border bg-card shadow-2xl"
     >
       <Loader2 className="size-6 animate-spin text-muted-foreground" />
     </div>

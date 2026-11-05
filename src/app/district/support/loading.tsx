@@ -6,7 +6,7 @@ export default function DistrictSupportLoading() {
   return (
     <RouteLoadingOverlay>
       <SchoolHeadPageSkeleton hero>
-        <TableSectionSkeleton rows={6} columns={3} className="rounded-2xl" />
+        <TableSectionSkeleton rows={6} columns={3} className="rounded-lg" />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
   );

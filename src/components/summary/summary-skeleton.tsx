@@ -19,8 +19,8 @@ export function SummaryPeriodBarSkeleton() {
 export function SummaryResultsSkeleton() {
   return (
     <div className="space-y-4" aria-hidden>
-      <TableSectionSkeleton rows={5} columns={5} className="rounded-2xl" />
-      <TableSectionSkeleton rows={5} columns={5} className="rounded-2xl" />
+      <TableSectionSkeleton rows={5} columns={5} className="rounded-lg" />
+      <TableSectionSkeleton rows={5} columns={5} className="rounded-lg" />
     </div>
   );
 }
@@ -33,14 +33,14 @@ export function SummaryFacetSkeleton() {
   return (
     <div className="w-full p-4 lg:p-6" aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading summary</span>
-      <Skeleton className="mb-6 mt-2 h-60 w-full rounded-2xl lg:h-[19rem]" aria-hidden />
+      <Skeleton className="mb-6 mt-2 h-60 w-full rounded-lg lg:h-[19rem]" aria-hidden />
       <div className="space-y-4" aria-hidden>
         <div className="flex items-center gap-2 overflow-hidden border-b border-border/70 pb-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-6 w-24 shrink-0" />
           ))}
         </div>
-        <Surface className="rounded-2xl">
+        <Surface className="rounded-lg">
           <div className="grid grid-cols-1 gap-3 p-3 sm:p-4 lg:grid-cols-3 lg:px-5">
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />

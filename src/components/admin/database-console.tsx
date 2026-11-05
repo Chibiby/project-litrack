@@ -283,7 +283,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   return (
     <div className="space-y-6">
       {!data.storeReady ? (
-        <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-950/40 flex gap-3 text-sm text-amber-950 dark:text-amber-100">
+        <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-950/40 flex gap-3 text-sm text-amber-950 dark:text-amber-100">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
             <div>
               <p className="font-semibold">Backup storage is not connected</p>
@@ -298,7 +298,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
       ) : null}
 
       {/* Undo — first, because it is what someone who just made a mistake is looking for. */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 text-lg font-semibold">
@@ -330,7 +330,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
         </Surface>
 
       {/* Current contents */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-4">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Database className="h-5 w-5" aria-hidden />
@@ -372,7 +372,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
         </Surface>
 
       {/* Stored backups */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-4">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold">Backups</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -547,7 +547,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
       />
 
       {/* Restore from file */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 space-y-3">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-3">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Upload className="h-5 w-5" aria-hidden />
@@ -607,7 +607,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
         </Surface>
 
       {/* Danger zone */}
-      <Surface as="section" className="min-w-0 rounded-2xl p-4 sm:p-6 border-destructive/40 space-y-3">
+      <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 border-destructive/40 space-y-3">
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-destructive">
               <AlertTriangle className="h-5 w-5" aria-hidden />

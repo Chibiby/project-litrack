@@ -263,7 +263,7 @@ export async function SchoolHeadRecentActivitySection({
   // would be near-empty. The full log is still at `/school-head/audit`.
   return (
     <div className="mb-6">
-      <Surface as="section" className="rounded-2xl">
+      <Surface as="section" className="rounded-lg">
         <SurfaceHeader>
           <h2 className="text-base font-semibold text-foreground">Recent notices</h2>
         </SurfaceHeader>

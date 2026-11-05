@@ -45,7 +45,7 @@ test.describe("offline sign-in", () => {
     const empty = page.getByText("No schools found. Contact admin.");
     test.skip((await empty.count()) > 0, "target database has no schools — run db:seed first");
 
-    await page.getByLabel("School Name").click();
+    await page.getByLabel("School", { exact: true }).click();
     await page.getByRole("option").first().click();
 
     const teachers = page.getByRole("button", { name: "Teachers" });
@@ -54,7 +54,7 @@ test.describe("offline sign-in", () => {
       "the first school is not open to teachers yet, so the teacher form cannot be reached"
     );
     await teachers.click();
-    await page.getByRole("button", { name: /Next: enter email and password/ }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
 
     const email = page.locator("#email");
     await expect(email).toBeVisible();
@@ -72,7 +72,7 @@ test.describe("offline sign-in", () => {
     await expect(page.getByText(OFFLINE_MESSAGE).first()).toBeVisible();
     // Still on the teacher form, with the typed value intact.
     await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByRole("heading", { name: "Teacher sign in" })).toBeVisible();
+    await expect(page.getByText("Sign in to your teacher account")).toBeVisible();
     await expect(email).toHaveValue(typed);
     await expect(page.getByText(BANNER_TEXT)).toBeVisible();
 

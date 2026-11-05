@@ -56,7 +56,7 @@ const PILL =
 /**
  * One card per district in the admin's scope: school count, how many are
  * active, and links straight into that district's summaries. Styled like the
- * School Head dashboard's panels (icon tile, rounded-2xl surface).
+ * School Head dashboard's panels (icon tile, large rounded surface).
  */
 export function DistrictsPanel({
   title,
@@ -68,11 +68,11 @@ export function DistrictsPanel({
   totalSchools: number;
 }) {
   return (
-    <Surface as="section" aria-labelledby="district-list-title" className="min-w-0 rounded-2xl">
+    <Surface as="section" aria-labelledby="district-list-title" className="min-w-0 rounded-lg">
       <div className="flex flex-wrap items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
         >
           <MapPin className="size-5" />
         </span>
@@ -102,7 +102,7 @@ export function DistrictsPanel({
             return (
               <li
                 key={label}
-                className="flex min-w-0 flex-col rounded-xl border border-border/70 bg-muted/20 p-3 sm:p-4"
+                className="flex min-w-0 flex-col rounded-lg border border-border/70 bg-muted/20 p-3 sm:p-4"
               >
                 <p className="truncate font-semibold text-foreground">{label}</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">

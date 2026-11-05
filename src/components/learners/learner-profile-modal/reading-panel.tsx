@@ -78,7 +78,7 @@ export function ReadingPanel({ learner }: { learner: LearnerProfileData }) {
           <p className="text-sm font-medium text-muted-foreground">
             Weekly history
           </p>
-          <div className="overflow-x-auto rounded-xl border border-border/80">
+          <div className="overflow-x-auto rounded-lg border border-border/80">
             <Table>
               <TableHeader>
                 <TableRow>

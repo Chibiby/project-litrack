@@ -241,7 +241,7 @@ export function ReleaseWelcome({
         {step === null ? (
           <section
             aria-labelledby={`${baseId}-new`}
-            className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6"
+            className="rounded-lg border border-border bg-card p-4 shadow-sm sm:p-6"
           >
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
               <div className="min-w-0">
@@ -474,7 +474,7 @@ function GuideStep({
   const current = steps[index];
   if (!current) return null;
   return (
-    <section aria-live="polite" className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-8">
+    <section aria-live="polite" className="rounded-lg border border-border bg-card p-5 shadow-sm sm:p-8">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {ui.step(index + 1, steps.length)}
       </p>

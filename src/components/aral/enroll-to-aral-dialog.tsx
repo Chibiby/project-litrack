@@ -232,7 +232,7 @@ export function EnrollToAralDialog({
           ) : null}
         </div>
 
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-md border">
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border">
           {candidates.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">
               Every active learner in this grade is already enrolled in ARAL.

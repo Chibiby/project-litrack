@@ -7,7 +7,7 @@ function ImportWizardFallback() {
   return (
     <div className="space-y-4" aria-hidden>
       <Skeleton className="h-10 w-48" />
-      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-40 w-full rounded-lg" />
       <Skeleton className="h-10 w-32" />
     </div>
   );

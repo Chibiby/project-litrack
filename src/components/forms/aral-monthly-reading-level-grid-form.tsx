@@ -914,7 +914,7 @@ export function BandSelect({
               onClick={() => commit(entry.value)}
               onMouseEnter={() => setActive(i)}
               className={cn(
-                "flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm",
+                "flex cursor-pointer items-center gap-2.5 rounded-sm px-2 py-1.5 text-sm",
                 i === active && "bg-accent"
               )}
             >

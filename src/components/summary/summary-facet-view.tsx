@@ -155,7 +155,7 @@ export async function SummaryFacetView({
       <div className="min-w-0 space-y-4">
         <SummaryFacetSwitcher basePath={basePath} current={facetId} scopeQuery={scopeQuery(flat)} />
 
-        <Surface as="section" aria-label="Summary filters" className="min-w-0 rounded-2xl">
+        <Surface as="section" aria-label="Summary filters" className="min-w-0 rounded-lg">
           <div className="p-3 sm:p-4 lg:px-5">
             <SummaryScopeBar
               basePath={facetPath}

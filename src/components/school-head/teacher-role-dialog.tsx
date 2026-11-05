@@ -190,7 +190,7 @@ export function TeacherRoleDialog({
                   {choose.held.map((s) => (
                     <label
                       key={s.id}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm has-[:checked]:border-primary"
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-2 text-sm has-[:checked]:border-primary"
                     >
                       <input
                         type={choose.keepLimit === 1 ? "radio" : "checkbox"}
@@ -273,7 +273,7 @@ export function TeacherRoleDialog({
                 value={designationKind}
                 disabled={pending}
                 onChange={(e) => setDesignationKind(e.target.value as DesignationKind)}
-                className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
               >
                 {DESIGNATION_KIND_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>

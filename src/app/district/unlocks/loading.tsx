@@ -6,7 +6,7 @@ export default function DistrictUnlocksLoading() {
   return (
     <RouteLoadingOverlay>
       <SchoolHeadPageSkeleton hero>
-        <ListCardSkeleton items={5} className="max-w-5xl rounded-2xl" />
+        <ListCardSkeleton items={5} className="max-w-5xl rounded-lg" />
       </SchoolHeadPageSkeleton>
     </RouteLoadingOverlay>
   );

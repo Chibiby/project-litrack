@@ -62,7 +62,7 @@ export function KinderChecklistSchoolHeadPicker({
   }));
 
   return (
-    <Surface className="flex flex-col gap-3 rounded-2xl p-3 sm:flex-row sm:flex-wrap sm:items-end sm:p-4">
+    <Surface className="flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:flex-wrap sm:items-end sm:p-4">
       <div className="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-xs">
         <span className="text-xs font-medium text-muted-foreground">Kindergarten section</span>
         <SearchableSelect

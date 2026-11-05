@@ -11,7 +11,7 @@ describe("Surface", () => {
     expect(el.tagName).toBe("DIV");
     expect(el.className).toContain("bg-card");
     expect(el.className).toContain("border-border/80");
-    expect(el.className).toContain("rounded-xl");
+    expect(el.className).toContain("rounded-lg");
     // Hardcoded colors would break dark mode.
     expect(el.className).not.toContain("bg-white");
   });

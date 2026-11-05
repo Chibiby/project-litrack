@@ -195,7 +195,7 @@ export function KinderChecklistClient({
       </div>
 
       {!learnerId ? (
-        <div className="print:hidden rounded-2xl border border-dashed border-border/80 bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+        <div className="print:hidden rounded-lg border border-dashed border-border/80 bg-muted/30 p-8 text-center text-sm text-muted-foreground">
           Select a learner above to open their checklist.
         </div>
       ) : (

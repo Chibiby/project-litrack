@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
-import { ShieldCheck } from "lucide-react";
+import { LockKeyhole, School, UserRound } from "lucide-react";
 import { callAction } from "@/lib/ui/call-action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,12 +22,16 @@ import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
 import {
-  AUTH_LABEL,
   AUTH_LINK,
   AUTH_PRIMARY_BUTTON,
   AuthCard,
   AuthCardHeader,
+  FIELD_ICON,
+  FLOAT_INPUT,
+  FLOAT_LABEL,
 } from "@/components/auth/auth-card";
+import { cn } from "@/lib/utils";
+import { useShakeInvalid } from "@/hooks/use-shake-invalid";
 
 const SHARED_ERROR_ID = "admin-login-error";
 
@@ -54,25 +58,43 @@ export function AdminLoginForm({
   const form = useAppForm<AdminLoginInput>({
     schema: adminLoginSchema,
     defaultValues: { username: "", password: "" },
+    // Check only when Sign in is pressed: leaving an empty field, or typing,
+    // never raises a warning on its own (operator, 2026-11-06).
+    mode: "onSubmit",
+    reValidateMode: "onSubmit",
   });
   const { errors } = form.formState;
   const sharedShown = sharedError && (errors.username?.type === "server" || errors.password?.type === "server")
     ? sharedError
     : null;
   const sharedProps = sharedShown ? { "aria-describedby": SHARED_ERROR_ID } : {};
+  const { ref: fieldsRef, shake } = useShakeInvalid();
+
+  /**
+   * Editing a field takes its warning away (it is being fixed) without raising
+   * a new one; a shared "incorrect username or password" goes from both.
+   */
+  const clearOnEdit =
+    (name: keyof AdminLoginInput, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange(e);
+      if (sharedError) {
+        setSharedError(null);
+        form.clearErrors(["username", "password"]);
+      } else if (form.formState.errors[name]) {
+        form.clearErrors(name);
+      }
+    };
 
   return (
-    <AuthCard>
-      <AuthCardHeader
-        icon={ShieldCheck}
-        title="Admin sign-in"
-        subtitle="Division and district admin sign-in"
-      />
-      <div className="mt-6 space-y-5 2xl:mt-8">
+    <AuthCard className="pt-10 sm:pt-12 2xl:pt-16">
+      <AuthCardHeader title="Sign In" subtitle="Sign in as Division or District Admin" />
+      <div ref={fieldsRef} className="mt-6 space-y-5 2xl:mt-8">
         {notice}
         <AppForm
           form={form}
           className="space-y-5"
+          onInvalid={shake}
           onSubmit={(values) => {
             setFormError(null);
             startTransition(async () => {
@@ -92,9 +114,11 @@ export function AdminLoginForm({
                   setSharedError(res.error);
                   form.setError("username", { type: "server" }, { shouldFocus: true });
                   form.setError("password", { type: "server" });
+                  shake();
                   return;
                 }
-                if (!applyFieldErrors(form, res)) setFormError(res.error);
+                if (applyFieldErrors(form, res)) shake();
+                else setFormError(res.error);
                 return;
               }
               markPostLoginSplash();
@@ -107,11 +131,11 @@ export function AdminLoginForm({
             name="username"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required className={AUTH_LABEL}>
-                  Username
-                </FormLabel>
+                <div className="group relative" data-shake data-filled={field.value !== ""}>
+                <UserRound className={FIELD_ICON} aria-hidden />
                 <FormControl>
                   <Input
+                    className={cn(FLOAT_INPUT, "pr-5")}
                     type="text"
                     autoComplete="username"
                     // The handle is stored lower-case and the schema folds case
@@ -124,8 +148,11 @@ export function AdminLoginForm({
                     disabled={disabled || pending}
                     {...sharedProps}
                     {...field}
+                    onChange={clearOnEdit("username", field.onChange)}
                   />
                 </FormControl>
+                <FormLabel className={FLOAT_LABEL}>Username</FormLabel>
+                </div>
                 <FormMessage />
               </FormItem>
             )}
@@ -135,17 +162,21 @@ export function AdminLoginForm({
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required className={AUTH_LABEL}>
-                  Password
-                </FormLabel>
+                <div className="group relative" data-shake data-filled={field.value !== ""}>
+                <LockKeyhole className={cn(FIELD_ICON, "z-10")} aria-hidden />
+                <FormLabel className={cn(FLOAT_LABEL, "z-10")}>Password</FormLabel>
                 <FormControl>
                   <PasswordInput
+                    className={FLOAT_INPUT}
+                    toggleSize="lg"
                     autoComplete="current-password"
                     disabled={disabled || pending}
                     {...sharedProps}
                     {...field}
+                    onChange={clearOnEdit("password", field.onChange)}
                   />
                 </FormControl>
+                </div>
                 <FormMessage />
                 {sharedShown ? (
                   <p id={SHARED_ERROR_ID} role="alert" className="text-xs font-medium text-destructive">
@@ -169,14 +200,18 @@ export function AdminLoginForm({
           >
             Sign in
           </Button>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-base font-medium">
+          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm">
             <Link href="/forgot-password" className={AUTH_LINK}>
               Forgot password?
             </Link>
-            <Link href="/login" className={AUTH_LINK}>
+            <span aria-hidden className="text-slate-400">
+              ·
+            </span>
+            <Link href="/login" className={cn("inline-flex items-center gap-1", AUTH_LINK)}>
+              <School aria-hidden className="size-4" />
               School login
             </Link>
-          </div>
+          </p>
           {/* Admin accounts sign in by username and most have no mailbox, so the
               email reset above cannot reach them. */}
           <p className="text-center text-sm text-slate-600">

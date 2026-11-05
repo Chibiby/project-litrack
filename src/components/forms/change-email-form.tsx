@@ -80,7 +80,7 @@ export function ChangeEmailForm({ currentEmail, isSynthetic, className, dryRun =
   }
 
   return (
-    <Card className={cn("rounded-xl border border-border/80 shadow-sm", className)}>
+    <Card className={cn("rounded-lg border border-border/80 shadow-sm", className)}>
       <CardContent className="space-y-4 pt-6">
         <h2 className="text-lg font-semibold">Change email</h2>
         <div className="space-y-1.5">

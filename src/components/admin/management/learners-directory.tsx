@@ -141,7 +141,7 @@ function LearnersDirectoryInner({
 
   return (
     <div className="space-y-4">
-      <Surface as="section" aria-label="Find learners" className="rounded-2xl p-3 sm:p-4">
+      <Surface as="section" aria-label="Find learners" className="rounded-lg p-3 sm:p-4">
         <ListFilterBar
           basePath={basePath}
           q={list.q}
@@ -152,7 +152,7 @@ function LearnersDirectoryInner({
           keepParams={keepParams}
         />
       </Surface>
-      <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-2xl">
+      <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-lg">
         <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
           <h2 className="text-base font-semibold">
             Learner directory{" "}

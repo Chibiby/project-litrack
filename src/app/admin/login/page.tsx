@@ -1,5 +1,6 @@
 import { AdminLoginForm } from "@/components/forms/admin-login-form";
 import { LoginShell } from "@/components/auth/login-shell";
+import { GLASS_NOTE } from "@/components/auth/auth-card";
 import { isAuthConfigured } from "@/lib/auth/better-auth";
 import { AUTH_NOT_CONFIGURED_MESSAGE } from "@/lib/auth/login-gates";
 import { sessionEndCode } from "@/lib/auth/session-end";
@@ -30,15 +31,15 @@ export default async function AdminLoginPage({ searchParams }: AdminLoginPagePro
     );
   }
 
-  // Same frame as /login, and always light for the same reason.
+  // Same frame and Liquid Glass card as /login, and always light for the same reason.
   return (
-    <LoginShell>
+    <LoginShell glass>
       <AdminLoginForm
         disabled={!authReady}
         notice={
           <>
             {endedCode ? (
-              <div className="rounded-xl border border-slate-200 bg-muted/60 px-4 py-3 text-sm text-slate-700">
+              <div className={GLASS_NOTE}>
                 {formatMessage(endedCode)}
               </div>
             ) : null}

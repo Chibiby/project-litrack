@@ -101,11 +101,11 @@ function PanelShell({
   action: { label: string; href: string };
 }) {
   return (
-    <Surface as="section" className="relative flex min-w-0 flex-col rounded-2xl">
+    <Surface as="section" className="relative flex min-w-0 flex-col rounded-lg">
       <div className="flex items-start gap-3 px-3 pt-4 sm:px-5 sm:pt-5">
         <span
           aria-hidden
-          className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-11", iconTile)}
+          className={cn("flex size-10 shrink-0 items-center justify-center rounded-md sm:size-11", iconTile)}
         >
           <Icon className="size-5" />
         </span>
@@ -118,7 +118,7 @@ function PanelShell({
             <span className="hidden lg:inline">{subtitle}</span>
           </p>
         </div>
-        <span className="hidden shrink-0 rounded-lg border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground lg:inline-block">
+        <span className="hidden shrink-0 rounded-md border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground lg:inline-block">
           {period}
         </span>
         <ChevronRight aria-hidden className="size-4 shrink-0 text-violet-600 lg:hidden" />
@@ -130,7 +130,7 @@ function PanelShell({
         <PrefetchLink
           href={action.href}
           prefetch
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-violet-100 px-3 py-2.5 text-center text-xs font-medium text-violet-700 transition-colors hover:bg-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm lg:w-auto lg:rounded-full lg:px-4 lg:py-2 dark:bg-violet-900/40 dark:text-violet-200"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-violet-100 px-3 py-2.5 text-center text-xs font-medium text-violet-700 transition-colors hover:bg-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm lg:w-auto lg:rounded-full lg:px-4 lg:py-2 dark:bg-violet-900/40 dark:text-violet-200"
         >
           {action.label}
           <ArrowRight aria-hidden className="size-4 shrink-0" />
@@ -188,7 +188,7 @@ function TipTile({
   // there is no room for the donut, the legend and this tile side by side —
   // it waits for 2xl, where the row has width to spare again.
   return (
-    <div className={cn("hidden w-44 shrink-0 rounded-xl p-4 2xl:block", className)}>
+    <div className={cn("hidden w-44 shrink-0 rounded-lg p-4 2xl:block", className)}>
       <div className="flex items-start gap-2.5">
         <Icon aria-hidden className={cn("size-6 shrink-0", iconClassName)} />
         <p className="text-sm font-semibold leading-snug">{title}</p>

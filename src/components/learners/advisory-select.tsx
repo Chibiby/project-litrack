@@ -47,7 +47,7 @@ export function AdvisorySelect({
       <SelectTrigger
         aria-label="Advisory"
         className={cn(
-          "h-11 gap-2 rounded-xl border-violet-300 bg-violet-50 font-semibold text-violet-800 shadow-sm hover:bg-violet-100 focus:ring-violet-400 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-950/60 [&>svg]:text-violet-600 dark:[&>svg]:text-violet-300",
+          "h-11 gap-2 rounded-md border-violet-300 bg-violet-50 font-semibold text-violet-800 shadow-sm hover:bg-violet-100 focus:ring-violet-400 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-950/60 [&>svg]:text-violet-600 dark:[&>svg]:text-violet-300",
           className
         )}
       >

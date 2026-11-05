@@ -16,7 +16,7 @@ export default async function DistrictSettingsProfilePage() {
     <AppShell title="Profile" role={user.role} userName={user.fullName || user.email} hideTitle>
       <DistrictSettingsShell active="profile">
         <ProfilePhotoCard name={name} avatarPath={user.avatarPath} />
-        <Surface as="section" aria-labelledby="district-account-title" className="min-w-0 rounded-2xl">
+        <Surface as="section" aria-labelledby="district-account-title" className="min-w-0 rounded-lg">
           <SurfaceHeader className="px-4 sm:px-5">
             <h2 id="district-account-title" className="text-base font-semibold">
               Account details

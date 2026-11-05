@@ -41,7 +41,7 @@ function SettingsSidebar({ roleBase }: { roleBase: SettingsRoleBase }) {
                 href={item.href}
                 prefetch={true}
                 className={cn(
-                  "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  "relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"

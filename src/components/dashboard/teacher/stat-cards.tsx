@@ -248,7 +248,7 @@ export function StatCard({
     <Surface
       as="section"
       className={cn(
-        "relative flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br via-card via-60% to-card sm:p-5",
+        "relative flex flex-col overflow-hidden rounded-lg bg-gradient-to-br via-card via-60% to-card sm:p-5",
         denseOnPhone ? "p-3" : "p-4",
         WASH[tone]
       )}
@@ -266,8 +266,8 @@ export function StatCard({
             <span
               aria-hidden
               className={cn(
-                "flex shrink-0 items-center justify-center rounded-xl sm:size-11",
-                denseOnPhone ? "size-8 rounded-lg sm:rounded-xl" : "size-10",
+                "flex shrink-0 items-center justify-center rounded-md sm:size-11",
+                denseOnPhone ? "size-8 rounded-sm sm:rounded-md" : "size-10",
                 TILE[tone]
               )}
             >
@@ -313,8 +313,8 @@ export function StatCard({
           <span
             aria-hidden
             className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-xl sm:size-11",
-              TILE[tone]
+              "flex size-10 shrink-0 items-center justify-center rounded-md sm:size-11",
+    TILE[tone]
             )}
           >
             <Icon className="size-5" />
@@ -380,7 +380,7 @@ export function StatCard({
           href={target}
           prefetch
           aria-label={action?.label ?? title}
-          className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
         />
       ) : null}
     </Surface>

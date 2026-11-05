@@ -96,7 +96,7 @@ export function TransferRequestsPanel({
       as="section"
       id="transfer-requests"
       aria-labelledby="transfer-requests-heading"
-      className="scroll-mt-24 space-y-3 rounded-2xl px-3 py-4 sm:px-4"
+      className="scroll-mt-24 space-y-3 rounded-lg px-3 py-4 sm:px-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="transfer-requests-heading" className="text-base font-semibold">

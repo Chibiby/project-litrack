@@ -241,7 +241,7 @@ export function ArchiveView({
 
   return (
     <div className="space-y-6">
-      <Surface as="section" className="rounded-2xl p-3 sm:p-4">
+      <Surface as="section" className="rounded-lg p-3 sm:p-4">
           <form
             className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
             onSubmit={(event) => event.preventDefault()}
@@ -360,7 +360,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
   };
 
   return (
-    <Surface as="section" className="min-w-0 space-y-3 rounded-2xl p-4 sm:p-5">
+    <Surface as="section" className="min-w-0 space-y-3 rounded-lg p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Users className="h-5 w-5" aria-hidden />
@@ -491,7 +491,7 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
   };
 
   return (
-    <Surface as="section" className="min-w-0 space-y-3 rounded-2xl p-4 sm:p-5">
+    <Surface as="section" className="min-w-0 space-y-3 rounded-lg p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <GraduationCap className="h-5 w-5" aria-hidden />

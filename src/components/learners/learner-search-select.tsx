@@ -105,7 +105,7 @@ export function LearnerSearchSelect({
       {value ? (
         <>
           <Label htmlFor={inputId}>{label}</Label>
-          <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm">
+          <div className="flex items-center gap-2 rounded-md border border-input bg-card px-3 py-2 text-sm">
             <span className="min-w-0 flex-1 truncate">
               {value.fullName}{" "}
               <span className="text-muted-foreground">({value.gradeLabel})</span>

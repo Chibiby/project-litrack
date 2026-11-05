@@ -76,7 +76,7 @@ export default async function AdminErrorsPage({ searchParams }: ErrorsPageProps)
       role={user.role}
       userName={user.fullName || user.email}
     >
-      <Surface as="section" className="min-w-0 rounded-2xl">
+      <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceHeader className="flex-col items-stretch gap-3">
           <h2 className="text-base font-semibold">
             {params.ref ? `Reference ${params.ref}` : `Last 150 events`}
