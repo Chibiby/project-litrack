@@ -158,14 +158,14 @@ function focusStepField(step: HTMLElement | null) {
 const ROLE_SWITCH =
   "grid grid-cols-2 gap-1 rounded-lg border border-white/60 bg-card/25 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]";
 const ROLE_OPTION =
-  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 2xl:h-12 [&_svg]:size-5";
+  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base 2xl:h-12 [&_svg]:size-4 sm:[&_svg]:size-5";
 const ROLE_PICKED = AUTH_PILL;
 const ROLE_UNPICKED = "text-slate-700 hover:bg-card/45 hover:text-indigo-950";
 
 /** The tall, icon-led trigger both pickers share on the first step. */
 const PICKER_TRIGGER = cn(
   GLASS_FIELD,
-  "h-12 gap-3 rounded-md px-4 text-base text-indigo-950 lg:h-12 lg:text-base 2xl:h-14",
+  "h-12 gap-3 rounded-md px-4 text-sm text-indigo-950 sm:text-base lg:h-12 lg:text-base 2xl:h-14",
 );
 
 export function LoginForm({

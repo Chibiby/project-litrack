@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.46.3",
+    date: "2026-11-06",
+    title: "Sign-in text sized for phones",
+    announce: false,
+    fixes: [
+      "On phones, the sign-in screens use the same text size as the rest of the app, so buttons like Teachers and School Head no longer look oversized.",
+    ],
+  },
+  {
     version: "2.46.2",
     date: "2026-11-06",
     title: "The sign-in card stays still on phones as you scroll",

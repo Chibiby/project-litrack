@@ -54,10 +54,10 @@ export function AuthCardHeader({
           <Icon className="size-9 2xl:size-11" strokeWidth={1.75} />
         </span>
       ) : null}
-      <h2 className="text-3xl font-bold leading-tight tracking-tight text-indigo-950 2xl:text-4xl">
+      <h2 className="text-2xl font-bold leading-tight tracking-tight text-indigo-950 sm:text-3xl 2xl:text-4xl">
         {title}
       </h2>
-      <p className="mt-0.5 text-base text-slate-600 2xl:mt-1 2xl:text-lg">{subtitle}</p>
+      <p className="mt-0.5 text-sm text-slate-600 sm:text-base 2xl:mt-1 2xl:text-lg">{subtitle}</p>
     </div>
   );
 }
@@ -75,7 +75,7 @@ export const AUTH_PILL = "bg-gradient-to-r from-violet-600 to-violet-500 text-wh
  * is busy signing in (aria-busy) it keeps the violet.
  */
 export const AUTH_PRIMARY_BUTTON = cn(
-  "h-12 w-full rounded-xl text-base font-bold 2xl:h-14 2xl:text-lg [&_svg]:size-5 bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600",
+  "h-11 w-full rounded-xl text-sm font-bold sm:h-12 sm:text-base 2xl:h-14 2xl:text-lg [&_svg]:size-4 sm:[&_svg]:size-5 bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600",
   "[.login-glass_&:disabled:not([aria-busy=true])]:border [.login-glass_&:disabled:not([aria-busy=true])]:border-white/70 [.login-glass_&:disabled:not([aria-busy=true])]:bg-card/35 [.login-glass_&:disabled:not([aria-busy=true])]:bg-none [.login-glass_&:disabled:not([aria-busy=true])]:text-slate-500 [.login-glass_&:disabled:not([aria-busy=true])]:opacity-100 [.login-glass_&:disabled:not([aria-busy=true])]:shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
 );
 
@@ -104,7 +104,7 @@ export const FLOAT_INPUT = cn(
   "h-12 pb-1 pl-14 pt-5 text-base text-indigo-950 lg:h-12 lg:text-base 2xl:h-14 2xl:pt-6",
 );
 export const FLOAT_LABEL =
-  "pointer-events-none absolute left-14 top-1/2 -translate-y-1/2 text-base font-normal text-slate-600 transition-all duration-150 motion-reduce:transition-none group-focus-within:top-3 group-focus-within:text-xs group-focus-within:text-violet-700 group-data-[filled=true]:top-3 group-data-[filled=true]:text-xs group-has-[:autofill]:top-3 group-has-[:autofill]:text-xs 2xl:group-has-[:autofill]:top-4 2xl:group-focus-within:top-4 2xl:group-data-[filled=true]:top-4";
+  "pointer-events-none absolute left-14 top-1/2 -translate-y-1/2 text-sm font-normal text-slate-600 sm:text-base transition-all duration-150 motion-reduce:transition-none group-focus-within:top-3 group-focus-within:text-xs group-focus-within:text-violet-700 group-data-[filled=true]:top-3 group-data-[filled=true]:text-xs group-has-[:autofill]:top-3 group-has-[:autofill]:text-xs 2xl:group-has-[:autofill]:top-4 2xl:group-focus-within:top-4 2xl:group-data-[filled=true]:top-4";
 
 /** Notes inside the glass card (session ended, …): a glass fill, not a grey box. */
 export const GLASS_NOTE =
