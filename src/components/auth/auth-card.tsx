@@ -76,7 +76,7 @@ export const AUTH_PILL = "bg-gradient-to-r from-violet-600 to-violet-500 text-wh
  */
 export const AUTH_PRIMARY_BUTTON = cn(
   "h-12 w-full rounded-xl text-base font-bold 2xl:h-14 2xl:text-lg [&_svg]:size-5 bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600",
-  "[.login-glass_&:disabled:not([aria-busy=true])]:border [.login-glass_&:disabled:not([aria-busy=true])]:border-white/70 [.login-glass_&:disabled:not([aria-busy=true])]:bg-card/35[.login-glass_&:disabled:not([aria-busy=true])]:bg-none [.login-glass_&:disabled:not([aria-busy=true])]:text-slate-500 [.login-glass_&:disabled:not([aria-busy=true])]:opacity-100 [.login-glass_&:disabled:not([aria-busy=true])]:shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
+  "[.login-glass_&:disabled:not([aria-busy=true])]:border [.login-glass_&:disabled:not([aria-busy=true])]:border-white/70 [.login-glass_&:disabled:not([aria-busy=true])]:bg-card/35 [.login-glass_&:disabled:not([aria-busy=true])]:bg-none [.login-glass_&:disabled:not([aria-busy=true])]:text-slate-500 [.login-glass_&:disabled:not([aria-busy=true])]:opacity-100 [.login-glass_&:disabled:not([aria-busy=true])]:shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
 );
 
 /**
