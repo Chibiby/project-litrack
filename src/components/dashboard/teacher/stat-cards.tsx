@@ -52,7 +52,7 @@ const LINK: Record<StatTone, string> = {
   neutral: "text-muted-foreground",
 };
 
-/** Border colour a clickable card rings in on hover / focus. */
+/** Border colour a card rings in on hover / focus. */
 const HOVER_RING: Record<StatTone, string> = {
   violet: "hover:border-violet-300 focus-within:border-violet-300 dark:hover:border-violet-700 dark:focus-within:border-violet-700",
   amber: "hover:border-amber-300 focus-within:border-amber-300 dark:hover:border-amber-700 dark:focus-within:border-amber-700",
@@ -244,6 +244,7 @@ export function StatCard({
   return (
     <Surface
       as="section"
+      data-stat-card=""
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-lg sm:p-5",
         // Glass: a translucent tinted pane that blurs whatever sits behind it
@@ -255,17 +256,16 @@ export function StatCard({
         "shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_8px_24px_-12px_rgb(0_0_0/0.5)]",
         denseOnPhone ? "p-3" : "p-4",
         WASH[tone],
-        // Read-only cards still ease into the row's sibling blur.
-        !clickable && "transition-[filter,opacity] duration-200 ease-out",
+        // Every card — clickable or read-only — lifts, enlarges slightly,
+        // deepens its shadow and rings in its tone on hover / focus.
+        "transition-[transform,box-shadow,border-color,filter,opacity] duration-200 ease-out",
+        "hover:z-20 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_16px_32px_-12px_rgb(0_0_0/0.6)]",
+        "focus-within:z-20 focus-within:-translate-y-0.5 focus-within:scale-[1.02] focus-within:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:focus-within:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_16px_32px_-12px_rgb(0_0_0/0.6)]",
+        "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100",
+        HOVER_RING[tone],
+        // Only a card that goes somewhere looks pressable.
         clickable &&
-          cn(
-            "cursor-pointer transition-[transform,box-shadow,border-color,filter,opacity] duration-200 ease-out",
-            "hover:z-20 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_16px_32px_-12px_rgb(0_0_0/0.6)]",
-            "focus-within:z-20 focus-within:-translate-y-0.5 focus-within:scale-[1.02] focus-within:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:focus-within:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_16px_32px_-12px_rgb(0_0_0/0.6)]",
-            "active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_2px_6px_-2px_rgb(15_23_42/0.15)]",
-            "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 motion-reduce:active:scale-100",
-            HOVER_RING[tone]
-          )
+          "cursor-pointer active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_2px_6px_-2px_rgb(15_23_42/0.15)] motion-reduce:active:scale-100"
       )}
     >
       {decor ? <Decor kind={decor} tone={tone} compact={inlineOnPhone} /> : null}
@@ -364,17 +364,8 @@ export function StatCardRow({ children }: { children: React.ReactNode }) {
   // little room for four cards without crushing titles and CTA pills — stay
   // 2-up through xl and only go 4-up once 2xl gives the row its own width.
   return (
-    // While a clickable card is hovered, its siblings soften (slight blur and
-    // fade) so the hovered card stands out. Keyed on the card's link, so a row
-    // of read-only cards never blurs.
-    <div
-      className={cn(
-        "grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4",
-        "[&:has([data-stat-link]:hover)>*:not(:hover)]:opacity-90 [&:has([data-stat-link]:hover)>*:not(:hover)]:blur-[0.75px]",
-        "motion-reduce:[&:has([data-stat-link]:hover)>*:not(:hover)]:blur-none"
-      )}
-    >
-      {children}
-    </div>
+    // The sibling blur on hover lives in globals.css ([data-stat-card]), so
+    // it also works in pages that lay cards out in their own grids.
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4">{children}</div>
   );
 }
