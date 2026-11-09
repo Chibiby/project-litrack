@@ -118,12 +118,15 @@ function Row({
 }) {
   const notCollected = isNotCollectedRow(group);
   return (
-    <tr className={cn(isTotalOfGrades && "bg-muted/30")} data-group-key={group.key}>
+    <tr
+      className={cn("group/row transition-colors hover:bg-muted/40", isTotalOfGrades && "bg-muted/30")}
+      data-group-key={group.key}
+    >
       <th
         scope="row"
         className={cn(
           "sticky left-0 z-10 min-w-[10rem] max-w-[16rem] border-b border-r border-border/60 px-3 py-2.5 text-left align-top text-sm font-normal",
-          isTotalOfGrades ? "bg-muted" : "bg-card",
+          isTotalOfGrades ? "bg-muted" : "bg-card group-hover/row:bg-muted/60",
           indent && "pl-7"
         )}
       >
@@ -204,14 +207,21 @@ function HeaderCell({
         <SummaryTableNavLink
           href={sortHref(paging, sectionId, column)}
           className={cn(
-            "flex min-h-11 w-full items-center gap-1 px-3 py-2.5 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:min-h-9",
+            "group/sort flex min-h-11 w-full items-center gap-1 px-3 py-2.5 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:min-h-9",
             align === "right" ? "justify-end text-right" : "justify-start text-left",
             active && "text-foreground"
           )}
         >
           <span className="sr-only">Sort by </span>
           <span>{children}</span>
-          <Arrow className={cn("size-3.5 shrink-0", !active && "opacity-50")} aria-hidden />
+          {/* Only the sorted column shows its arrow; the rest reveal one on hover or focus. */}
+          <Arrow
+            className={cn(
+              "size-3.5 shrink-0 transition-opacity",
+              !active && "opacity-0 group-hover/sort:opacity-50 group-focus-visible/sort:opacity-50"
+            )}
+            aria-hidden
+          />
         </SummaryTableNavLink>
       ) : (
         children

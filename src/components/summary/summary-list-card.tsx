@@ -1,12 +1,26 @@
 import { CheckCircle2, School } from "lucide-react";
-import { Table } from "@/components/ui/table";
+import { NoValue, Table } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { cn } from "@/lib/utils";
 import type { SummaryList } from "@/lib/summary/types";
 import { sectionAnchorId } from "./summary-href";
 
+type Cell = SummaryList["rows"][number][number];
+
+/** Index of the row's last numeric cell, or -1. It becomes the phone row's value slot. */
+function lastNumericIndex(row: readonly Cell[]): number {
+  for (let j = row.length - 1; j > 0; j--) if (typeof row[j] === "number") return j;
+  return -1;
+}
+
 /** A plain list printed beside the tables: schools flagged, schools with no attendance. */
 export function SummaryListCard({ list }: { list: SummaryList }) {
   const anchor = sectionAnchorId(`list-${list.id}`);
+  // A column is numeric when every filled cell in it is a number; its header aligns right.
+  const numericColumns = list.columns.map((_, j) => {
+    const filled = list.rows.map((row) => row[j]).filter((v) => v !== null && v !== undefined);
+    return filled.length > 0 && filled.every((v) => typeof v === "number");
+  });
   return (
     <section
       id={anchor}
@@ -49,41 +63,80 @@ export function SummaryListCard({ list }: { list: SummaryList }) {
             No schools in this list.
           </p>
         ) : (
-          <div className="max-h-96 w-full min-w-0 overflow-auto rounded-lg border border-border/60">
-            <Table className="border-separate border-spacing-0">
-              <thead>
-                <tr>
-                  {list.columns.map((column) => (
-                    <th
-                      key={column}
-                      scope="col"
-                      className="whitespace-nowrap border-b border-border/60 bg-card px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground"
-                    >
-                      {column}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {list.rows.map((row, i) => (
-                  <tr key={i}>
-                    {row.map((value, j) => (
-                      <td
-                        key={j}
-                        className={cn(
-                          "border-b border-border/60 px-3 py-2.5 align-top",
-                          j === 0 ? "min-w-[12rem] font-medium text-foreground" : "text-muted-foreground",
-                          typeof value === "number" && "text-right tabular-nums"
-                        )}
-                      >
-                        {value ?? "—"}
-                      </td>
+          <ResponsiveTable
+            table={
+              <div className="max-h-96 w-full min-w-0 overflow-auto rounded-lg border border-border/60">
+                <Table className="border-separate border-spacing-0">
+                  <thead>
+                    <tr>
+                      {list.columns.map((column, j) => (
+                        <th
+                          key={column}
+                          scope="col"
+                          className={cn(
+                            "sticky top-0 z-10 whitespace-nowrap border-b border-border/60 bg-card px-3 py-2.5 text-xs font-semibold text-muted-foreground",
+                            numericColumns[j] ? "text-right" : "text-left"
+                          )}
+                        >
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.rows.map((row, i) => (
+                      <tr key={i} className="transition-colors hover:bg-muted/40">
+                        {row.map((value, j) => (
+                          <td
+                            key={j}
+                            className={cn(
+                              "border-b border-border/60 px-3 py-2.5 align-top",
+                              j === 0 ? "min-w-[12rem] font-medium text-foreground" : "text-muted-foreground",
+                              typeof value === "number" && "whitespace-nowrap text-right tabular-nums"
+                            )}
+                          >
+                            {value ?? <NoValue />}
+                          </td>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </div>
+                  </tbody>
+                </Table>
+              </div>
+            }
+            stacked={
+              <div className="max-h-96 overflow-auto rounded-lg border border-border/60">
+                <StackedList aria-label={list.title}>
+                  {list.rows.map((row, i) => {
+                    const valueIndex = lastNumericIndex(row);
+                    return (
+                      <StackedRow
+                        key={i}
+                        title={String(row[0] ?? "—")}
+                        value={
+                          valueIndex > 0 ? (
+                            <>
+                              {row[valueIndex]}
+                              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                {list.columns[valueIndex]}
+                              </span>
+                            </>
+                          ) : undefined
+                        }
+                        details={row
+                          .map((value, j) => ({ j, value }))
+                          .filter(({ j }) => j !== 0 && j !== valueIndex)
+                          .map(({ j, value }) => ({
+                            label: list.columns[j] ?? "",
+                            value: value ?? <NoValue />,
+                          }))}
+                      />
+                    );
+                  })}
+                </StackedList>
+              </div>
+            }
+          />
         )}
       </div>
     </section>
