@@ -110,7 +110,7 @@ function Decor({
       <svg
         aria-hidden
         viewBox="0 0 40 40"
-        className={cn(base, "bottom-3 right-3 size-7 opacity-50 sm:size-8")}
+        className={cn(base, "-bottom-2 -right-2 size-16 opacity-40 sm:size-20")}
       >
         <circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" />
         <path d="M20 11v10l6 4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
@@ -121,7 +121,7 @@ function Decor({
   // The art sits in the bottom-right corner, behind the text column.
   const box = cn(
     "bottom-0 right-1 opacity-60",
-    compact ? "h-9 w-12 sm:h-12 sm:w-16" : "h-12 w-16 sm:h-14 sm:w-20"
+    compact ? "h-16 w-24 sm:h-20 sm:w-28" : "h-20 w-28 sm:h-24 sm:w-36"
   );
 
   if (kind === "wave") {
@@ -272,17 +272,21 @@ export function StatCard({
         />
       ) : null}
 
-      <div className={cn("relative flex items-start", denseOnPhone ? "gap-2.5 sm:gap-4" : "gap-4")}>
+      {/* items-stretch: the tile always matches the text column's height.
+          Its width is fixed, sized so the tile is near-square at the
+          column's usual height (aspect-ratio can't derive a width from a
+          stretched height). */}
+      <div className={cn("relative flex items-stretch", denseOnPhone ? "gap-2.5 sm:gap-4" : "gap-4")}>
         {Icon ? (
           <span
             aria-hidden
             className={cn(
-              "flex shrink-0 items-center justify-center rounded-md transition-transform duration-200 group-hover:scale-105 sm:size-11 motion-reduce:group-hover:scale-100",
-              denseOnPhone ? "size-8 rounded-sm sm:rounded-md" : "size-10",
+              "flex shrink-0 items-center justify-center self-stretch rounded-lg transition-transform duration-200 group-hover:scale-105 sm:w-20 motion-reduce:group-hover:scale-100",
+              denseOnPhone ? "w-14" : "w-16",
               TILE[tone]
             )}
           >
-            <Icon className={denseOnPhone ? "size-4 sm:size-5" : "size-5"} />
+            <Icon className={denseOnPhone ? "size-6 sm:size-8" : "size-7 sm:size-8"} />
           </span>
         ) : null}
         <div className="min-w-0 flex-1 pr-3">
