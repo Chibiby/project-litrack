@@ -10,7 +10,8 @@ describe("Surface", () => {
     const el = screen.getByTestId("s");
     expect(el.tagName).toBe("DIV");
     expect(el.className).toContain("bg-card");
-    expect(el.className).toContain("border-border/80");
+    // Frosted glass: the border is the glass token, not a literal white.
+    expect(el.className).toContain("border-glass/60");
     expect(el.className).toContain("rounded-lg");
     // Hardcoded colors would break dark mode.
     expect(el.className).not.toContain("bg-white");

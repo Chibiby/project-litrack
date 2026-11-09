@@ -22,7 +22,7 @@ const Surface = React.forwardRef<HTMLDivElement, SurfaceProps>(
         ref={ref}
         className={cn(
           // Frosted glass, matching Card: translucent surface plus backdrop blur.
-          "rounded-lg border border-white/60 bg-card/55 text-card-foreground shadow-card backdrop-blur-xl dark:border-white/10 dark:bg-card/45",
+          "rounded-lg border border-glass/60 bg-card/55 text-card-foreground shadow-card backdrop-blur-xl dark:border-white/10 dark:bg-card/45",
           className
         )}
         {...props}
