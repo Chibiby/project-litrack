@@ -48,6 +48,10 @@ export type AralAssignmentAlert = {
   /** "Ana Cruz, Ben Dela Cruz and 4 more" */
   description: string;
   href: string;
+  /** "Teacher Marivic Santos" — lets the dialog group several alerts from one person. */
+  actorName: string;
+  /** Learners this alert covers, for the grouped heading's count. */
+  count: number;
 };
 
 /**
@@ -207,6 +211,8 @@ export async function getUnreadAralAssignments(user: {
         row.learnerIds.length
       ),
       href,
+      actorName,
+      count,
     };
   });
 }

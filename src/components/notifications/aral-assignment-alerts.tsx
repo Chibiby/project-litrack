@@ -136,9 +136,21 @@ export function AralAssignmentAlerts() {
   const hrefs = new Set(alerts.map((a) => a.href));
   const href = hrefs.size === 1 ? alerts[0].href : ARAL_ROSTER_HREF;
 
+  // One heading per person, not one per alert: assigning learners one by one
+  // writes one alert each, and a dozen identical headings buried the names.
+  const groups = new Map<string, { count: number; names: { id: string; text: string }[] }>();
+  for (const a of alerts) {
+    const group = groups.get(a.actorName) ?? { count: 0, names: [] };
+    group.count += a.count;
+    group.names.push({ id: a.id, text: a.description });
+    groups.set(a.actorName, group);
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      {/* Capped to the viewport so a long list scrolls inside the dialog
+          instead of pushing the buttons off screen. */}
+      <DialogContent className="flex max-h-[85dvh] max-w-md flex-col">
         <DialogHeader>
           <span
             aria-hidden
@@ -162,18 +174,29 @@ export function AralAssignmentAlerts() {
         </DialogHeader>
 
         {single ? null : (
-          <ul className="space-y-3">
-            {alerts.map((a) => (
-              <li key={a.id} className="text-sm">
-                <span className="block font-medium text-foreground">
-                  {a.title}
-                </span>
-                <span className="block text-muted-foreground">
-                  {a.description}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div
+            tabIndex={0}
+            aria-label="New ARAL learners"
+            className="-mx-6 min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ul className="space-y-4">
+              {[...groups].map(([actorName, group]) => (
+                <li key={actorName} className="text-sm">
+                  <span className="block font-medium text-foreground">
+                    {actorName} assigned you{" "}
+                    {group.count === 1 ? "an ARAL learner" : `${group.count} ARAL learners`}.
+                  </span>
+                  <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                    {group.names.map((n) => (
+                      <li key={n.id} className="break-words">
+                        {n.text}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <DialogFooter>
