@@ -320,7 +320,10 @@ export function AppSidebar({
         <div
           className={cn(
             "flex min-h-[calc(var(--app-chrome-header-height)+1rem)] shrink-0 flex-col justify-center pt-4",
-            isCollapsed ? "px-2" : "px-4"
+            isCollapsed ? "px-2" : "px-4",
+            // Phone drawer: leave room for the sheet's close button (top right)
+            // so the school name truncates before it instead of running under it.
+            opts?.phone && "pr-14"
           )}
         >
           <Link
@@ -533,7 +536,22 @@ export function AppSidebar({
         </SheetTrigger>
         <SheetContent
           side="left"
-          className="w-64 border-r border-border/60 bg-[hsl(var(--surface)/0.55)] p-0 backdrop-blur-lg backdrop-saturate-150 data-[state=closed]:duration-150 data-[state=open]:duration-200 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.5)]"
+          // Glass that stays readable: the backdrop is a light dim plus a blur
+          // (not 80% black, which turned translucent glass a murky grey), and
+          // the drawer keeps enough tint for its links to read over any page.
+          overlayClassName="bg-black/30 backdrop-blur-sm dark:bg-black/50"
+          className="w-72 max-w-[85vw] border-r border-white/40 bg-[hsl(var(--surface)/0.8)] p-0 shadow-2xl backdrop-blur-xl backdrop-saturate-150 data-[state=closed]:duration-150 data-[state=open]:duration-200 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.75)]"
+          // Start focus on the current page's link rather than the close
+          // button, so opening the menu doesn't ring the X in the corner.
+          onOpenAutoFocus={(event) => {
+            const current = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>(
+              '[aria-current="page"]'
+            );
+            if (current) {
+              event.preventDefault();
+              current.focus();
+            }
+          }}
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           {renderSidebarContent(() => setMobileOpen(false), { collapsed: false, phone: true })}
