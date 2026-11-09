@@ -126,6 +126,19 @@ export function PageHero({
  * Support and Settings — use this instead of `PageHero`'s ~270px banded art,
  * which `PageHero` keeps reserved for a role's Overview/dashboard.
  */
+/**
+ * True when the small label above a page title says what the title already
+ * says ("BOSY Report" over "BOSY Report", "End of Terms Reports" over "End of
+ * Terms Reports — Grade 3"). Heroes hide such a label: it repeats the title
+ * and costs a line. A label that adds context ("Management" over "Learners")
+ * stays.
+ */
+export function eyebrowRepeatsTitle(eyebrow: string | undefined, title: string): boolean {
+  if (!eyebrow) return false;
+  const norm = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return norm(title).startsWith(norm(eyebrow));
+}
+
 export function CompactPageHeader({
   eyebrow,
   eyebrowIcon: EyebrowIcon,
@@ -147,7 +160,7 @@ export function CompactPageHeader({
   return (
     <section className="mt-2 flex flex-col gap-3 rounded-lg border border-border/70 bg-card px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-5">
       <div className="min-w-0">
-        {eyebrow ? (
+        {eyebrow && !eyebrowRepeatsTitle(eyebrow, title) ? (
           <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:text-sm">
             {EyebrowIcon ? <EyebrowIcon className="size-3.5 shrink-0 sm:size-4" aria-hidden /> : null}
             {eyebrow}

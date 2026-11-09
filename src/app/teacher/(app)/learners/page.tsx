@@ -572,8 +572,8 @@ export default async function TeacherLearnersPage({
             />
           </Suspense>
         }
-        artClassName="h-[75%] right-[calc(100%-509px)] sm:right-[calc(50%-338px)] lg:right-[min(0px,calc(100%-1291px))]"
-        phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_52%,black_55%)]"
+        artClassName="h-[75%] right-[calc(100%-509px)] sm:right-[min(0px,calc(50%-338px))] lg:right-[min(0px,calc(100%-1291px))]"
+        phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_52%,black_55%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%),linear-gradient(to_bottom,transparent,black_18%)] sm:max-lg:[&>img]:[mask-composite:intersect]"
         headClassName="max-lg:hidden"
         contentClassName="lg:min-h-[17rem]"
       >

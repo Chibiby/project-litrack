@@ -103,7 +103,12 @@ function Decor({
   compact?: boolean;
 }) {
   const id = `stat-decor-${kind}-${tone}`;
-  const base = cn("pointer-events-none absolute", DECOR_COLOR[tone]);
+  // Hidden while the card is in its row layout but still narrow (15-20rem):
+  // there the text column reaches the corner and the art would sit on it.
+  const base = cn(
+    "pointer-events-none absolute @[15rem]/stat:hidden @[20rem]/stat:block",
+    DECOR_COLOR[tone]
+  );
 
   if (kind === "clock") {
     return (

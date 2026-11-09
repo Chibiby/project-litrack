@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { CompactPageHeader, PageHero } from "@/components/shell/page-hero";
+import { CompactPageHeader, PageHero, eyebrowRepeatsTitle } from "@/components/shell/page-hero";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,7 +66,7 @@ export function SchoolHeadHero({
       // Phones: a top-right control (the Schools "+") would sit on the
       // girl's face, so the art is drawn smaller and further left, under it.
       artClassName={cn(
-        "sm:right-[calc(50%-375px)] lg:right-[min(0px,calc(100%-1291px))]",
+        "sm:right-[min(0px,calc(50%-375px))] lg:right-[min(0px,calc(100%-1291px))]",
         topRight
           ? "max-sm:!h-[112px] max-sm:right-[-38px]"
           : "max-sm:!h-[140px] max-sm:right-[-112px]",
@@ -77,18 +77,24 @@ export function SchoolHeadHero({
       // Phones: with stat tiles in the band the hero grows tall, and
       // bottom-anchored art would land beside a tile; pin it to the top, next
       // to the title, instead.
-      phoneMaskClassName={cn(
-        "max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%)]",
-        stats ? "max-lg:[&>img]:!bottom-auto max-lg:[&>img]:top-0" : undefined
-      )}
+      // Pinned to the top, the art's bottom edge would show as a hard line
+      // across the band, so a second mask fades it out (intersected with the
+      // left-edge fade).
+      phoneMaskClassName={
+        stats
+          ? "max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%),linear-gradient(to_bottom,black_70%,transparent)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%),linear-gradient(to_bottom,black_70%,transparent)] max-lg:[&>img]:[mask-composite:intersect] max-lg:[&>img]:!bottom-auto max-lg:[&>img]:top-0"
+          : "max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%)]"
+      }
       headClassName="max-lg:hidden"
       contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
     >
       <div className="relative z-10">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
-          <EyebrowIcon className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
-          {eyebrow}
-        </p>
+        {eyebrowRepeatsTitle(eyebrow, title) ? null : (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
+            <EyebrowIcon className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
+            {eyebrow}
+          </p>
+        )}
         <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
           {title}
         </h1>

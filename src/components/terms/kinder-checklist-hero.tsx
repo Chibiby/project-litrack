@@ -54,8 +54,8 @@ export function KinderChecklistHero({
         bannerSrc="/brand/banner-learner.webp"
         className="h-auto"
         topRight={topRight}
-        artClassName="max-sm:!h-[160px] max-sm:right-[-118px] sm:h-[75%] sm:right-[calc(50%-338px)] lg:right-[min(0px,calc(100%-1291px))]"
-        phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_40%,black_53%)]"
+        artClassName="max-sm:!h-[160px] max-sm:right-[-118px] sm:h-[75%] sm:max-lg:!h-[10.5rem] sm:right-[min(0px,calc(50%-338px))] lg:right-[min(0px,calc(100%-1291px))]"
+        phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_40%,black_53%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%),linear-gradient(to_bottom,black_70%,transparent)] sm:max-lg:[&>img]:[mask-composite:intersect] sm:max-lg:[&>img]:!bottom-auto sm:max-lg:[&>img]:top-0"
         headClassName="max-lg:hidden"
         contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
       >
