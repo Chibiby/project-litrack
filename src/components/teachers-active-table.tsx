@@ -22,7 +22,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { ConfirmAction } from "@/components/confirm-action";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { UserAvatar } from "@/components/user-avatar";
@@ -217,8 +221,8 @@ export type RemovedTeacherRow = {
  * The advisory picker's content, shared by the desktop table cell and the
  * below-`lg` list row so both drive the same handlers rather than each
  * re-implementing the chips/select. `idPrefix` keeps the native `<select>`'s
- * `id` unique between the two — both can be mounted at once (table hidden via
- * `hidden`, list via `lg:hidden`), and a duplicate `id` would break the
+ * `id` unique between the two — both can be mounted at once (the
+ * `ResponsiveTable` container query picks which one shows), and a duplicate `id` would break the
  * `<Label htmlFor>` pairing for whichever one lost the collision.
  */
 function AdvisoryPicker({
@@ -1003,9 +1007,8 @@ function TeachersManagedTable({
                     : null,
           }));
           return (
-            <>
-        {/* lg and up: the unchanged table. */}
-        <div className="hidden lg:block">
+            <ResponsiveTable
+        table={
         <Table>
           <TableHeader>
             <TableRow>
@@ -1016,7 +1019,11 @@ function TeachersManagedTable({
               <TableHead>ARAL learners</TableHead>
               <TableHead>Profile</TableHead>
               <TableHead>Approved</TableHead>
-              {!readOnly ? <TableHead className="text-right">Actions</TableHead> : null}
+              {!readOnly ? (
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              ) : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1030,18 +1037,20 @@ function TeachersManagedTable({
               rowsWithBusy.map(({ row, rowBusy }) => {
                 return (
                 <TableRow key={row.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
+                  <TableCell className="max-w-[16rem] font-medium">
+                    <div className="flex min-w-0 items-center gap-2">
                       <UserAvatar
                         name={row.fullName}
                         avatarPath={row.avatarPath}
                         size={32}
                         variant="thumb"
                       />
-                      <span>{row.listingName}</span>
+                      <CellText>{row.listingName}</CellText>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{row.email}</TableCell>
+                  <TableCell className="max-w-[16rem] text-sm">
+                    <CellText>{row.email}</CellText>
+                  </TableCell>
                   <TableCell className="text-sm">
                     {row.designation === null ? (
                       <span className="text-muted-foreground">
@@ -1099,7 +1108,7 @@ function TeachersManagedTable({
                         {row.aralLearnerCount}
                       </Badge>
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <NoValue />
                     )}
                   </TableCell>
                   <TableCell>
@@ -1111,8 +1120,8 @@ function TeachersManagedTable({
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {row.approvedAt ? formatDate(row.approvedAt) : "—"}
+                  <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
+                    {row.approvedAt ? formatDate(row.approvedAt) : <NoValue />}
                   </TableCell>
                   {!readOnly ? (
                     <TeacherManageActions
@@ -1130,10 +1139,9 @@ function TeachersManagedTable({
             )}
           </TableBody>
         </Table>
-        </div>
-
-        {/* Below lg: one stacked row per teacher. */}
-        <ul className="divide-y divide-border/60 lg:hidden" aria-label={title}>
+        }
+        stacked={
+        <ul className="divide-y divide-border/60" aria-label={title}>
           {rowsWithBusy.length === 0 ? (
             <li className="px-4 py-6 text-center text-sm text-muted-foreground">
               {emptyLabel}
@@ -1242,7 +1250,8 @@ function TeachersManagedTable({
             ))
           )}
         </ul>
-            </>
+        }
+            />
           );
         })()}
         </ListBusyRegion>
@@ -1336,45 +1345,51 @@ export function TeachersRemovedTable({ rows }: { rows: RemovedTeacherRow[] }) {
         <div className="border-b px-4 py-3 text-sm font-medium">
           Removed teachers ({rows.length})
         </div>
-        <div className="hidden lg:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Removed</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="font-medium">{row.fullName}</TableCell>
-                <TableCell className="text-sm">
-                  {row.email ?? <span className="text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {formatDate(row.removedAt)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        </div>
-
-        {/* Below lg: one stacked row per removed teacher. */}
-        <ul className="divide-y divide-border/60 lg:hidden" aria-label="Removed teachers">
-          {rows.map((row) => (
-            <li key={row.id} className="px-3 py-3 sm:px-4">
-              <p className="truncate font-medium text-foreground">{row.fullName}</p>
-              <p className="truncate text-sm text-muted-foreground">
-                {row.email ?? "—"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Removed {formatDate(row.removedAt)}
-              </p>
-            </li>
-          ))}
-        </ul>
+        <ResponsiveTable
+          table={
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Removed</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="max-w-[16rem] font-medium">
+                      <CellText>{row.fullName}</CellText>
+                    </TableCell>
+                    <TableCell className="max-w-[18rem] text-sm">
+                      {row.email ? <CellText>{row.email}</CellText> : <NoValue />}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
+                      {formatDate(row.removedAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          }
+          stacked={
+            <StackedList aria-label="Removed teachers">
+              {rows.map((row) => (
+                <StackedRow
+                  key={row.id}
+                  className="sm:px-4"
+                  title={row.fullName}
+                  value={
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {formatDate(row.removedAt)}
+                    </span>
+                  }
+                  meta={<span className="truncate">{row.email ?? "No email"}</span>}
+                />
+              ))}
+            </StackedList>
+          }
+        />
       </CardContent>
     </Card>
   );
@@ -1417,50 +1432,65 @@ export function TeachersDeclinedTable({
     <Card>
       <CardContent className="p-0">
         <div className="border-b px-4 py-3 text-sm font-medium">Declined ({rows.length})</div>
-        <div className="hidden lg:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Rejected</TableHead>
-              {!readOnly ? <TableHead className="text-right">Actions</TableHead> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="font-medium">{row.fullName}</TableCell>
-                <TableCell className="text-sm">{row.email}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {row.rejectedAt ? formatDate(row.rejectedAt) : "—"}
-                </TableCell>
-                {!readOnly ? (
-                  <TableCell className="text-right">
-                    {allowReRegister(row)}
-                  </TableCell>
-                ) : null}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        </div>
-
-        {/* Below lg: one stacked row per declined teacher. */}
-        <ul className="divide-y divide-border/60 lg:hidden" aria-label="Declined">
-          {rows.map((row) => (
-            <li key={row.id} className="flex flex-col gap-2 px-3 py-3 sm:px-4">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">{row.fullName}</p>
-                <p className="truncate text-sm text-muted-foreground">{row.email}</p>
-                <p className="text-xs text-muted-foreground">
-                  Rejected {row.rejectedAt ? formatDate(row.rejectedAt) : "—"}
-                </p>
-              </div>
-              {!readOnly ? allowReRegister(row, "lg:h-9") : null}
-            </li>
-          ))}
-        </ul>
+        <ResponsiveTable
+          table={
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Rejected</TableHead>
+                  {!readOnly ? (
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  ) : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="max-w-[16rem] font-medium">
+                      <CellText>{row.fullName}</CellText>
+                    </TableCell>
+                    <TableCell className="max-w-[18rem] text-sm">
+                      <CellText>{row.email}</CellText>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
+                      {row.rejectedAt ? formatDate(row.rejectedAt) : <NoValue />}
+                    </TableCell>
+                    {!readOnly ? (
+                      <TableCell>
+                        <RowActions>{allowReRegister(row)}</RowActions>
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          }
+          stacked={
+            <StackedList aria-label="Declined">
+              {rows.map((row) => (
+                <StackedRow
+                  key={row.id}
+                  className="sm:px-4"
+                  title={row.fullName}
+                  value={
+                    row.rejectedAt ? (
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {formatDate(row.rejectedAt)}
+                      </span>
+                    ) : undefined
+                  }
+                  meta={<span className="truncate">{row.email}</span>}
+                >
+                  {!readOnly ? allowReRegister(row, "lg:h-9") : null}
+                </StackedRow>
+              ))}
+            </StackedList>
+          }
+        />
       </CardContent>
     </Card>
   );
