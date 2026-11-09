@@ -144,6 +144,8 @@ function AralTeachersTableInner({
             </div>
           ) : (
             <ResponsiveTable
+              // Wide roster: the full table needs ~1300px of its own width.
+              breakpoint={1300}
               table={
                 <Table>
                   <TableHeader>

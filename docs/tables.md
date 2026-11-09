@@ -50,7 +50,8 @@ too, instead of a sideways scroll.
 
 - `700` (default) — most tables.
 - `900` — a table with wide inline controls (Kinder checklist).
-- `1100` — a wide roster (the ten-column learner list).
+- `1100` — a wide roster (the ten-column learner list, the admin schools list).
+- `1300` — the widest rosters (accounts, teachers, ARAL teachers, deleted learners).
 
 Both views are in the DOM; CSS picks one. Tests that query a row's button by
 name scope to the desktop table:

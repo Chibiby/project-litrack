@@ -76,11 +76,11 @@ async function AdminAuditTable() {
                       {when(log.timestamp)}
                     </TableCell>
                     <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell className="max-w-[16rem] text-muted-foreground">
+                    <TableCell className="max-w-[14rem] text-muted-foreground">
                       <CellText>{schoolLabel(log.schoolId)}</CellText>
                     </TableCell>
                     <TableCell>{log.resource}</TableCell>
-                    <TableCell className="max-w-[12rem] font-mono text-xs text-muted-foreground">
+                    <TableCell className="max-w-[8rem] font-mono text-xs text-muted-foreground">
                       {log.resourceId ? <CellText>{log.resourceId}</CellText> : <NoValue />}
                     </TableCell>
                   </TableRow>

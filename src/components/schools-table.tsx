@@ -712,6 +712,8 @@ function SchoolsTableInner({
         </div>
       ) : (
         <ResponsiveTable
+          // Admin view has eight columns plus five actions: it needs ~1100px.
+          breakpoint={isAdminColumns ? 1100 : 700}
           table={
             <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-card">
               <Table>

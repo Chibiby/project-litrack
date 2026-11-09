@@ -200,7 +200,7 @@ async function SchoolAuditTable({
                           </TableCell>
                           <TableCell className="font-medium">{log.action}</TableCell>
                           <TableCell>{log.resource}</TableCell>
-                          <TableCell className="max-w-[12rem] font-mono text-xs text-muted-foreground">
+                          <TableCell className="max-w-[8rem] font-mono text-xs text-muted-foreground">
                             {log.resourceId ? <CellText>{log.resourceId}</CellText> : <NoValue />}
                           </TableCell>
                         </TableRow>

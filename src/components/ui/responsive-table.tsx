@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Container widths at which the full table takes over. Most tables switch at
- * 700px; a wide roster (ten columns) passes 1100 so it stacks until its box
+ * 700px; a wide roster passes 1100 or 1300 so it stacks until its box
  * can hold every column. The classes are spelled out because Tailwind only
  * generates class names it can read in the source.
  */
@@ -34,6 +34,7 @@ const BREAKPOINT = {
   700: { table: "hidden @[700px]/rt:block", stacked: "@[700px]/rt:hidden" },
   900: { table: "hidden @[900px]/rt:block", stacked: "@[900px]/rt:hidden" },
   1100: { table: "hidden @[1100px]/rt:block", stacked: "@[1100px]/rt:hidden" },
+  1300: { table: "hidden @[1300px]/rt:block", stacked: "@[1300px]/rt:hidden" },
 } as const;
 
 export type ResponsiveTableBreakpoint = keyof typeof BREAKPOINT;
