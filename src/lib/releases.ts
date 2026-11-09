@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.47.3",
+    date: "2026-11-10",
+    title: "Teacher pages open faster",
+    announce: false,
+    fixes: [
+      "Your dashboard, Learners list and ARAL Program list open faster. Each one used to wait for one piece of information before asking for the next; now they ask at the same time.",
+    ],
+  },
+  {
     version: "2.47.2",
     date: "2026-11-09",
     title: "New ARAL learner message fits on screen",
