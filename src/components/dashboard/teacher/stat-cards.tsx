@@ -103,10 +103,10 @@ function Decor({
   compact?: boolean;
 }) {
   const id = `stat-decor-${kind}-${tone}`;
-  // Hidden while the card is in its row layout but still narrow (15-20rem):
-  // there the text column reaches the corner and the art would sit on it.
+  // Shown only once the card is 20rem wide: in narrower cards the text column
+  // reaches the bottom-right corner and the art would sit on the words.
   const base = cn(
-    "pointer-events-none absolute @[15rem]/stat:hidden @[20rem]/stat:block",
+    "pointer-events-none absolute hidden @[20rem]/stat:block",
     DECOR_COLOR[tone]
   );
 
