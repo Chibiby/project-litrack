@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARAL_BOSY_HREF,
   ARAL_MOSY_HREF,
   flattenNavGroups,
   getNavGroups,
@@ -26,6 +27,7 @@ describe("getNavGroups — teacher", () => {
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
       "End of Terms Reports",
+      "BOSY Report",
       "MOSY Report",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual([
@@ -36,11 +38,13 @@ describe("getNavGroups — teacher", () => {
     expect(groups[3].items.map((i) => i.label)).toEqual(["Reports"]);
   });
 
-  it("has one MOSY Report row directly after End of Terms Reports, never grade-scoped", () => {
+  it("has one BOSY then one MOSY Report row directly after End of Terms Reports, never grade-scoped", () => {
     for (const grades of [[], oneAral, twoAral, undefined] as (NavGrade[] | undefined)[]) {
       const groups = getNavGroups("TEACHER", grades);
       const ids = groups[1].items.map((item) => item.id);
-      expect(ids.indexOf("teacher-aral-mosy")).toBe(ids.indexOf("teacher-terms-reports") + 1);
+      expect(ids.indexOf("teacher-aral-bosy")).toBe(ids.indexOf("teacher-terms-reports") + 1);
+      expect(ids.indexOf("teacher-aral-mosy")).toBe(ids.indexOf("teacher-aral-bosy") + 1);
+      expect(resolveActiveItemId(ARAL_BOSY_HREF, flattenNavGroups(groups))).toBe("teacher-aral-bosy");
       const row = groups[1].items.find((item) => item.id === "teacher-aral-mosy");
       expect(row?.label).toBe("MOSY Report");
       expect(row?.href).toBe(ARAL_MOSY_HREF);
@@ -162,6 +166,7 @@ describe("getNavGroups — ARAL volunteer", () => {
     expect(menu.items.map((i) => i.label)).toEqual([
       "Learners",
       "End of Terms Reports",
+      "BOSY Report",
       "MOSY Report",
     ]);
     const [, ordinaryMenu] = getNavGroups("TEACHER", oneAral);
@@ -184,6 +189,7 @@ describe("getNavGroups — ARAL volunteer", () => {
     expect(items.filter((i) => i.unavailable).map((i) => i.id)).toEqual([
       "teacher-learners",
       "teacher-terms-reports",
+      "teacher-aral-bosy",
       "teacher-aral-mosy",
     ]);
   });
@@ -487,7 +493,7 @@ describe("getNavGroups — floating teacher", () => {
   });
   it("keeps the ARAL rows open", () => {
     const items = flattenNavGroups(floating());
-    expect(items.filter((i) => i.id.startsWith("teacher-aral-") && i.id !== "teacher-aral-mosy").every((i) => !i.unavailable)).toBe(true);
+    expect(items.filter((i) => i.id.startsWith("teacher-aral-") && i.id !== "teacher-aral-mosy" && i.id !== "teacher-aral-bosy").every((i) => !i.unavailable)).toBe(true);
   });
   it("lets the volunteer pill win when both are set", () => {
     const items = flattenNavGroups(getNavGroups("TEACHER", oneAral, { isFloating: true, isAralVolunteer: true }));

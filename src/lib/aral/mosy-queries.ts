@@ -264,7 +264,7 @@ export function buildMosyGradeOptions(
  * grades that have in-scope learners, with every live section of each. Every
  * query pins `schoolId`.
  */
-async function loadMosyGradeOptions(
+export async function loadMosyGradeOptions(
   schoolId: string,
   sectionIds: string[] | null,
   baseWhere: Prisma.LearnerWhereInput

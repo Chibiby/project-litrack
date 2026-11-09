@@ -21,6 +21,11 @@ import { MOSY_STATUSES, MOSY_STATUS_LABELS, type MosyStatusFilter } from "@/lib/
 
 export const MOSY_SEARCH_DEBOUNCE_MS = 500;
 
+const MOSY_STATUS_OPTIONS = MOSY_STATUSES.map((value) => ({
+  value,
+  label: value === "all" ? "All ARAL statuses" : MOSY_STATUS_LABELS[value],
+}));
+
 const ALL = "all";
 const STALE = "stale";
 const gradeValue = (gradeId: string) => `g:${gradeId}`;
@@ -37,12 +42,24 @@ export function MosyToolbar({
   section,
   status,
   grades,
+  basePath = ARAL_MOSY_HREF,
+  statusParam = "status",
+  statusOptions = MOSY_STATUS_OPTIONS,
+  statusAriaLabel = "ARAL status",
 }: {
   q: string;
   grade: string;
   section: string;
-  status: MosyStatusFilter;
+  /** Selected value of the third select; `"all"` means unfiltered. */
+  status: MosyStatusFilter | (string & {});
   grades: MosyGradeOption[];
+  /** List page this toolbar navigates. The BOSY page reuses the toolbar. */
+  basePath?: string;
+  /** URL key the third select writes. */
+  statusParam?: string;
+  /** Options of the third select. The first must be `"all"`. */
+  statusOptions?: readonly { value: string; label: string }[];
+  statusAriaLabel?: string;
 }) {
   const listNavigate = useListNavigate();
   const searchParams = useSearchParams();
@@ -71,7 +88,7 @@ export function MosyToolbar({
     }
     params.delete("page");
     const qs = params.toString();
-    listNavigate(qs ? `${ARAL_MOSY_HREF}?${qs}` : ARAL_MOSY_HREF);
+    listNavigate(qs ? `${basePath}?${qs}` : basePath);
   }
 
   const pushSearch = (raw: string) => {
@@ -172,15 +189,15 @@ export function MosyToolbar({
 
       <Select
         value={status}
-        onValueChange={(value) => navigate({ status: value === "all" ? undefined : value })}
+        onValueChange={(value) => navigate({ [statusParam]: value === "all" ? undefined : value })}
       >
-        <SelectTrigger aria-label="ARAL status" className="h-11 sm:w-44 lg:h-9">
+        <SelectTrigger aria-label={statusAriaLabel} className="h-11 sm:w-44 lg:h-9">
           <SelectValue placeholder="All statuses" />
         </SelectTrigger>
         <SelectContent>
-          {MOSY_STATUSES.map((value) => (
-            <SelectItem key={value} value={value}>
-              {value === "all" ? "All ARAL statuses" : MOSY_STATUS_LABELS[value]}
+          {statusOptions.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
             </SelectItem>
           ))}
         </SelectContent>

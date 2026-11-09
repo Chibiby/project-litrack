@@ -143,6 +143,13 @@ export const ARAL_PROFILING_HREF = "/teacher/aral/profiling";
 export const ARAL_MOSY_HREF = "/teacher/aral/mosy";
 
 /**
+ * The BOSY Report list: the reading levels each ARAL learner of the teacher's
+ * advisory was enrolled with. Read-only. Same advisory gate and scope as MOSY,
+ * and sits directly above it in the Advisory group.
+ */
+export const ARAL_BOSY_HREF = "/teacher/aral/bosy";
+
+/**
  * Where the "End of Terms Reports" row points: always `/teacher/terms-reports`.
  *
  * v2 puts the sheet itself there, opening on All Advisories, so one URL serves
@@ -330,6 +337,13 @@ export function getNavGroups(
             },
             // Lists only the ARAL learners of the teacher's own advisory, so it
             // shares the advisory gate rather than sitting with the ARAL tools.
+            {
+              id: "teacher-aral-bosy",
+              label: "BOSY Report",
+              href: ARAL_BOSY_HREF,
+              icon: ClipboardList,
+              ...(classLock ? { unavailable: classLock } : {}),
+            },
             {
               id: "teacher-aral-mosy",
               label: "MOSY Report",
