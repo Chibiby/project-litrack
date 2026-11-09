@@ -15,6 +15,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  NoValue,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -293,11 +294,11 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
               </Label>
             </div>
 
-            <div className="max-h-[420px] overflow-auto rounded-lg border">
-              <Table>
+            <div className="overflow-hidden rounded-lg border">
+              <Table stickyHeader density="compact" containerClassName="max-h-[420px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Row</TableHead>
+                    <TableHead numeric className="w-16">Row</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Name / errors</TableHead>
                   </TableRow>
@@ -305,7 +306,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
                 <TableBody>
                   {results.map((r) => (
                     <TableRow key={r.rowNumber}>
-                      <TableCell>{r.rowNumber}</TableCell>
+                      <TableCell numeric>{r.rowNumber}</TableCell>
                       <TableCell>
                         {r.ok ? (
                           r.duplicateWarning ? (
@@ -388,14 +389,14 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
                 <p className="text-sm font-medium">
                   {skippedRows.length} row{skippedRows.length === 1 ? "" : "s"} did not import
                 </p>
-                <div className="max-h-[320px] overflow-auto rounded-lg border">
-                  <Table>
+                <div className="overflow-hidden rounded-lg border">
+                  <Table stickyHeader density="compact" containerClassName="max-h-[320px]">
                     <caption className="sr-only">
                       {skippedRows.length} row{skippedRows.length === 1 ? "" : "s"} did not import
                     </caption>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Row</TableHead>
+                        <TableHead numeric className="w-16">Row</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Reason</TableHead>
                       </TableRow>
@@ -403,8 +404,8 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
                     <TableBody>
                       {skippedRows.map((s) => (
                         <TableRow key={s.rowNumber}>
-                          <TableCell>{s.rowNumber}</TableCell>
-                          <TableCell className="text-sm">{s.name}</TableCell>
+                          <TableCell numeric>{s.rowNumber}</TableCell>
+                          <TableCell className="text-sm">{s.name || <NoValue />}</TableCell>
                           <TableCell className="text-sm text-destructive">{s.reason}</TableCell>
                         </TableRow>
                       ))}

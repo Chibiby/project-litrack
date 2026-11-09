@@ -14,7 +14,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard";
 import {
   GRADE_LEVEL_LABELS,
@@ -197,6 +200,20 @@ export default async function LearnerDetailPage({
     learner.distanceHomeToSchool != null ||
     learner.previousTransfers != null;
 
+
+  const readingWeeks = learner.readingLevels.map((r) => ({
+    id: r.id,
+    week: formatWeekStart(r.weekStart),
+    english: r.englishProfile ? readingLabels[r.englishProfile] : null,
+    filipino: r.filipinoProfile ? readingLabels[r.filipinoProfile] : null,
+    word: r.wordRecognitionLevel
+      ? WEEKLY_WORD_RECOGNITION_LEVEL_LABELS[r.wordRecognitionLevel]
+      : null,
+    comprehension: r.readingComprehensionLevel
+      ? WEEKLY_READING_COMPREHENSION_LEVEL_LABELS[r.readingComprehensionLevel]
+      : null,
+    notes: r.notes ?? null,
+  }));
   return (
     <AppShell
       title={learner.fullName}
@@ -372,40 +389,71 @@ export default async function LearnerDetailPage({
                 <EmptyState title="No enrollment history yet" />
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>School year</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>Section</TableHead>
-                    <TableHead>Teacher</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Enrolled</TableHead>
-                    <TableHead>Ended</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {learner.enrollments.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell>{e.schoolYear.label}</TableCell>
-                      <TableCell>
-                        {GRADE_LEVEL_LABELS[e.gradeLevel.type]}
-                      </TableCell>
-                      <TableCell>{e.section?.name ?? "—"}</TableCell>
-                      <TableCell>{e.teacher?.fullName ?? "—"}</TableCell>
-                      <TableCell>
-                        {ENROLLMENT_STATUS_LABELS[e.status] ?? e.status}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {e.enrolledAt.toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {e.endedAt?.toLocaleDateString() ?? "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ResponsiveTable
+                table={
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>School year</TableHead>
+                        <TableHead>Grade</TableHead>
+                        <TableHead>Section</TableHead>
+                        <TableHead>Teacher</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Enrolled</TableHead>
+                        <TableHead>Ended</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {learner.enrollments.map((e) => (
+                        <TableRow key={e.id}>
+                          <TableCell className="whitespace-nowrap font-medium tabular-nums">
+                            {e.schoolYear.label}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {GRADE_LEVEL_LABELS[e.gradeLevel.type]}
+                          </TableCell>
+                          <TableCell>{e.section?.name ?? <NoValue />}</TableCell>
+                          <TableCell className="max-w-[14rem]">
+                            {e.teacher?.fullName ? <CellText>{e.teacher.fullName}</CellText> : <NoValue />}
+                          </TableCell>
+                          <TableCell>{ENROLLMENT_STATUS_LABELS[e.status] ?? e.status}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                            {e.enrolledAt.toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                            {e.endedAt ? e.endedAt.toLocaleDateString() : <NoValue />}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                }
+                stacked={
+                  <StackedList aria-label="Enrollment history">
+                    {learner.enrollments.map((e) => (
+                      <StackedRow
+                        key={e.id}
+                        title={e.schoolYear.label}
+                        value={
+                          <span className="text-sm font-medium">
+                            {GRADE_LEVEL_LABELS[e.gradeLevel.type]}
+                            {e.section?.name ? ` · ${e.section.name}` : ""}
+                          </span>
+                        }
+                        state={<span>{ENROLLMENT_STATUS_LABELS[e.status] ?? e.status}</span>}
+                        details={[
+                          { label: "Teacher", value: e.teacher?.fullName ?? <NoValue /> },
+                          { label: "Enrolled", value: e.enrolledAt.toLocaleDateString() },
+                          {
+                            label: "Ended",
+                            value: e.endedAt ? e.endedAt.toLocaleDateString() : <NoValue />,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </StackedList>
+                }
+              />
             )}
           </CardContent>
         </Card>
@@ -564,12 +612,14 @@ export default async function LearnerDetailPage({
                     <TableBody>
                       {rows.map((a) => (
                         <TableRow key={a.id}>
-                          <TableCell>{a.date.toLocaleDateString()}</TableCell>
+                          <TableCell className="whitespace-nowrap tabular-nums">
+                            {a.date.toLocaleDateString()}
+                          </TableCell>
                           <TableCell>
                             {ATTENDANCE_STATUS_LABELS[a.status]}
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {a.notes ?? ""}
+                          <TableCell className="max-w-[20rem] text-xs text-muted-foreground">
+                            {a.notes ? <CellText>{a.notes}</CellText> : <NoValue />}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -598,52 +648,57 @@ export default async function LearnerDetailPage({
                 />
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Week of</TableHead>
-                    <TableHead>English</TableHead>
-                    <TableHead>Filipino</TableHead>
-                    <TableHead>Word recognition</TableHead>
-                    <TableHead>Reading comprehension</TableHead>
-                    <TableHead>Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {learner.readingLevels.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{formatWeekStart(r.weekStart)}</TableCell>
-                      <TableCell className="text-xs">
-                        {r.englishProfile
-                          ? readingLabels[r.englishProfile]
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {r.filipinoProfile
-                          ? readingLabels[r.filipinoProfile]
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {r.wordRecognitionLevel
-                          ? WEEKLY_WORD_RECOGNITION_LEVEL_LABELS[
-                              r.wordRecognitionLevel
-                            ]
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {r.readingComprehensionLevel
-                          ? WEEKLY_READING_COMPREHENSION_LEVEL_LABELS[
-                              r.readingComprehensionLevel
-                            ]
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {r.notes ?? ""}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ResponsiveTable
+                table={
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Week of</TableHead>
+                        <TableHead>English</TableHead>
+                        <TableHead>Filipino</TableHead>
+                        <TableHead>Word recognition</TableHead>
+                        <TableHead>Reading comprehension</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {readingWeeks.map((w) => (
+                        <TableRow key={w.id}>
+                          <TableCell className="whitespace-nowrap font-medium tabular-nums">{w.week}</TableCell>
+                          <TableCell className="text-xs">{w.english ?? <NoValue />}</TableCell>
+                          <TableCell className="text-xs">{w.filipino ?? <NoValue />}</TableCell>
+                          <TableCell className="text-xs">{w.word ?? <NoValue />}</TableCell>
+                          <TableCell className="text-xs">{w.comprehension ?? <NoValue />}</TableCell>
+                          <TableCell className="max-w-[16rem] text-xs text-muted-foreground">
+                            {w.notes ? <CellText>{w.notes}</CellText> : <NoValue />}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                }
+                stacked={
+                  <StackedList aria-label="Reading-level history">
+                    {readingWeeks.map((w) => (
+                      <StackedRow
+                        key={w.id}
+                        title={`Week of ${w.week}`}
+                        meta={
+                          <>
+                            <span>English: {w.english ?? "—"}</span>
+                            <span>Filipino: {w.filipino ?? "—"}</span>
+                          </>
+                        }
+                        details={[
+                          { label: "Word recognition", value: w.word ?? <NoValue /> },
+                          { label: "Reading comprehension", value: w.comprehension ?? <NoValue /> },
+                          { label: "Notes", value: w.notes || <NoValue /> },
+                        ]}
+                      />
+                    ))}
+                  </StackedList>
+                }
+              />
             )}
           </CardContent>
         </Card>
