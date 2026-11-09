@@ -6,6 +6,7 @@ import { NavPathProvider } from "@/components/nav/nav-path";
 import { AppHeader } from "@/components/shell/app-header";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
+import { LightRays } from "@/components/ui/light-rays";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
 
@@ -121,7 +122,9 @@ function AppShellFallback({
     // Same pairing as RoleShell: the rail and the header both read the optimistic
     // nav path, so the provider has to sit above both of them.
     <NavPathProvider>
-      <div className="min-h-screen bg-background">
+      <div className="relative isolate min-h-screen bg-background">
+        {/* Same light-rays ground as RoleShell, under every page. */}
+        <LightRays className="fixed inset-0 -z-10" color="rgba(120, 175, 255, 0.35)" />
         <AppSidebar
           role={role}
           userName={userName}

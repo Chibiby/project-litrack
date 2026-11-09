@@ -9,6 +9,7 @@ import { ReleaseNotesModal } from "@/components/release-notes-modal";
 import type { ShellNotification } from "@/components/shell/notifications-menu";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
+import { LightRays } from "@/components/ui/light-rays";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
 import { TeacherPresenceHeartbeat } from "@/components/presence/teacher-presence-heartbeat";
@@ -165,7 +166,11 @@ export function RoleShell({
               onToggleSidebar={toggle}
             />
 
-            <div className="min-h-[calc(100dvh-var(--app-chrome-header-height))] bg-background">
+            {/* isolate: the light rays sit at -z-10 inside this panel, so they
+                paint above its background but under every page. Fixed, so they
+                stay put while the page scrolls. */}
+            <div className="relative isolate min-h-[calc(100dvh-var(--app-chrome-header-height))] bg-background">
+              <LightRays className="fixed inset-0 -z-10" color="rgba(120, 175, 255, 0.35)" />
               {children}
             </div>
           </div>

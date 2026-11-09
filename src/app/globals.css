@@ -348,3 +348,40 @@
 :where(*):has(> [data-stat-card]:hover) > [data-stat-card]:not(:hover) {
   opacity: 0.9;
 }
+
+/*
+ * Light rays (src/components/ui/light-rays.tsx): each ray fades in to its
+ * intensity while swaying a couple of degrees, fades out, then rests for the
+ * last ~9% of the cycle. The translate keeps the ray centred on its `left`,
+ * because the keyframe transform replaces Tailwind's translate class.
+ */
+@keyframes light-ray {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) rotate(var(--ray-rotate-from));
+  }
+  45% {
+    opacity: var(--ray-intensity);
+    transform: translateX(-50%) rotate(var(--ray-rotate-to));
+  }
+  91%,
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) rotate(var(--ray-rotate-from));
+  }
+}
+
+.light-ray {
+  animation-name: light-ray;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .light-ray {
+    animation: none;
+    opacity: calc(var(--ray-intensity) * 0.5);
+    transform: translateX(-50%) rotate(var(--ray-rotate-from));
+  }
+}
