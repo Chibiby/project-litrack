@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 
 import { createPrismaClient, markTransactionFailures, withDbErrorMarking } from "@/lib/prisma";
@@ -101,10 +101,12 @@ describe("withDbErrorMarking on the real Prisma runtime", () => {
   });
 
   it("keeps the exported client's adapter configuration reachable", async () => {
+    vi.stubEnv("LITRACK_DEPLOY_TARGET", "cloudflare");
     const client = createPrismaClient("postgresql://postgres:password@localhost:5432/litrack");
     const engine = client as unknown as { _engineConfig: { adapter?: { config?: { maxUses?: number } } } };
     expect(engine._engineConfig.adapter?.config?.maxUses).toBe(1);
     await client.$disconnect();
+    vi.unstubAllEnvs();
   });
 
   it(

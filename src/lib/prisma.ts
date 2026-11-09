@@ -85,9 +85,13 @@ export function createPrismaClient(
       resolvePgDriverUrl(databaseUrl) ?? UNCONFIGURED_DATABASE_URL,
     // Workers forbid reusing an I/O object from a previous request. Retire a
     // pool connection after one use so a warm isolate cannot carry its socket
-    // into the next request; Supabase's transaction pooler handles reuse on
-    // the database side.
-    maxUses: 1,
+    // into the next request; Hyperdrive handles reuse on the database side.
+    //
+    // Cloudflare only. Off Workers the client is a process-wide singleton
+    // (`getPrismaClient`), and `maxUses: 1` there made every query open a new
+    // TLS connection to the database: about 340 ms of handshake on a 50 ms
+    // query, measured from a local machine to Neon.
+    ...(process.env.LITRACK_DEPLOY_TARGET === "cloudflare" ? { maxUses: 1 } : {}),
   });
 
   return withDbErrorMarking(
