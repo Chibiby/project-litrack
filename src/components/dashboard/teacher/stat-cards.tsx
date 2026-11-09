@@ -250,7 +250,7 @@ export function StatCard({
         // Glass: a translucent tinted pane that blurs whatever sits behind it
         // (the hero art, the page background), with a bright hairline edge
         // and a top highlight so it reads as a sheet of frosted glass.
-        "bg-white/45 bg-gradient-to-br via-white/25 via-60% to-white/10 dark:bg-card/45 dark:via-card/25 dark:to-card/10",
+        "bg-card/45 bg-gradient-to-br via-card/25 via-60% to-card/10",
         "backdrop-blur-xl backdrop-saturate-150",
         "border-white/70 dark:border-white/10",
         "shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_8px_24px_-12px_rgb(0_0_0/0.5)]",
