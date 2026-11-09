@@ -1,6 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "project-litrack",
+  // Pinned to the pixelonhub account (since 2026-11-08). A Workers Builds run
+  // connected in any other account, such as the old one, then fails at deploy
+  // instead of shipping production there.
+  "account_id": "f422363ac391253c19295a240adbd9c7",
   // Wraps `.open-next/worker.js` so the Worker also answers Cron Triggers.
   // See worker.js — the cron expressions below must match its CRON_ROUTES map.
   "main": "worker.js",
