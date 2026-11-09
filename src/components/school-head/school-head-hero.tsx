@@ -82,10 +82,14 @@ export function SchoolHeadHero({
       // left-edge fade).
       phoneMaskClassName={
         stats
-          ? "max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%),linear-gradient(to_bottom,black_70%,transparent)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%),linear-gradient(to_bottom,black_70%,transparent)] max-lg:[&>img]:[mask-composite:intersect] max-lg:[&>img]:!bottom-auto max-lg:[&>img]:top-0"
+          ? "max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%),linear-gradient(to_bottom,black_70%,transparent)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%),linear-gradient(to_bottom,black_70%,transparent)] max-lg:[&>img]:[mask-composite:intersect] max-lg:[&>img]:!bottom-auto max-lg:[&>img]:top-0 lg:[&>img]:!top-0 lg:[&>img]:!h-[20rem] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%),linear-gradient(to_bottom,black_75%,transparent)] lg:[&>img]:[mask-composite:intersect]"
           : "max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%)]"
       }
-      headClassName="max-lg:hidden"
+      // Desktop: with stat tiles the band is tall, and the art (sized to the
+      // band) would grow until its doodle sat under the description. It keeps
+      // a fixed 20rem from the top instead, fading out at the bottom, and the
+      // head strip above the band (sized for the zoomed art) is left out.
+      headClassName={stats ? "hidden" : "max-lg:hidden"}
       contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
     >
       <div className="relative z-10">

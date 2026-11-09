@@ -55,8 +55,11 @@ export function KinderChecklistHero({
         className="h-auto"
         topRight={topRight}
         artClassName="max-sm:!h-[160px] max-sm:right-[-118px] sm:h-[75%] sm:max-lg:!h-[10.5rem] sm:right-[min(0px,calc(50%-338px))] lg:right-[min(0px,calc(100%-1291px))]"
-        phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_40%,black_53%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%),linear-gradient(to_bottom,black_70%,transparent)] sm:max-lg:[&>img]:[mask-composite:intersect] sm:max-lg:[&>img]:!bottom-auto sm:max-lg:[&>img]:top-0"
-        headClassName="max-lg:hidden"
+        phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_40%,black_53%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%),linear-gradient(to_bottom,black_70%,transparent)] sm:max-lg:[&>img]:[mask-composite:intersect] sm:max-lg:[&>img]:!bottom-auto sm:max-lg:[&>img]:top-0 lg:[&>img]:!top-0 lg:[&>img]:!h-[20rem] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%),linear-gradient(to_bottom,black_75%,transparent)] lg:[&>img]:[mask-composite:intersect]"
+        // The stat tiles make the band tall; the art keeps a fixed 20rem on
+        // desktop rather than growing under the title, so the head strip
+        // above the band (sized for the zoomed art) is left out.
+        headClassName="hidden"
         contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
       >
         <h1 className="max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:max-w-[45%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">

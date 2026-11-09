@@ -252,25 +252,24 @@ export function StatCard({
       data-stat-card=""
       className={cn(
         "group @container/stat relative flex flex-col overflow-hidden rounded-lg sm:p-5",
-        // Glass: a translucent tinted pane that blurs whatever sits behind it
-        // (the hero art, the page background), with a bright hairline edge
-        // and a top highlight so it reads as a sheet of frosted glass.
-        "bg-card/45 bg-gradient-to-br via-card/25 via-60% to-card/10",
-        "backdrop-blur-xl backdrop-saturate-150",
-        "border-white/70 dark:border-white/10",
-        "shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_8px_24px_-12px_rgb(0_0_0/0.5)]",
+        // Opaque: the card surface with its tone washed into the top-left
+        // corner. No blur and no see-through, so a card looks the same on the
+        // page background as on top of a hero's art.
+        "bg-card bg-gradient-to-br via-card via-60% to-card",
+        "border-border/70",
+        "shadow-[0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[0_8px_24px_-12px_rgb(0_0_0/0.5)]",
         denseOnPhone ? "p-3" : "p-4",
         WASH[tone],
         // Every card — clickable or read-only — lifts, enlarges slightly,
         // deepens its shadow and rings in its tone on hover / focus.
-        "transition-[transform,box-shadow,border-color,filter,opacity] duration-200 ease-out",
-        "hover:z-20 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_16px_32px_-12px_rgb(0_0_0/0.6)]",
-        "focus-within:z-20 focus-within:-translate-y-0.5 focus-within:scale-[1.02] focus-within:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:focus-within:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08),0_16px_32px_-12px_rgb(0_0_0/0.6)]",
+        "transition-[transform,box-shadow,border-color,opacity] duration-200 ease-out",
+        "hover:z-20 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:hover:shadow-[0_16px_32px_-12px_rgb(0_0_0/0.6)]",
+        "focus-within:z-20 focus-within:-translate-y-0.5 focus-within:scale-[1.02] focus-within:shadow-[0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:focus-within:shadow-[0_16px_32px_-12px_rgb(0_0_0/0.6)]",
         "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100",
         HOVER_RING[tone],
         // Only a card that goes somewhere looks pressable.
         clickable &&
-          "cursor-pointer active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.7),0_2px_6px_-2px_rgb(15_23_42/0.15)] motion-reduce:active:scale-100"
+          "cursor-pointer active:translate-y-0 active:scale-[0.98] active:shadow-[0_2px_6px_-2px_rgb(15_23_42/0.15)] motion-reduce:active:scale-100"
       )}
     >
       {decor ? <Decor kind={decor} tone={tone} compact={inlineOnPhone} /> : null}

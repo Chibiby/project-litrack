@@ -341,17 +341,10 @@
 }
 
 /*
- * Stat cards: while one card is hovered, its sibling cards soften
- * (slight blur and fade) so the hovered card stands out. Parent-agnostic, so
- * it works in StatCardRow and in every page's own card grid alike.
+ * Stat cards: while one card is hovered, its sibling cards fade slightly so
+ * the hovered card stands out. No blur: the cards stay sharp. Parent-agnostic,
+ * so it works in StatCardRow and in every page's own card grid alike.
  */
 :where(*):has(> [data-stat-card]:hover) > [data-stat-card]:not(:hover) {
   opacity: 0.9;
-  filter: blur(0.75px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :where(*):has(> [data-stat-card]:hover) > [data-stat-card]:not(:hover) {
-    filter: none;
-  }
 }
