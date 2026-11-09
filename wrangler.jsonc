@@ -20,24 +20,19 @@
   "kv_namespaces": [
     {
       "binding": "NEXT_INC_CACHE_KV",
-      "id": "f333fd7954de4e19bb2bf2d161258776"
+      "id": "7e5a9233e3c04717bb817ec177b2e679"
     }
   ],
   "d1_databases": [
     {
       "binding": "NEXT_TAG_CACHE_D1",
       "database_name": "litrack-tag-cache",
-      "database_id": "0a94e4ae-55d1-4d7d-b749-2698bc1308ac"
+      "database_id": "5e44542a-ed74-48d2-9532-b33fa28e56fd"
     }
   ],
-  // Profile photos. Public reads go through the bucket's custom domain
-  // (NEXT_PUBLIC_AVATAR_BASE_URL); the Worker only writes and deletes.
-  "r2_buckets": [
-    {
-      "binding": "AVATARS",
-      "bucket_name": "litrack-avatars"
-    }
-  ],
+  // No r2_buckets: R2 is not enabled on this Cloudflare account (pixelonhub,
+  // since 2026-11-08), so the AVATARS binding is left out and avatar uploads
+  // fail until a bucket exists. Add it back here when one does.
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -45,15 +40,18 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "194a9703ac674c7a9934acaf2c677047"
+      "id": "b43ecd7c83054f2dacd45f19e6f0d795",
+      // Local-only placeholder, same reason as HYPERDRIVE_FRESH below, so the
+      // build needs no CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_* variable.
+      "localConnectionString": "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured"
     },
-    // litrack-supabase-fresh: same database, query caching DISABLED, origin is
-    // Supabase's direct host. Read through `prismaFresh` only, by the School
+    // litrack-neon-fresh: same database, query caching DISABLED, origin is
+    // Neon's direct host. Read through `prismaFresh` only, by the School
     // Head teachers workspace, which must show a save the moment it lands —
     // the cached binding above can return rows about a minute old.
     {
       "binding": "HYPERDRIVE_FRESH",
-      "id": "99e5c8692aaa4961b4d980fed0ccc778",
+      "id": "76cfa620a26f4b74969b1e90abc86cc6",
       // Local-only placeholder, never used in production. `opennextjs-cloudflare
       // deploy` starts a local platform proxy that needs a local connection
       // string for EVERY Hyperdrive binding; the Workers Builds env var only
@@ -72,7 +70,7 @@
   // because a streaming snapshot will still be a long-running job, not because
   // it solved anything.
   "limits": {
-    "cpu_ms": 300000
+    "cpu_ms": 30000
   },
   // Replaces the `crons` block in vercel.json. Times are UTC; Manila is UTC+8.
   // "*/5 * * * *" fires every 5 minutes, but it only re-warms the Division Summary
