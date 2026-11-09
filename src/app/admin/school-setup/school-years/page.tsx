@@ -10,7 +10,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -24,6 +27,19 @@ function StatusBadge({ active }: { active: boolean }) {
   return active ? <Badge>Active</Badge> : <Badge variant="secondary">Inactive</Badge>;
 }
 
+function OpenYearsButton({ schoolId, schoolName }: { schoolId: string; schoolName: string }) {
+  return (
+    <Button asChild variant="ghost" size="icon" className="size-9 shrink-0">
+      <Link
+        href={`${SCHOOL_HEAD_ROUTES.schoolYears}?schoolId=${schoolId}`}
+        aria-label={`Open ${schoolName}'s school years`}
+      >
+        <ExternalLink aria-hidden />
+      </Link>
+    </Button>
+  );
+}
+
 export default async function AdminSchoolYearsPage() {
   const user = await requireUser("SUPER_ADMIN");
 
@@ -34,7 +50,6 @@ export default async function AdminSchoolYearsPage() {
 
   const range = (y: (typeof years)[number]) =>
     `${y.startDate.toISOString().slice(0, 10)} → ${y.endDate.toISOString().slice(0, 10)}`;
-  const openHref = (schoolId: string) => `${SCHOOL_HEAD_ROUTES.schoolYears}?schoolId=${schoolId}`;
 
   return (
     <AdminPage
@@ -64,8 +79,8 @@ export default async function AdminSchoolYearsPage() {
             />
           </SurfaceBody>
         ) : (
-          <>
-            <div className="hidden overflow-x-auto lg:block">
+          <ResponsiveTable
+            table={
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -73,58 +88,49 @@ export default async function AdminSchoolYearsPage() {
                     <TableHead>Label</TableHead>
                     <TableHead>Range</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead />
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {years.map((y) => (
                     <TableRow key={y.id}>
-                      <TableCell className="font-medium">{y.school.name}</TableCell>
+                      <TableCell className="max-w-[18rem] font-medium">
+                        <CellText>{y.school.name}</CellText>
+                      </TableCell>
                       <TableCell>{y.label}</TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                         {range(y)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge active={y.isActive} />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild variant="ghost" size="icon" className="lg:size-9">
-                          <Link
-                            href={openHref(y.school.id)}
-                            aria-label={`Open ${y.school.name}'s school years`}
-                          >
-                            <ExternalLink aria-hidden />
-                          </Link>
-                        </Button>
+                      <TableCell>
+                        <RowActions>
+                          <OpenYearsButton schoolId={y.school.id} schoolName={y.school.name} />
+                        </RowActions>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </div>
-            <ul className="divide-y divide-border/60 lg:hidden" aria-label="School years">
-              {years.map((y) => (
-                <li key={y.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-foreground">{y.school.name}</span>
-                      <StatusBadge active={y.isActive} />
-                    </div>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{y.label}</p>
-                    <p className="text-xs text-muted-foreground">{range(y)}</p>
-                  </div>
-                  <Button asChild variant="ghost" size="icon" className="shrink-0">
-                    <Link
-                      href={openHref(y.school.id)}
-                      aria-label={`Open ${y.school.name}'s school years`}
-                    >
-                      <ExternalLink aria-hidden />
-                    </Link>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </>
+            }
+            stacked={
+              <StackedList aria-label="School years">
+                {years.map((y) => (
+                  <StackedRow
+                    key={y.id}
+                    title={y.school.name}
+                    value={<span className="font-medium">{y.label}</span>}
+                    state={<StatusBadge active={y.isActive} />}
+                    meta={<span className="tabular-nums">{range(y)}</span>}
+                    actions={<OpenYearsButton schoolId={y.school.id} schoolName={y.school.name} />}
+                  />
+                ))}
+              </StackedList>
+            }
+          />
         )}
       </Surface>
     </AdminPage>

@@ -5,7 +5,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { DemoBadge } from "@/components/demo-badge";
@@ -99,8 +102,8 @@ export function ErrorLogTable({
   }
 
   return (
-    <>
-      <div className="hidden overflow-x-auto lg:block">
+    <ResponsiveTable
+      table={
         <Table>
           <TableHeader>
             <TableRow>
@@ -115,7 +118,7 @@ export function ErrorLogTable({
           <TableBody>
             {events.map((event) => (
               <TableRow key={event.id}>
-                <TableCell className="whitespace-nowrap align-top text-xs text-muted-foreground">
+                <TableCell className="whitespace-nowrap align-top text-xs tabular-nums text-muted-foreground">
                   {when(event)}
                 </TableCell>
                 <TableCell className="max-w-[28rem] align-top font-medium">
@@ -125,8 +128,8 @@ export function ErrorLogTable({
                 <TableCell className="align-top">
                   <SeverityBadge severity={event.severity} />
                 </TableCell>
-                <TableCell className="align-top text-xs text-muted-foreground">
-                  {event.route ?? "—"}
+                <TableCell className="max-w-[16rem] align-top text-xs text-muted-foreground">
+                  {event.route ? <CellText>{event.route}</CellText> : <NoValue />}
                   {event.routeType ? (
                     <span className="block text-xs opacity-70">{event.routeType}</span>
                   ) : null}
@@ -142,29 +145,44 @@ export function ErrorLogTable({
             ))}
           </TableBody>
         </Table>
-      </div>
-
-      {/* Below lg: one stacked row per event, the house phone/tablet list. */}
-      <ul className="divide-y divide-border/60 lg:hidden" aria-label="Error events">
-        {events.map((event) => (
-          <li key={event.id} className="min-w-0 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-foreground">{event.code}</span>
-              <SeverityBadge severity={event.severity} />
-              <span className="ml-auto font-mono text-xs text-muted-foreground">{event.ref}</span>
-            </div>
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
-              <span>{schoolLabel(event)}</span>
-              {event.isDemoSchool ? <DemoBadge /> : null}
-            </p>
-            <p className="mt-0.5 break-all text-xs text-muted-foreground">
-              {when(event)} · {event.route ?? "—"}
-              {event.routeType ? ` (${event.routeType})` : ""}
-            </p>
-            <EventDetails event={event} />
-          </li>
-        ))}
-      </ul>
-    </>
+      }
+      stacked={
+        <StackedList aria-label="Error events">
+          {events.map((event) => (
+            <StackedRow
+              key={event.id}
+              title={event.code}
+              value={
+                <span className="font-mono text-xs font-normal text-muted-foreground">
+                  {event.ref}
+                </span>
+              }
+              state={<SeverityBadge severity={event.severity} />}
+              meta={
+                <>
+                  <span className="truncate">{schoolLabel(event)}</span>
+                  {event.isDemoSchool ? <DemoBadge /> : null}
+                </>
+              }
+              details={[
+                { label: "When", value: when(event) },
+                {
+                  label: "Where",
+                  value: event.route ? (
+                    <span className="break-all">
+                      {event.route}
+                      {event.routeType ? ` (${event.routeType})` : ""}
+                    </span>
+                  ) : (
+                    <NoValue />
+                  ),
+                },
+                { label: "Message", value: <EventDetails event={event} /> },
+              ]}
+            />
+          ))}
+        </StackedList>
+      }
+    />
   );
 }

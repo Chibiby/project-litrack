@@ -9,7 +9,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
@@ -54,8 +57,8 @@ async function AdminAuditTable() {
           />
         </SurfaceBody>
       ) : (
-        <>
-          <div className="hidden overflow-x-auto lg:block">
+        <ResponsiveTable
+          table={
             <Table>
               <TableHeader>
                 <TableRow>
@@ -69,42 +72,50 @@ async function AdminAuditTable() {
               <TableBody>
                 {logs.map((log) => (
                   <TableRow key={log.id}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                       {when(log.timestamp)}
                     </TableCell>
                     <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {schoolLabel(log.schoolId)}
+                    <TableCell className="max-w-[16rem] text-muted-foreground">
+                      <CellText>{schoolLabel(log.schoolId)}</CellText>
                     </TableCell>
                     <TableCell>{log.resource}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {log.resourceId ?? "—"}
+                    <TableCell className="max-w-[12rem] font-mono text-xs text-muted-foreground">
+                      {log.resourceId ? <CellText>{log.resourceId}</CellText> : <NoValue />}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </div>
-
-          {/* Below lg: one stacked row per event, as on the School Head audit page. */}
-          <ul className="divide-y divide-border/60 lg:hidden" aria-label="Audit events">
-            {logs.map((log) => (
-              <li key={log.id} className="flex flex-col gap-1 px-4 py-3">
-                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span className="font-medium text-foreground">{log.action}</span>
-                  <span className="text-sm text-muted-foreground">{log.resource}</span>
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {schoolLabel(log.schoolId)}
-                </span>
-                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                  <span className="whitespace-nowrap">{when(log.timestamp)}</span>
-                  <span className="min-w-0 break-all font-mono">{log.resourceId ?? "—"}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
+          }
+          stacked={
+            <StackedList aria-label="Audit events">
+              {logs.map((log) => (
+                <StackedRow
+                  key={log.id}
+                  title={log.action}
+                  value={
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {when(log.timestamp)}
+                    </span>
+                  }
+                  state={<span>{log.resource}</span>}
+                  meta={<span className="truncate">{schoolLabel(log.schoolId)}</span>}
+                  details={[
+                    {
+                      label: "Resource ID",
+                      value: log.resourceId ? (
+                        <span className="break-all font-mono text-xs">{log.resourceId}</span>
+                      ) : (
+                        <NoValue />
+                      ),
+                    },
+                  ]}
+                />
+              ))}
+            </StackedList>
+          }
+        />
       )}
     </Surface>
   );

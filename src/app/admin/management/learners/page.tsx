@@ -27,7 +27,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { MetricsGridSkeleton, TableSectionSkeleton, ListCardSkeleton } from "@/components/loading";
@@ -168,16 +170,16 @@ async function LearnersBreakdowns({ params }: { params: LearnersHubParams }) {
             <TableHeader>
               <TableRow>
                 <TableHead className="pl-4">Group</TableHead>
-                <TableHead className="text-right">Count</TableHead>
-                <TableHead className="pr-4 text-right">Share</TableHead>
+                <TableHead numeric>Count</TableHead>
+                <TableHead numeric className="pr-4">Share</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {summary.ipByGroup.map((g) => (
                 <TableRow key={g.key}>
                   <TableCell className="pl-4 font-medium">{g.name}</TableCell>
-                  <TableCell className="text-right tabular-nums">{n(g.count)}</TableCell>
-                  <TableCell className="pr-4 text-right tabular-nums">{share(g.count, ipTotal)}</TableCell>
+                  <TableCell numeric>{n(g.count)}</TableCell>
+                  <TableCell numeric className="pr-4">{share(g.count, ipTotal)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -218,48 +220,55 @@ async function SchoolsWithIp() {
           />
         </SurfaceBody>
       ) : (
-        <>
-          <div className="hidden overflow-x-auto lg:block">
+        <ResponsiveTable
+          table={
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-4">School</TableHead>
-                  <TableHead className="text-right">Per teacher</TableHead>
-                  <TableHead className="text-right">IP</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="pr-4 text-right">IP %</TableHead>
+                  <TableHead numeric>Per teacher</TableHead>
+                  <TableHead numeric>IP</TableHead>
+                  <TableHead numeric>Total</TableHead>
+                  <TableHead numeric className="pr-4">IP %</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {schools.map((s) => (
                   <TableRow key={s.schoolId}>
-                    <TableCell className="pl-4 font-medium">{s.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.learnersPerTeacher}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.ipLearners}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.totalLearners}</TableCell>
-                    <TableCell className="pr-4 text-right tabular-nums">{s.ipPercent}</TableCell>
+                    <TableCell className="max-w-[20rem] pl-4 font-medium">
+                      <CellText>{s.name}</CellText>
+                    </TableCell>
+                    <TableCell numeric>{s.learnersPerTeacher}</TableCell>
+                    <TableCell numeric>{s.ipLearners}</TableCell>
+                    <TableCell numeric>{s.totalLearners}</TableCell>
+                    <TableCell numeric className="pr-4">{s.ipPercent}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </div>
-          <ul className="divide-y divide-border/60 lg:hidden" aria-label="Schools with IP learners">
-            {schools.map((s) => (
-              <li key={s.schoolId} className="flex items-start gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground">{s.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {s.totalLearners} enrolled · {s.learnersPerTeacher} per teacher
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-semibold tabular-nums text-foreground">{s.ipLearners}</p>
-                  <p className="text-xs tabular-nums text-muted-foreground">{s.ipPercent}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
+          }
+          stacked={
+            <StackedList aria-label="Schools with IP learners">
+              {schools.map((s) => (
+                <StackedRow
+                  key={s.schoolId}
+                  title={s.name}
+                  value={
+                    <>
+                      {s.ipLearners}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">IP</span>
+                    </>
+                  }
+                  meta={
+                    <span className="tabular-nums">
+                      {s.ipPercent} IP · {s.totalLearners} enrolled · {s.learnersPerTeacher} per teacher
+                    </span>
+                  }
+                />
+              ))}
+            </StackedList>
+          }
+        />
       )}
     </Surface>
   );

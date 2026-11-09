@@ -14,7 +14,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
+
+/** "YYYY-MM-DD HH:MM:SS" in UTC — the audit log's shown timestamp. */
+function utcStamp(d: Date): string {
+  return d.toISOString().replace("T", " ").slice(0, 19);
+}
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
@@ -173,59 +181,60 @@ async function SchoolAuditTable({
                 </div>
               }
             >
-              <div className="hidden overflow-x-auto lg:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>When (UTC)</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Resource</TableHead>
-                      <TableHead>ID</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {logs.map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {log.timestamp
-                            .toISOString()
-                            .replace("T", " ")
-                            .slice(0, 19)}
-                        </TableCell>
-                        <TableCell className="font-medium">{log.action}</TableCell>
-                        <TableCell>{log.resource}</TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {log.resourceId ?? "—"}
-                        </TableCell>
+              <ResponsiveTable
+                table={
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>When (UTC)</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Resource</TableHead>
+                        <TableHead>ID</TableHead>
                       </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {logs.map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                            {utcStamp(log.timestamp)}
+                          </TableCell>
+                          <TableCell className="font-medium">{log.action}</TableCell>
+                          <TableCell>{log.resource}</TableCell>
+                          <TableCell className="max-w-[12rem] font-mono text-xs text-muted-foreground">
+                            {log.resourceId ? <CellText>{log.resourceId}</CellText> : <NoValue />}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                }
+                stacked={
+                  <StackedList aria-label="Audit events">
+                    {logs.map((log) => (
+                      <StackedRow
+                        key={log.id}
+                        title={log.action}
+                        value={
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {utcStamp(log.timestamp)}
+                          </span>
+                        }
+                        state={<span>{log.resource}</span>}
+                        details={[
+                          {
+                            label: "Resource ID",
+                            value: log.resourceId ? (
+                              <span className="break-all font-mono text-xs">{log.resourceId}</span>
+                            ) : (
+                              <NoValue />
+                            ),
+                          },
+                        ]}
+                      />
                     ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Below lg: one stacked row per event, as in the learner roster's
-                  phone list (src/components/learners/learner-list-client.tsx). */}
-              <ul className="divide-y divide-border/60 lg:hidden" aria-label="Audit events">
-                {logs.map((log) => (
-                  <li key={log.id} className="flex flex-col gap-1 px-3 py-3 sm:px-4">
-                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span className="font-medium text-foreground">{log.action}</span>
-                      <span className="text-sm text-muted-foreground">{log.resource}</span>
-                    </span>
-                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                      <span className="whitespace-nowrap">
-                        {log.timestamp
-                          .toISOString()
-                          .replace("T", " ")
-                          .slice(0, 19)}
-                      </span>
-                      <span className="min-w-0 break-all font-mono">
-                        {log.resourceId ?? "—"}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                  </StackedList>
+                }
+              />
             </ListBusyRegion>
             <LearnerPagination
               basePath={SCHOOL_HEAD_ROUTES.audit}

@@ -22,7 +22,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { DeletedLearnerRestoreButton } from "@/components/admin/deleted-learners-restore-button";
 import type { DeletedLearnerRow, DeletedLearnersPage } from "@/lib/learners/deleted-learners";
@@ -179,8 +183,8 @@ export function DeletedLearnersView({
             />
           )
         ) : (
-          <>
-            <div className="hidden lg:block">
+          <ResponsiveTable
+            table={
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -190,45 +194,59 @@ export function DeletedLearnersView({
                     <TableHead>Grade / Section</TableHead>
                     <TableHead>Removed on</TableHead>
                     <TableHead>Deleted on</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{row.schoolName}</TableCell>
+                      <TableCell className="max-w-[16rem] font-medium">
+                        <CellText>{row.name}</CellText>
+                      </TableCell>
+                      <TableCell className="max-w-[16rem] text-muted-foreground">
+                        <CellText>{row.schoolName}</CellText>
+                      </TableCell>
                       {showDistrict ? (
-                        <TableCell className="text-sm text-muted-foreground">{row.district ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {row.district ?? <NoValue />}
+                        </TableCell>
                       ) : null}
-                      <TableCell className="text-sm text-muted-foreground">{placement(row)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{formatDate(row.removedAt)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{formatDate(row.deletedAt)}</TableCell>
-                      <TableCell className="text-right">{restoreButton(row)}</TableCell>
+                      <TableCell className="text-muted-foreground">{placement(row)}</TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                        {formatDate(row.removedAt)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                        {formatDate(row.deletedAt)}
+                      </TableCell>
+                      <TableCell>
+                        <RowActions>{restoreButton(row)}</RowActions>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </div>
-            <ul className="divide-y divide-border/60 lg:hidden" aria-label="Deleted learners">
-              {rows.map((row) => (
-                <li key={row.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-start">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="break-words font-medium text-foreground">{row.name}</p>
-                    <p className="break-words text-sm text-muted-foreground">{schoolLine(row, showDistrict)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {placement(row)}
-                      {" · removed "}
-                      {formatDate(row.removedAt)}
-                      {" · deleted "}
-                      {formatDate(row.deletedAt)}
-                    </p>
-                  </div>
-                  <div className="shrink-0">{restoreButton(row)}</div>
-                </li>
-              ))}
-            </ul>
-          </>
+            }
+            stacked={
+              <StackedList aria-label="Deleted learners">
+                {rows.map((row) => (
+                  <StackedRow
+                    key={row.id}
+                    className="px-0"
+                    title={row.name}
+                    value={<span className="text-sm font-medium">{placement(row)}</span>}
+                    meta={<span className="truncate">{schoolLine(row, showDistrict)}</span>}
+                    details={[
+                      { label: "Removed on", value: formatDate(row.removedAt) },
+                      { label: "Deleted on", value: formatDate(row.deletedAt) },
+                    ]}
+                    actions={restoreButton(row)}
+                  />
+                ))}
+              </StackedList>
+            }
+          />
         )}
 
         {data.pages > 1 ? (

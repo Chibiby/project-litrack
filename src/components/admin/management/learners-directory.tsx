@@ -14,7 +14,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import {
   ListFilterBar,
   describeActiveFilters,
@@ -206,8 +210,8 @@ function LearnersDirectoryInner({
               )}
             </div>
           ) : (
-            <>
-              <div className="hidden overflow-x-auto lg:block">
+            <ResponsiveTable
+              table={
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -216,13 +220,17 @@ function LearnersDirectoryInner({
                           <SelectAll rows={rows} selection={selection} />
                         </TableHead>
                       ) : null}
-                      <TableHead className="pl-4 text-xs">Name</TableHead>
-                      <TableHead className="text-xs">Sex</TableHead>
-                      <TableHead className="text-xs">Grade</TableHead>
-                      <TableHead className="text-xs">Section</TableHead>
-                      {hideSchool ? null : <TableHead className="text-xs">School</TableHead>}
-                      <TableHead className="pr-4 text-xs">Programs</TableHead>
-                      {rowActions ? <TableHead className="pr-4 text-right text-xs">Actions</TableHead> : null}
+                      <TableHead className="pl-4">Name</TableHead>
+                      <TableHead>Sex</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Section</TableHead>
+                      {hideSchool ? null : <TableHead>School</TableHead>}
+                      <TableHead className="pr-4">Programs</TableHead>
+                      {rowActions ? (
+                        <TableHead className="pr-4">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      ) : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -232,58 +240,68 @@ function LearnersDirectoryInner({
                         data-state={selection?.selectedIds.has(row.id) ? "selected" : undefined}
                       >
                         {selection ? (
-                          <TableCell className="w-10 py-2.5 pl-4">
+                          <TableCell className="w-10 pl-4">
                             <SelectOne row={row} selection={selection} />
                           </TableCell>
                         ) : null}
-                        <TableCell className="py-2.5 pl-4 text-sm font-medium">
-                          {row.listingName}
+                        <TableCell className="max-w-[18rem] pl-4 font-medium">
+                          <CellText>{row.listingName}</CellText>
                           {rowBadge ? rowBadge(row) : null}
                         </TableCell>
-                        <TableCell className="py-2.5 text-sm">{GENDER_LABELS[row.gender]}</TableCell>
-                        <TableCell className="py-2.5 text-sm">{row.gradeLabel}</TableCell>
-                        <TableCell className="py-2.5 text-sm">{row.sectionName ?? "—"}</TableCell>
+                        <TableCell>{GENDER_LABELS[row.gender]}</TableCell>
+                        <TableCell className="whitespace-nowrap">{row.gradeLabel}</TableCell>
+                        <TableCell className="max-w-[10rem]">
+                          {row.sectionName ? <CellText>{row.sectionName}</CellText> : <NoValue />}
+                        </TableCell>
                         {hideSchool ? null : (
-                          <TableCell className="py-2.5 text-sm text-muted-foreground">{row.school.name}</TableCell>
+                          <TableCell className="max-w-[16rem] text-muted-foreground">
+                            <CellText>{row.school.name}</CellText>
+                          </TableCell>
                         )}
-                        <TableCell className="py-2.5 pr-4">
+                        <TableCell className="pr-4">
                           <ProgramBadges row={row} />
                         </TableCell>
                         {rowActions ? (
-                          <TableCell className="py-2.5 pr-4 text-right">{rowActions(row)}</TableCell>
+                          <TableCell className="pr-4">
+                            <RowActions>{rowActions(row)}</RowActions>
+                          </TableCell>
                         ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <ul className="divide-y divide-border/60 lg:hidden" aria-label="Learners">
-                {rows.map((row) => (
-                  <li key={row.id} className="flex items-start gap-3 px-4 py-3">
-                    {selection ? (
-                      <span className="pt-0.5">
-                        <SelectOne row={row} selection={selection} where="in list" />
-                      </span>
-                    ) : null}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">{row.listingName}</p>
-                      {rowBadge ? rowBadge(row) : null}
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {GENDER_LABELS[row.gender]} · {row.gradeLabel}
-                        {row.sectionName ? ` · ${row.sectionName}` : ""}
-                      </p>
-                      {hideSchool ? null : (
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.school.name}</p>
-                      )}
-                    </div>
-                    <div className="shrink-0">
-                      <ProgramBadges row={row} />
-                    </div>
-                    {rowActions ? <div className="shrink-0">{rowActions(row)}</div> : null}
-                  </li>
-                ))}
-              </ul>
-            </>
+              }
+              stacked={
+                <StackedList aria-label="Learners">
+                  {rows.map((row) => (
+                    <StackedRow
+                      key={row.id}
+                      leading={
+                        selection ? (
+                          <SelectOne row={row} selection={selection} where="in list" />
+                        ) : undefined
+                      }
+                      title={row.listingName}
+                      value={
+                        <span className="text-sm font-medium">
+                          {row.gradeLabel}
+                          {row.sectionName ? ` · ${row.sectionName}` : ""}
+                        </span>
+                      }
+                      state={<ProgramBadges row={row} />}
+                      meta={
+                        <>
+                          {rowBadge ? rowBadge(row) : null}
+                          <span>{GENDER_LABELS[row.gender]}</span>
+                        </>
+                      }
+                      details={hideSchool ? undefined : [{ label: "School", value: row.school.name }]}
+                      actions={rowActions ? rowActions(row) : undefined}
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </ListBusyRegion>
         {list.totalCount > 0 ? (

@@ -13,7 +13,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import {
   ListFilterBar,
   describeActiveFilters,
@@ -140,75 +143,78 @@ function AralTeachersTableInner({
               )}
             </div>
           ) : (
-            <>
-              <div className="hidden overflow-x-auto lg:block">
+            <ResponsiveTable
+              table={
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="pl-4 text-xs">Name</TableHead>
-                      <TableHead className="text-xs">Employment</TableHead>
-                      <TableHead className="text-xs">Advisory</TableHead>
-                      <TableHead className="text-right text-xs">ARAL learners</TableHead>
-                      <TableHead className={showSchool ? "text-xs" : "pr-4 text-xs"}>Grades</TableHead>
-                      {showSchool ? <TableHead className="pr-4 text-xs">School</TableHead> : null}
+                      <TableHead className="pl-4">Name</TableHead>
+                      <TableHead>Employment</TableHead>
+                      <TableHead>Advisory</TableHead>
+                      <TableHead numeric>ARAL learners</TableHead>
+                      <TableHead className={showSchool ? undefined : "pr-4"}>Grades</TableHead>
+                      {showSchool ? <TableHead className="pr-4">School</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell className="py-2.5 pl-4 text-sm font-medium">{row.listingName}</TableCell>
-                        <TableCell className="py-2.5">
+                        <TableCell className="max-w-[16rem] pl-4 font-medium">
+                          <CellText>{row.listingName}</CellText>
+                        </TableCell>
+                        <TableCell>
                           <EmploymentCell row={row} dash />
                         </TableCell>
-                        <TableCell className="py-2.5 text-sm text-muted-foreground">
-                          {row.advisorySummary ?? "No advisory"}
+                        <TableCell className="max-w-[16rem] text-muted-foreground">
+                          <CellText>{row.advisorySummary ?? "No advisory"}</CellText>
                         </TableCell>
-                        <TableCell className="py-2.5 text-right text-sm font-semibold tabular-nums text-violet-700 dark:text-violet-300">
+                        <TableCell
+                          numeric
+                          className="font-semibold text-violet-700 dark:text-violet-300"
+                        >
                           {row.aralLearnerCount.toLocaleString()}
                         </TableCell>
-                        <TableCell className={showSchool ? "py-2.5 text-sm" : "py-2.5 pr-4 text-sm"}>
-                          {formatTeacherGrades(row.grades) || "—"}
+                        <TableCell className={showSchool ? undefined : "pr-4"}>
+                          {formatTeacherGrades(row.grades) || <NoValue />}
                         </TableCell>
                         {showSchool ? (
-                          <TableCell className="py-2.5 pr-4 text-sm text-muted-foreground">
-                            {row.school.name}
+                          <TableCell className="max-w-[16rem] pr-4 text-muted-foreground">
+                            <CellText>{row.school.name}</CellText>
                           </TableCell>
                         ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <ul className="divide-y divide-border/60 lg:hidden" aria-label="ARAL teachers">
-                {rows.map((row) => (
-                  <li key={row.id} className="flex items-start gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-foreground">
-                        <span className="truncate">{row.listingName}</span>
-                        <EmploymentCell row={row} />
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {row.advisorySummary ?? "No advisory"}
-                      </p>
-                      {row.grades.length > 0 ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{formatTeacherGrades(row.grades)}</p>
-                      ) : null}
-                      {showSchool ? (
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.school.name}</p>
-                      ) : null}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="font-semibold tabular-nums text-violet-700 dark:text-violet-300">
-                        {row.aralLearnerCount.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {row.aralLearnerCount === 1 ? "learner" : "learners"}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
+              }
+              stacked={
+                <StackedList aria-label="ARAL teachers">
+                  {rows.map((row) => (
+                    <StackedRow
+                      key={row.id}
+                      title={row.listingName}
+                      value={
+                        <span className="text-violet-700 dark:text-violet-300">
+                          {row.aralLearnerCount.toLocaleString()}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            {row.aralLearnerCount === 1 ? "learner" : "learners"}
+                          </span>
+                        </span>
+                      }
+                      state={<EmploymentCell row={row} />}
+                      meta={<span className="truncate">{row.advisorySummary ?? "No advisory"}</span>}
+                      details={[
+                        {
+                          label: "Grades",
+                          value: formatTeacherGrades(row.grades) || <NoValue />,
+                        },
+                        ...(showSchool ? [{ label: "School", value: row.school.name }] : []),
+                      ]}
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </ListBusyRegion>
         {list.totalCount > 0 ? (
