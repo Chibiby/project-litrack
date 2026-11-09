@@ -16,6 +16,8 @@ describe("BOSY tiers", () => {
         "NON_DECODER_LOW_EMERGENT",
         "FRUSTRATION_HIGH_EMERGENT",
         "INSTRUCTIONAL_DEVELOPING",
+        "DEVELOPING",
+        "TRANSITIONING",
         "INDEPENDENT_GRADE_READY",
         "CANNOT_NAME_SOUND_LETTERS",
         "LETTER_LEVEL",
@@ -29,6 +31,7 @@ describe("BOSY tiers", () => {
     expect(bosyTierOf("CANNOT_NAME_SOUND_LETTERS")).toBe("tier1");
     expect(bosyTierOf("NON_DECODER_LOW_EMERGENT")).toBe("tier1");
     expect(bosyTierOf("CVC_BLENDING")).toBe("tier4");
+    expect(bosyTierOf("TRANSITIONING")).toBe("tier3");
     expect(bosyTierOf(null)).toBeNull();
     expect(bosyTierOf("BOGUS")).toBeNull();
   });
@@ -42,7 +45,9 @@ describe("BOSY tiers", () => {
   it("filters on the Filipino level only", () => {
     expect(bosyTierWhere("all")).toEqual({});
     expect(bosyTierWhere("tier3")).toEqual({
-      filipinoReadingProfile: { in: ["INSTRUCTIONAL_DEVELOPING", "CV_BLENDING"] },
+      filipinoReadingProfile: {
+        in: ["INSTRUCTIONAL_DEVELOPING", "DEVELOPING", "TRANSITIONING", "CV_BLENDING"],
+      },
     });
   });
 

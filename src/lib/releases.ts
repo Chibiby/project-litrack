@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.47.0",
+    date: "2026-11-09",
+    title: "New BOSY Report under Advisory",
+    announce: true,
+    fixes: [
+      "Advisers have a new BOSY Report under Advisory. It lists the ARAL learners in your advisory with the Filipino and English reading levels recorded when they were enrolled.",
+      "See at a glance how many learners started the year at each reading level, then filter by grade, section or level, or search by name.",
+      "The BOSY Report is view-only for now. To correct a starting level, edit the learner.",
+    ],
+  },
+  {
     version: "2.46.4",
     date: "2026-11-09",
     title: "End of Terms Reports opens faster",

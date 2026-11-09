@@ -18,7 +18,8 @@ export type BosyTier = Exclude<BosyTierFilter, "all">;
 export const BOSY_TIER_VALUES: Record<BosyTier, readonly ReadingProfile[]> = {
   tier1: ["NON_DECODER_LOW_EMERGENT", "CANNOT_NAME_SOUND_LETTERS"],
   tier2: ["FRUSTRATION_HIGH_EMERGENT", "LETTER_LEVEL"],
-  tier3: ["INSTRUCTIONAL_DEVELOPING", "CV_BLENDING"],
+  // DEVELOPING / TRANSITIONING are the Grade 1-3 split of the Instructional band.
+  tier3: ["INSTRUCTIONAL_DEVELOPING", "DEVELOPING", "TRANSITIONING", "CV_BLENDING"],
   tier4: ["INDEPENDENT_GRADE_READY", "CVC_BLENDING"],
 };
 
@@ -34,7 +35,7 @@ export const BOSY_TIER_LABELS: Record<BosyTierFilter, string> = {
 export const BOSY_TIER_HINTS: Record<BosyTier, string> = {
   tier1: "Non-Decoder / Low Emergent, or Level 0",
   tier2: "Frustration / High Emergent, or Level 1",
-  tier3: "Instructional / Developing, or Level 2",
+  tier3: "Instructional, Developing or Transitioning, or Level 2",
   tier4: "Independent / Grade Ready, or Level 3",
 };
 
