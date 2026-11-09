@@ -194,22 +194,18 @@ function NavLink({
         "relative z-10 flex items-center rounded-xl text-sm font-medium transition-colors",
         collapsed ? "justify-center px-2 py-3" : "gap-3 px-3.5 py-3",
         isActive
-          ? // Violet now means "the page you are on *or on your way to*" —
-            // `isActive` is resolved from the optimistic nav path, so a clicked
-            // row takes this treatment in the same frame as the click rather
-            // than several hundred milliseconds later. The spinning icon inside
-            // is what still distinguishes the two.
-            //
-            // v2: the filled violet pill from the redesign mockup.
-            // Each row paints its own pill; there is no sliding highlight.
-            "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30"
+          ? // The active row (the page you are on *or on your way to* —
+            // `isActive` is resolved from the optimistic nav path, so it moves
+            // in the same frame as the click) paints no fill of its own: one
+            // liquid-glass pill, NavGlassIndicator, slides behind it.
+            "font-semibold text-foreground"
           : // The row a click cannot light this way: one whose navigation was
             // started by something other than its own record — a link the
             // provider never saw, or a sidebar mounted with no provider at all.
             // A mouse user is already sitting on it, so `hover:` has that
             // covered; this is what a keyboard user gets for a row activated by
             // Enter, which would otherwise change nothing but its icon.
-            "text-foreground/80 hover:bg-muted hover:text-foreground has-[[data-nav-pending]]:bg-muted has-[[data-nav-pending]]:text-foreground"
+            "text-foreground/80 hover:bg-white/30 hover:text-foreground has-[[data-nav-pending]]:bg-white/30 has-[[data-nav-pending]]:text-foreground dark:hover:bg-white/5 dark:has-[[data-nav-pending]]:bg-white/5"
       )}
     >
       <NavLinkIcon
@@ -217,7 +213,7 @@ function NavLink({
         onSettled={onSettled}
         className={cn(
           "h-[1.125rem] w-[1.125rem] shrink-0",
-          isActive ? "text-white" : "text-foreground/70"
+          isActive ? "text-foreground" : "text-foreground/70"
         )}
       />
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
@@ -407,6 +403,9 @@ export function AppSidebar({
                     fullPrefetch={item.href === homeHref}
                     collapsed={isCollapsed}
                   />
+            {/* Last child with no top margin: `space-y-5` would otherwise push
+                the absolute pill 1.25rem below the row it measures. */}
+            <NavGlassIndicator className="!mt-0" activeKey={`${activeItemId ?? ""}:${isCollapsed}`} />
                 ))}
               </div>
             ))}
@@ -508,12 +507,11 @@ export function AppSidebar({
       <NavPrefetcher cacheKey={prefetchKey} hrefs={prefetchHrefs} />
 
       {/* Desktop — width paired with CONTENT_OFFSET_CLASS in role-shell / app-shell.
-          Frosted glass: a translucent surface with a backdrop blur, so the
-          light-rays background shows through softly, matching the scrolled
-          header. */}
+          No fill of its own: the light-rays background runs straight through
+          the rail, and only the active row's glass pill sits on it. */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/60 bg-[hsl(var(--surface)/0.35)] backdrop-blur-md backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.3)] lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col bg-transparent lg:flex",
           transitionsEnabled && "transition-[width] duration-200",
           collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
         )}

@@ -154,19 +154,21 @@ export function AppHeader({
 
   return (
     // Transparent at the top of the page, so the light-rays background shows
-    // through behind it. Once the page scrolls, the bar turns into frosted
-    // glass: a translucent surface with a backdrop blur, so content sliding
-    // under it stays a soft blur behind the controls instead of competing
-    // with them.
-    <header
-      className={cn(
-        "sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b transition-[background-color,border-color,backdrop-filter] duration-200",
-        scrolled
-          ? "border-border/60 bg-[hsl(var(--surface-header)/0.4)] backdrop-blur-md backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface-header)/0.35)]"
-          : "border-transparent bg-transparent"
-      )}
-    >
-      <div className="flex h-full w-full items-center gap-3 px-4 lg:gap-4 lg:px-6">
+    // through behind it. Once the page scrolls, the bar lifts off into a
+    // floating pane of frosted glass: inset from the edges, rounded, with a
+    // translucent fill and backdrop blur, so content sliding under it stays
+    // a soft blur behind the controls. The header box itself keeps its
+    // height either way, so nothing below it moves. (It is a flex box so the
+    // pane's top margin is kept rather than collapsing through it.)
+    <header className="sticky top-0 z-30 flex h-[var(--app-chrome-header-height)]">
+      <div
+        className={cn(
+          "flex w-full items-center gap-3 border px-4 transition-[margin,height,width,border-radius,background-color,border-color,box-shadow] duration-300 ease-in-out lg:gap-4 lg:px-6",
+          scrolled
+            ? "mx-2 mt-2 h-[calc(100%-0.75rem)] w-[calc(100%-1rem)] rounded-2xl border-white/60 bg-[hsl(var(--surface-header)/0.4)] shadow-[inset_0_1px_0_rgb(255_255_255/0.7),0_10px_30px_-12px_rgb(15_23_42/0.25)] backdrop-blur-md backdrop-saturate-150 lg:mx-3 lg:w-[calc(100%-1.5rem)] dark:border-white/10 dark:bg-[hsl(var(--surface-header)/0.35)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_10px_30px_-12px_rgb(0_0_0/0.6)]"
+            : "h-full rounded-none border-transparent bg-transparent"
+        )}
+      >
         {/* Mobile: spacer for the floating Sheet trigger. Desktop: collapse toggle. */}
         <div className="w-8 shrink-0 lg:hidden" />
 
