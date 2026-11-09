@@ -37,6 +37,7 @@ import {
 import { SIDEBAR_WIDTH_CLASS } from "@/lib/sidebar-layout";
 import type { UserRole } from "@prisma/client";
 import { Menu, Shield } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import {
   flattenNavGroups,
   getNavGroups,
@@ -380,6 +381,9 @@ export function AppSidebar({
           )}
         </div>
 
+        {/* Separates the wordmark and school from the navigation below. */}
+        <Separator className={cn("mt-3 w-auto", isCollapsed ? "mx-2" : "mx-4")} />
+
         <ScrollArea className={cn("flex-1 pb-5 pt-2", isCollapsed ? "px-1.5" : "px-3")}>
           <nav aria-label="Primary" className="group/nav relative space-y-5">
             {navGroups.map((group, groupIndex) => (
@@ -468,6 +472,8 @@ export function AppSidebar({
           )}
           {showAccount ? (
             <>
+              {/* Separates the version line from the account block. */}
+              <Separator className="my-1" />
               <UserAccountMenu
                 role={accountRole}
                 userName={userName}
