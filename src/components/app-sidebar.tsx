@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { NavLinkIcon } from "@/components/nav/nav-link-icon";
-import { NavHighlight } from "@/components/nav/nav-highlight";
 import { useNavPath } from "@/components/nav/nav-path";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -201,9 +200,8 @@ function NavLink({
             // is what still distinguishes the two.
             //
             // v2: the filled violet pill from the redesign mockup.
-            // Once <NavHighlight> has positioned the sliding pill it sets
-            // data-slide on the nav and this row drops its own copy.
-            "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30 group-data-[slide=on]/nav:bg-none group-data-[slide=on]/nav:shadow-none"
+            // Each row paints its own pill; there is no sliding highlight.
+            "bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30"
           : // The row a click cannot light this way: one whose navigation was
             // started by something other than its own record — a link the
             // provider never saw, or a sidebar mounted with no provider at all.
@@ -405,11 +403,6 @@ export function AppSidebar({
                 ))}
               </div>
             ))}
-            {/* Phones get no sliding pill: the drawer closes on the same tap, so
-                the slide was motion nobody could follow. Each row lights itself. */}
-            {opts?.phone ? null : (
-              <NavHighlight activeKey={activeItemId} collapsed={isCollapsed} />
-            )}
           </nav>
           {!isCollapsed && (
             <div className="mt-5">
