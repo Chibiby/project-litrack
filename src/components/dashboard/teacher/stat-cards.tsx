@@ -272,17 +272,18 @@ export function StatCard({
         />
       ) : null}
 
-      {/* items-stretch: the tile always matches the text column's height.
-          Its width is fixed, sized so the tile is near-square at the
-          column's usual height (aspect-ratio can't derive a width from a
-          stretched height). */}
-      <div className={cn("relative flex items-stretch", denseOnPhone ? "gap-2.5 sm:gap-4" : "gap-4")}>
+      {/* The tile is a fixed square equal to the text column's height: figure
+          + one title line + one hint line, all at their default line heights
+          (sm+: 36 + 24 + 20 = 80px; phone: 32 + 20 + 16 = 68; dense phone:
+          28 + 16 + 16 = 60). If a long title wraps, the tile stays square and
+          centres on the column. */}
+      <div className={cn("relative flex items-center", denseOnPhone ? "gap-2.5 sm:gap-4" : "gap-4")}>
         {Icon ? (
           <span
             aria-hidden
             className={cn(
-              "flex shrink-0 items-center justify-center self-stretch rounded-lg transition-transform duration-200 group-hover:scale-105 sm:w-20 motion-reduce:group-hover:scale-100",
-              denseOnPhone ? "w-14" : "w-16",
+              "flex shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105 sm:size-20 motion-reduce:group-hover:scale-100",
+              denseOnPhone ? "size-[3.75rem]" : "size-[4.25rem]",
               TILE[tone]
             )}
           >
@@ -301,18 +302,14 @@ export function StatCard({
           </p>
           <h2
             className={cn(
-              "break-words font-semibold leading-snug text-foreground sm:text-base",
+              "break-words font-semibold text-foreground sm:text-base",
               denseOnPhone ? "text-xs" : "text-sm"
             )}
           >
             {title}
           </h2>
-          <p
-            className={cn(
-              "mt-0.5 text-muted-foreground sm:text-sm",
-              denseOnPhone ? "text-xs leading-tight" : "text-xs"
-            )}
-          >
+          {/* One line only: an overflowing hint ends in "…". */}
+          <p className="truncate text-xs text-muted-foreground sm:text-sm">
             {hint}
           </p>
         </div>
