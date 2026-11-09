@@ -1,5 +1,5 @@
 import "server-only";
-import type { SectionTransferRequestStatus } from "@prisma/client";
+import type { Prisma, SectionTransferRequestStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   evaluateSectionTransfer,
@@ -82,6 +82,37 @@ export async function pendingTransfersByLearner(
   if (learnerIds.length === 0) return new Map();
   const rows = await prisma.sectionTransferRequest.findMany({
     where: { schoolId, learnerId: { in: learnerIds }, status: "PENDING" },
+    select: {
+      id: true,
+      learnerId: true,
+      requestedById: true,
+      toSection: { select: { name: true } },
+    },
+  });
+  return new Map(
+    rows.map((r) => [
+      r.learnerId,
+      { requestId: r.id, toSectionName: r.toSection.name, requestedById: r.requestedById },
+    ])
+  );
+}
+
+/**
+ * The waiting request, if any, for every learner matching `learnerWhere`.
+ *
+ * Same rows as `pendingTransfersByLearner` gives for the learners on a page,
+ * but it needs no learner ids, so a roster can run it beside the read that
+ * fetches the page instead of after it. It reads every learner the filter
+ * matches, not one page; that stays small because a learner holds at most one
+ * PENDING request. `learnerWhere` must already carry its tenant and scope
+ * filters.
+ */
+export async function pendingTransfersForLearners(
+  schoolId: string,
+  learnerWhere: Prisma.LearnerWhereInput
+): Promise<Map<string, PendingTransfer>> {
+  const rows = await prisma.sectionTransferRequest.findMany({
+    where: { schoolId, status: "PENDING", learner: { is: learnerWhere } },
     select: {
       id: true,
       learnerId: true,

@@ -62,7 +62,7 @@ import type {
 import {
   listTeacherTransferRequests,
   listTransferDestinations,
-  pendingTransfersByLearner,
+  pendingTransfersForLearners,
   type PendingTransfer,
   type TeacherTransferRequestRow,
   type TransferDestination,
@@ -310,6 +310,30 @@ async function LearnersBody({
   // Every in-range request, which is nearly all of them, costs one round trip
   // fewer than count-then-read.
   const requestedSkip = (list.page - 1) * list.pageSize;
+
+  // Request transfer reaches only the teacher's own advisory sections, so its
+  // destinations are their grades' sections; a Super Admin view offers none.
+  // A failed read hides the transfer actions rather than the whole roster.
+  //
+  // Started before the roster read, not after it: neither read needs the page
+  // of rows (pending requests are matched by the same `where`), so they share
+  // the roster's round trip instead of adding one of their own.
+  const transferData: Promise<{
+    pending: Map<string, PendingTransfer>;
+    destinations: TransferDestination[] | null;
+  }> = Promise.all([
+    pendingTransfersForLearners(schoolId, where),
+    isSuperAdmin
+      ? []
+      : listTransferDestinations(schoolId, [...new Set(placements.map((p) => p.gradeLevelId))]),
+  ]).then(
+    ([pending, destinations]) => ({ pending, destinations }),
+    (err: unknown) => {
+      console.error("[TeacherLearnersPage] failed to load transfer data:", err);
+      return { pending: new Map<string, PendingTransfer>(), destinations: null };
+    }
+  );
+
   const [sections, totalCount, requestedLearners] = await Promise.all([
     getGradeSections({
       schoolId,
@@ -328,21 +352,7 @@ async function LearnersBody({
   const learners =
     requestedLearners && skip === requestedSkip ? requestedLearners : await fetchLearners(skip);
 
-  // Request transfer reaches only the teacher's own advisory sections, so its
-  // destinations are their grades' sections; a Super Admin view offers none.
-  // A failed read hides the transfer actions rather than the whole roster.
-  let pendingTransfers = new Map<string, PendingTransfer>();
-  let transferDestinations: TransferDestination[] | null = null;
-  try {
-    [pendingTransfers, transferDestinations] = await Promise.all([
-      pendingTransfersByLearner(schoolId, learners.map((l) => l.id)),
-      isSuperAdmin
-        ? []
-        : listTransferDestinations(schoolId, [...new Set(placements.map((p) => p.gradeLevelId))]),
-    ]);
-  } catch (err) {
-    console.error("[TeacherLearnersPage] failed to load transfer data:", err);
-  }
+  const { pending: pendingTransfers, destinations: transferDestinations } = await transferData;
 
   const rows: LearnerListRow[] = learners.map((l) => ({
     id: l.id,
