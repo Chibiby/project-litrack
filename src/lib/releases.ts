@@ -135,6 +135,22 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.48.0",
+    date: "2026-11-10",
+    title: "A lighter, glassier look and tables that fit your screen",
+    announce: true,
+    fixes: [
+      "Every page now has a soft, moving light background. The side menu, the top bar and the cards are see-through frosted glass, so the background shows gently through them.",
+      "The top bar is clear at the top of the page. When you scroll, it floats as a rounded glass bar so the page slides softly behind it.",
+      "In the side menu, the highlight now slides smoothly to the page you pick.",
+      "Tables fit your screen. On a phone, each learner, teacher or school shows as its own easy-to-read card instead of a table you have to scroll sideways, and wide rosters no longer spill out of their box on a computer.",
+      "The summary cards at the top of each page now look the same everywhere, and page banners no longer cover their titles on tablets and phones.",
+      "The banner picture on your dashboard is sharp again instead of blurry, and the white haze over it is gone.",
+      "On a phone, the menu is easier to read and its close button no longer sits on top of your school name.",
+      "The search box in the top bar is shorter and matches the glass look.",
+    ],
+  },
+  {
     version: "2.47.3",
     date: "2026-11-10",
     title: "Teacher pages open faster",
