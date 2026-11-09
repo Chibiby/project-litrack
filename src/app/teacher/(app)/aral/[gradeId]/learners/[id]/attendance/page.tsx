@@ -13,6 +13,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants/enum-labels";
 import { EmptyState } from "@/components/dashboard";
@@ -109,10 +111,12 @@ export default async function AttendancePage({
               <TableBody>
                 {attendances.map((a) => (
                   <TableRow key={a.id}>
-                    <TableCell>{a.date.toLocaleDateString()}</TableCell>
+                    <TableCell className="whitespace-nowrap tabular-nums">
+                      {a.date.toLocaleDateString()}
+                    </TableCell>
                     <TableCell>{ATTENDANCE_STATUS_LABELS[a.status]}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {a.notes ?? ""}
+                    <TableCell className="max-w-[20rem] text-xs text-muted-foreground">
+                      {a.notes ? <CellText>{a.notes}</CellText> : <NoValue />}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -6,6 +6,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard";
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/constants/enum-labels";
@@ -60,12 +62,14 @@ export function AttendancePanel({ learner }: { learner: LearnerProfileData }) {
               <TableBody>
                 {rows.map((a) => (
                   <TableRow key={a.id}>
-                    <TableCell>{formatDateKey(a.date)}</TableCell>
+                    <TableCell className="whitespace-nowrap tabular-nums">
+                      {formatDateKey(a.date)}
+                    </TableCell>
                     <TableCell>
                       {labelOf(ATTENDANCE_STATUS_LABELS, a.status)}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {a.notes ?? ""}
+                    <TableCell className="max-w-[16rem] text-xs text-muted-foreground">
+                      {a.notes ? <CellText>{a.notes}</CellText> : <NoValue />}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -6,7 +6,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard";
 import { ReadingBandPill } from "@/components/learners/reading-band-pill";
 import {
@@ -28,6 +31,16 @@ import { Field, FieldGrid, InfoCard, formatDateKey, labelList, labelOf } from ".
 export function ReadingPanel({ learner }: { learner: LearnerProfileData }) {
   const readingLabels = readingProfileLabelsForGradeType(learner.gradeType);
 
+
+  const weeks = learner.readingLevels.map((r) => ({
+    id: r.id,
+    week: formatDateKey(r.weekStart),
+    english: labelOf(readingLabels, r.englishProfile),
+    filipino: labelOf(readingLabels, r.filipinoProfile),
+    word: labelOf(WEEKLY_WORD_RECOGNITION_LEVEL_LABELS, r.wordRecognitionLevel),
+    comprehension: labelOf(WEEKLY_READING_COMPREHENSION_LEVEL_LABELS, r.readingComprehensionLevel),
+    notes: r.notes ?? null,
+  }));
   return (
     <div className="space-y-4">
       <InfoCard title="Current reading level">
@@ -78,49 +91,58 @@ export function ReadingPanel({ learner }: { learner: LearnerProfileData }) {
           <p className="text-sm font-medium text-muted-foreground">
             Weekly history
           </p>
-          <div className="overflow-x-auto rounded-lg border border-border/80">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Week of</TableHead>
-                  <TableHead>English</TableHead>
-                  <TableHead>Filipino</TableHead>
-                  <TableHead>Word recognition</TableHead>
-                  <TableHead>Reading comprehension</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {learner.readingLevels.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="whitespace-nowrap">
-                      {formatDateKey(r.weekStart)}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {labelOf(readingLabels, r.englishProfile)}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {labelOf(readingLabels, r.filipinoProfile)}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {labelOf(
-                        WEEKLY_WORD_RECOGNITION_LEVEL_LABELS,
-                        r.wordRecognitionLevel
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {labelOf(
-                        WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
-                        r.readingComprehensionLevel
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.notes ?? ""}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="overflow-hidden rounded-lg border border-border/80">
+            <ResponsiveTable
+              table={
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Week of</TableHead>
+                      <TableHead>English</TableHead>
+                      <TableHead>Filipino</TableHead>
+                      <TableHead>Word recognition</TableHead>
+                      <TableHead>Reading comprehension</TableHead>
+                      <TableHead>Notes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {weeks.map((w) => (
+                      <TableRow key={w.id}>
+                        <TableCell className="whitespace-nowrap font-medium tabular-nums">{w.week}</TableCell>
+                        <TableCell className="text-xs">{w.english}</TableCell>
+                        <TableCell className="text-xs">{w.filipino}</TableCell>
+                        <TableCell className="text-xs">{w.word}</TableCell>
+                        <TableCell className="text-xs">{w.comprehension}</TableCell>
+                        <TableCell className="max-w-[14rem] text-xs text-muted-foreground">
+                          {w.notes ? <CellText>{w.notes}</CellText> : <NoValue />}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+              stacked={
+                <StackedList aria-label="Weekly reading levels">
+                  {weeks.map((w) => (
+                    <StackedRow
+                      key={w.id}
+                      title={`Week of ${w.week}`}
+                      meta={
+                        <>
+                          <span>English: {w.english}</span>
+                          <span>Filipino: {w.filipino}</span>
+                        </>
+                      }
+                      details={[
+                        { label: "Word recognition", value: w.word },
+                        { label: "Reading comprehension", value: w.comprehension },
+                        { label: "Notes", value: w.notes || <NoValue /> },
+                      ]}
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           </div>
           {learner.readingLevels.length >= PROFILE_READING_TAKE ? (
             <p className="text-xs text-muted-foreground">
