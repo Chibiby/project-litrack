@@ -248,12 +248,15 @@ export function StatCard({
         "group relative flex flex-col overflow-hidden rounded-lg bg-gradient-to-br via-card via-60% to-card sm:p-5",
         denseOnPhone ? "p-3" : "p-4",
         WASH[tone],
+        // Read-only cards still ease into the row's sibling blur.
+        !clickable && "transition-[filter,opacity] duration-200 ease-out",
         clickable &&
           cn(
-            "cursor-pointer transition-[transform,box-shadow,border-color] duration-200 ease-out",
-            "hover:-translate-y-0.5 hover:shadow-lg focus-within:-translate-y-0.5 focus-within:shadow-lg",
+            "cursor-pointer transition-[transform,box-shadow,border-color,filter,opacity] duration-200 ease-out",
+            "hover:z-20 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lg",
+            "focus-within:z-20 focus-within:-translate-y-0.5 focus-within:scale-[1.02] focus-within:shadow-lg",
             "active:translate-y-0 active:scale-[0.98] active:shadow-sm",
-            "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100",
+            "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 motion-reduce:active:scale-100",
             HOVER_RING[tone]
           )
       )}
@@ -341,6 +344,7 @@ export function StatCard({
           href={target}
           prefetch
           aria-label={action?.label ?? title}
+          data-stat-link=""
           className="absolute inset-0 z-10 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         />
       ) : null}
@@ -353,6 +357,17 @@ export function StatCardRow({ children }: { children: React.ReactNode }) {
   // little room for four cards without crushing titles and CTA pills — stay
   // 2-up through xl and only go 4-up once 2xl gives the row its own width.
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4">{children}</div>
+    // While a clickable card is hovered, its siblings soften (slight blur and
+    // fade) so the hovered card stands out. Keyed on the card's link, so a row
+    // of read-only cards never blurs.
+    <div
+      className={cn(
+        "grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4",
+        "[&:has([data-stat-link]:hover)>*:not(:hover)]:opacity-75 [&:has([data-stat-link]:hover)>*:not(:hover)]:blur-[1.5px]",
+        "motion-reduce:[&:has([data-stat-link]:hover)>*:not(:hover)]:blur-none"
+      )}
+    >
+      {children}
+    </div>
   );
 }
