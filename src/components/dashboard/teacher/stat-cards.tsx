@@ -363,7 +363,7 @@ export function StatCardRow({ children }: { children: React.ReactNode }) {
     <div
       className={cn(
         "grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4",
-        "[&:has([data-stat-link]:hover)>*:not(:hover)]:opacity-75 [&:has([data-stat-link]:hover)>*:not(:hover)]:blur-[1.5px]",
+        "[&:has([data-stat-link]:hover)>*:not(:hover)]:opacity-90 [&:has([data-stat-link]:hover)>*:not(:hover)]:blur-[0.75px]",
         "motion-reduce:[&:has([data-stat-link]:hover)>*:not(:hover)]:blur-none"
       )}
     >
