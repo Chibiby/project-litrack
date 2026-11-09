@@ -214,12 +214,8 @@ async function SchoolAuditTable({
                       <StackedRow
                         key={log.id}
                         title={log.action}
-                        value={
-                          <span className="text-xs font-normal text-muted-foreground">
-                            {utcStamp(log.timestamp)}
-                          </span>
-                        }
                         state={<span>{log.resource}</span>}
+                        meta={<span className="tabular-nums">{utcStamp(log.timestamp)}</span>}
                         details={[
                           {
                             label: "Resource ID",

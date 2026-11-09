@@ -80,8 +80,8 @@ export function SchoolHeadSettingsShell({
     <>
       <PageHero
         bannerSrc={bannerSrc}
-        artClassName="right-[calc(18%-272px)] sm:right-[calc(23%-272px)]"
-        phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_67%,black_72%)]"
+        artClassName="right-[calc(18%-305px)] sm:right-[calc(23%-272px)]"
+        phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_68%)]"
         contentClassName="lg:min-h-[15rem]"
       >
         <h1 className="max-w-[11rem] text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:max-w-none sm:text-3xl lg:text-5xl">

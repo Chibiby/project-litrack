@@ -246,7 +246,7 @@ export function StatCard({
       as="section"
       data-stat-card=""
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-lg sm:p-5",
+        "group @container/stat relative flex flex-col overflow-hidden rounded-lg sm:p-5",
         // Glass: a translucent tinted pane that blurs whatever sits behind it
         // (the hero art, the page background), with a bright hairline edge
         // and a top highlight so it reads as a sheet of frosted glass.
@@ -282,25 +282,26 @@ export function StatCard({
         />
       ) : null}
 
-      {/* The tile is a fixed square equal to the text column's height: figure
-          + one title line + one hint line, all at their default line heights
-          (sm+: 36 + 24 + 20 = 80px; phone: 32 + 20 + 16 = 68; dense phone:
-          28 + 16 + 16 = 60). If a long title wraps, the tile stays square and
-          centres on the column. */}
-      <div className={cn("relative flex items-center", denseOnPhone ? "gap-2.5 sm:gap-4" : "gap-4")}>
+      {/* The card decides its layout by its own width (container query), not
+          the screen: in a narrow card (two-up on a phone, three-up on a
+          tablet) the icon sits above the figure so the number and title keep
+          the full width instead of breaking mid-word. From 15rem the icon
+          moves beside the text as a square tile; from 18rem it is full size. */}
+      <div className="relative flex flex-col items-start gap-2 @[15rem]/stat:flex-row @[15rem]/stat:items-center @[15rem]/stat:gap-4">
         {Icon ? (
           <span
             aria-hidden
             className={cn(
-              "flex shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105 sm:size-20 motion-reduce:group-hover:scale-100",
-              denseOnPhone ? "size-[3.75rem]" : "size-[4.25rem]",
+              "flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105 motion-reduce:group-hover:scale-100",
+              denseOnPhone ? "@[15rem]/stat:size-[3.75rem]" : "@[15rem]/stat:size-[4.25rem]",
+              "@[18rem]/stat:size-20",
               TILE[tone]
             )}
           >
-            <Icon className={denseOnPhone ? "size-6 sm:size-8" : "size-7 sm:size-8"} />
+            <Icon className="size-5 @[15rem]/stat:size-7 @[18rem]/stat:size-8" />
           </span>
         ) : null}
-        <div className="min-w-0 flex-1 pr-3">
+        <div className="w-full min-w-0 flex-1 pr-3">
           <p
             className={cn(
               "break-words font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl",

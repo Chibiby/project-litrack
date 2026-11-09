@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { CompactPageHeader, PageHero } from "@/components/shell/page-hero";
+import { cn } from "@/lib/utils";
 
 /**
  * The School Head hero: thin wrapper over `PageHero`, the same relationship
@@ -62,16 +63,28 @@ export function SchoolHeadHero({
       bannerSrc={bannerSrc}
       className="h-auto"
       topRight={topRight}
-      artClassName="max-sm:!h-[160px] max-sm:right-[-118px] sm:h-[75%] sm:right-[calc(50%-338px)] lg:right-[min(0px,calc(100%-1291px))]"
-      phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_40%,black_53%)]"
+      // Phones: a top-right control (the Schools "+") would sit on the
+      // girl's face, so the art is drawn smaller and further left, under it.
+      artClassName={cn(
+        "sm:right-[calc(50%-375px)] lg:right-[min(0px,calc(100%-1291px))]",
+        topRight
+          ? "max-sm:!h-[112px] max-sm:right-[-38px]"
+          : "max-sm:!h-[140px] max-sm:right-[-112px]",
+        // Stat tiles make the band tall; below lg the art keeps the height it
+        // has without them instead of scaling up behind the title.
+        stats && "sm:max-lg:!h-[10.5rem]"
+      )}
+      // Phones: with stat tiles in the band the hero grows tall, and
+      // bottom-anchored art would land beside a tile; pin it to the top, next
+      // to the title, instead.
+      phoneMaskClassName={cn(
+        "max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%)]",
+        stats ? "max-lg:[&>img]:!bottom-auto max-lg:[&>img]:top-0" : undefined
+      )}
       headClassName="max-lg:hidden"
       contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
     >
-      {/* Below lg: the art's handwritten doodle sits at the same height as
-          this text column and the mask doesn't fully hide it, so give the
-          text its own scrim to stay legible (z-index plus a
-          soft background) — same fix as `AralPageHero`/`TermsReportHero`. */}
-      <div className="max-lg:relative max-lg:z-10 max-lg:w-fit max-lg:max-w-[68%] max-lg:rounded-md max-lg:border max-lg:border-border/70 max-lg:bg-card/90 max-lg:px-2.5 max-lg:py-1.5 max-lg:shadow-card max-lg:backdrop-blur-sm">
+      <div className="relative z-10">
         <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
           <EyebrowIcon className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
           {eyebrow}
@@ -79,11 +92,11 @@ export function SchoolHeadHero({
         <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
           {title}
         </h1>
-        <p className="mt-1 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%] lg:text-lg">
+        <p className="mt-1 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
           {subtitle}
         </p>
         {meta ? (
-          <p className="mt-0.5 max-w-[56%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[55%] sm:text-sm lg:max-w-[46%]">
+          <p className="mt-0.5 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%]">
             {meta}
           </p>
         ) : null}

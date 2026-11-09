@@ -88,19 +88,30 @@ export function SchoolHeadGreetingHero({
         <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 lg:block">
           {eyebrow}
         </p>
-        <p className="text-2xl font-semibold text-blue-600 dark:text-blue-300 lg:hidden">
+        <p
+          className={`font-semibold text-blue-600 dark:text-blue-300 lg:hidden ${
+            isSuperAdminView ? "text-lg sm:text-2xl" : "text-2xl"
+          }`}
+        >
           {eyebrow}
         </p>
-        <h1 className="mt-0.5 text-4xl font-extrabold tracking-tight text-slate-950 dark:text-white lg:text-5xl">
+        {/* Narrow phones show the art right of 63%; keep the title left of it.
+            A school name (Super Admin view) is longer than a first name, so it
+            is set smaller and wraps instead of running into the character. */}
+        <h1
+          className={`mt-0.5 font-extrabold tracking-tight text-slate-950 text-balance dark:text-white max-[439px]:max-w-[62%] lg:text-5xl ${
+            "text-3xl leading-tight sm:text-4xl"
+          }`}
+        >
           {isSuperAdminView ? (
             firstName
           ) : (
             <>
-              {firstName}! <span aria-hidden>👋</span>
+              {firstName}!&nbsp;<span aria-hidden>👋</span>
             </>
           )}
         </h1>
-        <p className="mt-2 line-clamp-2 max-w-[13rem] text-base leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">
+        <p className="mt-2 line-clamp-2 max-w-[13rem] text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">
           {resolvedSubtitle}
         </p>
         {meta ? (

@@ -94,13 +94,13 @@ async function AdminAuditTable() {
                 <StackedRow
                   key={log.id}
                   title={log.action}
-                  value={
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {when(log.timestamp)}
-                    </span>
-                  }
                   state={<span>{log.resource}</span>}
-                  meta={<span className="truncate">{schoolLabel(log.schoolId)}</span>}
+                  meta={
+                    <>
+                      <span className="truncate">{schoolLabel(log.schoolId)}</span>
+                      <span className="shrink-0 tabular-nums">{when(log.timestamp)}</span>
+                    </>
+                  }
                   details={[
                     {
                       label: "Resource ID",
