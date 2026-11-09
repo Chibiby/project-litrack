@@ -14,7 +14,7 @@ import {
   UserX,
   Users,
 } from "lucide-react";
-import { StatCard } from "@/components/dashboard/teacher/stat-cards";
+import { StatCard, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 import { Surface } from "@/components/ui/surface";
 import type { AralTeachersSummary } from "@/lib/admin/aral-teachers";
 import type {
@@ -31,30 +31,17 @@ export function SummaryGrid({
   scope,
   label,
   children,
-  compact = false,
 }: {
   scope: string;
   label: string;
   children: ReactNode;
-  /**
-   * Three cards rather than six: stays three across from sm up, so on desktop
-   * each card gets a third of the row instead of a sixth (where titles broke
-   * over three lines).
-   */
-  compact?: boolean;
 }) {
   return (
     <section aria-label={label} className="space-y-2">
       <p className="text-xs text-muted-foreground">
         Figures for: <span className="font-medium text-foreground">{scope}</span>
       </p>
-      <div
-        className={
-          compact
-            ? "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4"
-            : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6"
-        }
-      >
+      <div className={STAT_GRID}>
         {children}
       </div>
     </section>
@@ -182,7 +169,7 @@ export function DistrictAdminsSummaryCards({
 
 export function AralTeachersSummaryCards({ summary, scope }: { summary: AralTeachersSummary; scope: string }) {
   return (
-    <SummaryGrid scope={scope} label="ARAL teacher overview" compact>
+    <SummaryGrid scope={scope} label="ARAL teacher overview">
       <StatCard title="ARAL teachers" value={n(summary.teachers)} hint="Teachers handling ARAL learners" icon={HandHelping} tone="violet" {...card} />
       <StatCard title="Learners with an ARAL teacher" value={n(summary.learnersWithTeacher)} hint="ARAL learners" icon={Sparkles} tone="violet" {...card} />
       <StatCard

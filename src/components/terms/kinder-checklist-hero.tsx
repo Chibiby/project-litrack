@@ -1,6 +1,7 @@
+import { cn } from "@/lib/utils";
 import { FileCheck2, FileText, GraduationCap, Info, Users } from "lucide-react";
 import { PageHero } from "@/components/shell/page-hero";
-import { StatCard } from "@/components/dashboard/teacher/stat-cards";
+import { StatCard, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 
 export interface KinderChecklistHeroProps {
   title: string;
@@ -76,7 +77,7 @@ export function KinderChecklistHero({
           </p>
         ) : null}
 
-        <div className="mt-3 grid max-w-full grid-cols-2 gap-3 sm:mt-4 sm:gap-4 lg:max-w-[46rem] lg:grid-cols-3">
+        <div className={cn(STAT_GRID, "mt-3 max-w-full sm:mt-4 lg:max-w-[46rem]")}>
           <StatCard
             title="Advisory"
             value={advisoryLabel ?? "Not chosen"}

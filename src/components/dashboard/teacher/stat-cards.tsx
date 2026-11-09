@@ -289,20 +289,21 @@ export function StatCard({
       {/* The card decides its layout by its own width (container query), not
           the screen: in a narrow card (two-up on a phone, three-up on a
           tablet) the icon sits above the figure so the number and title keep
-          the full width instead of breaking mid-word. From 15rem the icon
+          the full width instead of breaking mid-word. From 14rem (measured inside
+          the padding, so a 17rem STAT_GRID card qualifies) the icon
           moves beside the text as a square tile; from 18rem it is full size. */}
-      <div className="relative flex flex-col items-start gap-2 @[15rem]/stat:flex-row @[15rem]/stat:items-center @[15rem]/stat:gap-4">
+      <div className="relative flex flex-col items-start gap-2 @[14rem]/stat:flex-row @[14rem]/stat:items-center @[14rem]/stat:gap-4">
         {Icon ? (
           <span
             aria-hidden
             className={cn(
               "flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105 motion-reduce:group-hover:scale-100",
-              denseOnPhone ? "@[15rem]/stat:size-[3.75rem]" : "@[15rem]/stat:size-[4.25rem]",
+              denseOnPhone ? "@[14rem]/stat:size-[3.75rem]" : "@[14rem]/stat:size-[4.25rem]",
               "@[18rem]/stat:size-20",
               TILE[tone]
             )}
           >
-            <Icon className="size-5 @[15rem]/stat:size-7 @[18rem]/stat:size-8" />
+            <Icon className="size-5 @[14rem]/stat:size-7 @[18rem]/stat:size-8" />
           </span>
         ) : null}
         <div className="w-full min-w-0 flex-1 pr-3">
@@ -363,6 +364,16 @@ export function StatCard({
     </Surface>
   );
 }
+
+/**
+ * The grid every stat-card row uses outside the dashboard's own 2-up row.
+ * Two per row on phones (as the dashboard does); from sm, as many per row as
+ * fit at 17rem or wider, so every card is wide enough for the dashboard
+ * layout — the large icon tile beside the figure — instead of the narrow
+ * stacked one.
+ */
+export const STAT_GRID =
+  "grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(17rem,1fr))] sm:gap-4";
 
 export function StatCardRow({ children }: { children: React.ReactNode }) {
   // xl (1280–1535) keeps the 20rem rail beside this column, which leaves too

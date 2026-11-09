@@ -1,3 +1,4 @@
+import { STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 import type { LucideIcon } from "lucide-react";
 import { CompactPageHeader, PageHero, eyebrowRepeatsTitle } from "@/components/shell/page-hero";
 import { cn } from "@/lib/utils";
@@ -112,7 +113,7 @@ export function SchoolHeadHero({
         ) : null}
       </div>
       {stats ? (
-        <div className="mt-3 grid max-w-full grid-cols-2 gap-3 sm:mt-4 sm:gap-4 lg:max-w-[46rem] lg:grid-cols-3">
+        <div className={cn(STAT_GRID, "mt-3 max-w-full sm:mt-4 lg:max-w-[46rem]")}>
           {stats}
         </div>
       ) : null}

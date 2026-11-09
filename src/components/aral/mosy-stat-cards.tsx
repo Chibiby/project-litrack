@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -6,7 +7,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { StatCard, type StatDecor, type StatTone } from "@/components/dashboard/teacher/stat-cards";
+import { StatCard, type StatDecor, type StatTone, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 import type { MosyStatCard, MosyStats } from "@/lib/aral/mosy";
 
 const CARD_STYLE: Record<
@@ -23,7 +24,7 @@ const CARD_STYLE: Record<
 /** The five MOSY summary cards, from `computeMosyStats`. Same `StatCard` as Profiling. */
 export function MosyStatCards({ stats }: { stats: MosyStats }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-5 [&>*:last-child]:max-lg:col-span-2">
+    <div className={cn(STAT_GRID, "[&>*:last-child]:max-sm:col-span-2")}>
       {stats.cards.map((card) => {
         const style = CARD_STYLE[card.key];
         return (

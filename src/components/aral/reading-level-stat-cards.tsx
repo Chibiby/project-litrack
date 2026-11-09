@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart3, CalendarDays, ClipboardList, TrendingUp, Users } from "lucide-react";
-import { StatCard, type StatTone } from "@/components/dashboard/teacher/stat-cards";
+import { StatCard, type StatTone, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 import type { ReadingLevelStats } from "@/lib/aral/reading-level-stats";
 
 /**
@@ -28,7 +28,7 @@ export function ReadingLevelStatCards({
   monthLabel: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+    <div className={STAT_GRID}>
       <StatCard
         title="Monthly Status"
         value={statusLabel}
