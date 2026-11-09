@@ -1,4 +1,4 @@
-import { Suspense, type ComponentProps } from "react";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
@@ -12,16 +12,6 @@ export const dynamic = "force-dynamic";
 
 interface TeacherDashboardProps {
   searchParams: Promise<{ schoolId?: string }>;
-}
-
-async function BannerDashboardBody({
-  genderPromise,
-  ...props
-}: {
-  genderPromise: Promise<"MALE" | "FEMALE" | null>;
-} & Omit<ComponentProps<typeof TeacherDashboardBody>, "bannerSrc">) {
-  const gender = await genderPromise;
-  return <TeacherDashboardBody {...props} bannerSrc={teacherBannerSrc(gender)} />;
 }
 
 export default async function TeacherDashboard({
@@ -46,13 +36,18 @@ export default async function TeacherDashboard({
   // Artwork must never take the dashboard down: any read failure (including a
   // database the gender migration has not reached yet) falls back to the
   // default banner.
-  // Started here but awaited under Suspense so the shell flushes first.
-  const genderPromise: Promise<"MALE" | "FEMALE" | null> = isSuperAdmin
-    ? Promise.resolve(null)
-    : prisma.teacherProfile
-        .findUnique({ where: { userId: user.id }, select: { gender: true } })
-        .then((p) => p?.gender ?? null)
-        .catch(() => null);
+  // Started here, never awaited here: the body awaits it beside its own
+  // overview read under Suspense, so the shell flushes first and neither read
+  // waits for the other.
+  const bannerSrc: Promise<string> = (
+    isSuperAdmin
+      ? Promise.resolve(null)
+      : prisma.teacherProfile
+          .findUnique({ where: { userId: user.id }, select: { gender: true } })
+          .then((p) => p?.gender ?? null)
+  )
+    .catch(() => null)
+    .then(teacherBannerSrc);
 
   return (
     <AppShell
@@ -68,8 +63,8 @@ export default async function TeacherDashboard({
       viewedSchoolName={schoolName ?? undefined}
     >
       <Suspense fallback={<TeacherDashboardSkeleton />}>
-        <BannerDashboardBody
-          genderPromise={genderPromise}
+        <TeacherDashboardBody
+          bannerSrc={bannerSrc}
           schoolId={targetSchoolId}
           teacherId={user.id}
           isSuperAdmin={isSuperAdmin}
