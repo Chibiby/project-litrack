@@ -71,8 +71,30 @@ function resolveSection(
   return sectionIds.has(section) ? section : "all";
 }
 
+/** One page of the ARAL learners table. */
+function fetchAralRows(where: Prisma.LearnerWhereInput, skip: number, take: number) {
+  return prisma.learner.findMany({
+    relationLoadStrategy: "join",
+    where,
+    select: {
+      id: true,
+      fullName: true,
+      age: true,
+      gradeLevelId: true,
+      section: { select: { id: true, name: true } },
+    },
+    orderBy: { fullName: "asc" },
+    skip,
+    take,
+  });
+}
+
+type AralRows = Awaited<ReturnType<typeof fetchAralRows>>;
+
 async function AralLearnersTable({
   where,
+  requestedRows,
+  requestedSkip,
   totalCount,
   page,
   pages,
@@ -91,6 +113,13 @@ async function AralLearnersTable({
    * pages through. Rebuilding it here is what let the two drift.
    */
   where: Prisma.LearnerWhereInput;
+  /**
+   * The page the URL asked for, already in flight beside the count. Used when
+   * the count leaves that page in range, which is nearly always; otherwise
+   * the clamped page is read here.
+   */
+  requestedRows: Promise<AralRows> | null;
+  requestedSkip: number;
   totalCount: number;
   page: number;
   pages: number;
@@ -103,20 +132,10 @@ async function AralLearnersTable({
   showGradeColumn: boolean;
   showSection: boolean;
 }) {
-  const learners = await prisma.learner.findMany({
-    relationLoadStrategy: "join",
-    where,
-    select: {
-      id: true,
-      fullName: true,
-      age: true,
-      gradeLevelId: true,
-      section: { select: { id: true, name: true } },
-    },
-    orderBy: { fullName: "asc" },
-    skip,
-    take,
-  });
+  const learners =
+    requestedRows && skip === requestedSkip
+      ? await requestedRows
+      : await fetchAralRows(where, skip, take);
 
   const learnerHref = (l: (typeof learners)[number]) =>
     `/teacher/grade/${l.gradeLevelId}/learners/${l.id}`;
@@ -308,7 +327,40 @@ export default async function AralDashboard({
   const actionGradeId =
     activeGrade !== "all" ? activeGrade : assignedGradeIds[0]!;
 
-  const [gradeSections, enrollCandidates, aralTeachers] =await Promise.all([
+  // ONE `where`, from the RESOLVED section, shared by the count and the table's
+  // rows. There used to be a second count filtered on the raw `list.section`,
+  // so a stale or foreign `?section=` put "0 ARAL learners" in the subtitle
+  // above a full, pageable table. A single shared clause makes that
+  // disagreement unrepresentable.
+  const buildAralWhere = (resolved: LearnerListSectionFilter): Prisma.LearnerWhereInput => ({
+    ...gradeLevelIdWhere(activeGrade, assignedGradeIds),
+    isAralLearner: true,
+    deletedAt: null,
+    archivedAt: null,
+    ...(isSuperAdmin ? {} : aralLearnerScope(user.id)),
+    ...sectionIdWhere(resolved),
+  });
+
+  // "all" and "none" resolve to themselves whatever sections the grade has
+  // (see `resolveSection`), so with no specific `?section=` — the usual case —
+  // the `where` is known now. The count and the requested page of rows then
+  // start beside the reads below instead of two round trips after them. A
+  // specific section must first be checked against `gradeSections`.
+  const sectionKnownNow = list.section === "all" || list.section === "none";
+  const earlyWhere = sectionKnownNow ? buildAralWhere(list.section) : null;
+  const requestedSkip = (list.page - 1) * list.pageSize;
+  // `?page=` is user input; an absurd value must not reach the query as an
+  // out-of-range OFFSET, so it takes the table's clamped read instead.
+  const requestedRows =
+    earlyWhere && requestedSkip < 1_000_000
+      ? fetchAralRows(earlyWhere, requestedSkip, list.take)
+      : null;
+  // Awaited later, inside the table's Suspense boundary. Mark it handled now so
+  // a failure while the page is still awaiting other reads is not reported as
+  // an unhandled rejection; the table's own await still throws it.
+  requestedRows?.catch(() => {});
+
+  const [gradeSections, enrollCandidates, aralTeachers, earlyCount] = await Promise.all([
     getGradeSections({
       schoolId,
       gradeLevelIds: activeGrade === "all" ? assignedGradeIds : [activeGrade],
@@ -343,30 +395,13 @@ export default async function AralDashboard({
     isSuperAdmin
       ? Promise.resolve([] as AralTeacherPickOption[])
       : listAralTeachers(schoolId),
+    earlyWhere ? prisma.learner.count({ where: earlyWhere }) : null,
   ]);
 
   const sectionIds = new Set(gradeSections.map((s) => s.id));
   const section = resolveSection(list.section, sectionIds);
-
-  // ONE count, from the RESOLVED section, and the one `where` the table reuses
-  // for its `findMany`. There used to be a second count inside the batch above
-  // filtered on the raw `list.section`, so a stale or foreign `?section=` put
-  // "0 ARAL learners" in the subtitle above a full, pageable table. A single
-  // shared clause makes that disagreement unrepresentable.
-  //
-  // Deliberately sequential-looking but not a new round trip: `resolveSection`
-  // needs `gradeSections`, and the subtitle already blocked on a count before
-  // render. The Suspense boundary still covers the `findMany`, which is the
-  // slow half.
-  const aralWhere: Prisma.LearnerWhereInput = {
-    ...gradeLevelIdWhere(activeGrade, assignedGradeIds),
-    isAralLearner: true,
-    deletedAt: null,
-    archivedAt: null,
-    ...(isSuperAdmin ? {} : aralLearnerScope(user.id)),
-    ...sectionIdWhere(section),
-  };
-  const aralCount = await prisma.learner.count({ where: aralWhere });
+  const aralWhere = earlyWhere ?? buildAralWhere(section);
+  const aralCount = earlyCount ?? (await prisma.learner.count({ where: aralWhere }));
   const pages = totalPages(aralCount, list.pageSize);
   const page = Math.min(list.page, pages);
   const skip = (page - 1) * list.pageSize;
@@ -457,6 +492,8 @@ export default async function AralDashboard({
         >
           <AralLearnersTable
             where={aralWhere}
+            requestedRows={requestedRows}
+            requestedSkip={requestedSkip}
             totalCount={aralCount}
             page={page}
             pages={pages}
