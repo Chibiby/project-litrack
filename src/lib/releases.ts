@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.46.4",
+    date: "2026-11-09",
+    title: "End of Terms Reports opens faster",
+    announce: true,
+    fixes: [
+      "End of Terms Reports opens faster. The page now fetches your class list, subjects and saved grades all at once instead of one after another.",
+    ],
+  },
+  {
     version: "2.46.3",
     date: "2026-11-06",
     title: "Sign-in text sized for phones",

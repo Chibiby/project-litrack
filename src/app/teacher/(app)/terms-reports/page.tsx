@@ -9,6 +9,7 @@ import { TermsReportBodySkeleton } from "@/components/terms/terms-report-skeleto
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { getActiveSchoolYear } from "@/lib/cache/school-year";
 import { getAdvisoryPlacements } from "@/lib/teachers/advisory";
+import { readUnlockState } from "@/lib/unlock/grants";
 import { advisoryRosterDenial } from "@/lib/teachers/scope";
 import { DECLARED_FLOATING_CARD } from "@/lib/teachers/floating-copy";
 import {
@@ -80,10 +81,13 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
 
   // React-`cache()`d on (schoolId, teacherId, isSuperAdmin) and already awaited by
   // the teacher layout for this request, so the designation costs no extra query.
-  const [{ designation, advisoryMode }, placements, schoolYear] = await Promise.all([
+  // The unlock state needs no school year, so it rides this round trip instead
+  // of adding one after it (it degrades to "locked" rather than throwing).
+  const [{ designation, advisoryMode }, placements, schoolYear, unlockState] = await Promise.all([
     getTeacherShellContext({ schoolId, teacherId: user.id, isSuperAdmin }),
     getAdvisoryPlacements({ id: user.id, schoolId }),
     getActiveSchoolYear(schoolId),
+    readUnlockState({ userId: user.id, schoolId, scope: "TERM_GRADES" }),
   ]);
 
   const denial = advisoryRosterDenial({ isSuperAdmin, designation, advisoryMode });
@@ -107,6 +111,7 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
     schoolYear,
     requestedTerm: sp.term,
     viewer: { id: user.id, schoolId, isSuperAdmin },
+    unlockState,
   });
 
   const { kinder: kinderPlacements, numeric: numericPlacements } =

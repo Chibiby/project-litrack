@@ -1,10 +1,8 @@
 import "server-only";
 import type { Prisma, TermMark } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { classifyError } from "@/lib/errors/classify";
-import { reportError } from "@/lib/errors/report";
 import { nameSearchWhere, totalPages } from "@/lib/learners/pagination";
-import { getSheetSubjects, healLegacyTermGrades } from "@/lib/terms/subjects-db";
+import { getSheetSubjects } from "@/lib/terms/subjects-db";
 import {
   computeSheetStats,
   sliceSheetPage,
@@ -18,7 +16,7 @@ import {
   type TermWindowOverrideInput,
 } from "@/lib/terms/windows";
 import { formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-keys";
-import { readUnlockState } from "@/lib/unlock/grants";
+import { readUnlockState, type UnlockState } from "@/lib/unlock/grants";
 
 /**
  * One section of the End of Terms sheet — an advisory for a teacher, or the
@@ -100,39 +98,38 @@ export async function loadTermSheet(args: {
   const { schoolId, schoolYearId, term, scopes, q, pageSize } = args;
   const gradeIds = [...new Set(scopes.map((s) => s.gradeLevelId))];
 
-  // Seeded before the scores are read: the filter below needs each grade's
-  // active id set, and the lazy seed runs once per grade whoever reads first.
-  const subjectLists = await Promise.all(
-    gradeIds.map((gradeLevelId) => getSheetSubjects(prisma, { schoolId, gradeLevelId }))
-  );
-  const subjectsByGrade = new Map(
-    gradeIds.map((id, i) => [id, subjectLists[i].map((s) => ({ id: s.id, name: s.name }))])
-  );
-
-  // Adopt scores the pre-TermSubject build saved (termSubjectId NULL) before
-  // reading. Best-effort: this page only reads, so a failed UPDATE is logged
-  // for an admin and the sheet renders with what is already adopted. No-op
-  // after M2; removed with M3.
-  for (const gradeLevelId of gradeIds) {
-    try {
-      await healLegacyTermGrades(prisma, { schoolId, gradeLevelId, schoolYearId });
-    } catch (err) {
-      reportError(classifyError(err, { verb: "adopt legacy term grades" }), {
-        route: args.route,
-        routeType: "render",
-        schoolId,
-      });
-    }
-  }
-
+  // Every read below runs in ONE parallel round. On Cloudflare each round is a
+  // Worker -> Hyperdrive -> Postgres trip, and the trips — not the queries,
+  // which are a few ms each — were what made this page slow.
+  //
+  // The legacy-score adoption (`healLegacyTermGrades`) no longer runs here: it
+  // was an UPDATE on every page view, production holds no `termSubjectId IS
+  // NULL` rows, and the save path still adopts before it writes.
   const search = nameSearchWhere(q);
+  const roster = (s: SheetScope): Prisma.LearnerWhereInput => ({ AND: [s.rosterWhere, search] });
   const scopeWhere: Prisma.LearnerWhereInput = { OR: scopes.map((s) => s.rosterWhere) };
-  const allSubjectIds = subjectLists.flat().map((s) => s.id);
+  const rosterRows = (s: SheetScope, skip: number, take: number) =>
+    prisma.learner.findMany({
+      where: roster(s),
+      select: { id: true, fullName: true, section: { select: { name: true } } },
+      orderBy: { fullName: "asc" },
+      skip,
+      take,
+    });
 
-  const [counts, everyone, scores] = await Promise.all([
+  // A single-section scope (the common case) needs no counts to know its page:
+  // read the requested page now, and re-read below only if the page turns out
+  // to be past the end.
+  const requestedSkip = (Math.max(1, args.page) - 1) * pageSize;
+  const singleScope = scopes.length === 1 ? scopes[0] : null;
+
+  const [subjectLists, counts, everyone, scores, prefetchedRows] = await Promise.all([
+    // The lazy seed creates rows only for a grade with no subjects at all, so
+    // a subject it seeds has no scores yet and the score read cannot miss one.
     Promise.all(
-      scopes.map((s) => prisma.learner.count({ where: { AND: [s.rosterWhere, search] } }))
+      gradeIds.map((gradeLevelId) => getSheetSubjects(prisma, { schoolId, gradeLevelId }))
     ),
+    Promise.all(scopes.map((s) => prisma.learner.count({ where: roster(s) }))),
     // The figures' denominator: every learner in scope, search ignored.
     prisma.learner.findMany({
       where: scopeWhere,
@@ -142,15 +139,22 @@ export async function loadTermSheet(args: {
       where: {
         schoolYearId,
         term,
-        // Active subjects only: an archived column, and scores kept from a
-        // grade the learner moved out of, stay off the sheet.
-        termSubjectId: { in: allSubjectIds },
+        // Active subjects of the grades in scope only: an archived column, and
+        // scores kept from a grade the learner moved out of, stay off the
+        // sheet. Same set `getSheetSubjects` returns, expressed as a join so
+        // this read need not wait for that one.
+        termSubject: { schoolId, gradeLevelId: { in: gradeIds }, deletedAt: null },
         // Tenancy rides on the roster clause, so cells and rows cannot drift.
         learner: scopeWhere,
       },
       select: { learnerId: true, termSubjectId: true, score: true, mark: true },
     }),
+    singleScope ? rosterRows(singleScope, requestedSkip, pageSize) : Promise.resolve(null),
   ]);
+
+  const subjectsByGrade = new Map(
+    gradeIds.map((id, i) => [id, subjectLists[i].map((s) => ({ id: s.id, name: s.name }))])
+  );
 
   const stats = computeSheetStats({
     learners: everyone,
@@ -175,13 +179,12 @@ export async function loadTermSheet(args: {
   const rows = await Promise.all(
     slices.map((slice) => {
       const scope = scopes.find((s) => s.key === slice.key)!;
-      return prisma.learner.findMany({
-        where: { AND: [scope.rosterWhere, search] },
-        select: { id: true, fullName: true, section: { select: { name: true } } },
-        orderBy: { fullName: "asc" },
-        skip: slice.skip,
-        take: slice.take,
-      });
+      // `take` may be shorter than the page on the last page; the prefetch
+      // asked for a full page, which returns the same rows when fewer exist.
+      if (prefetchedRows && scope === singleScope && slice.skip === requestedSkip) {
+        return prefetchedRows;
+      }
+      return rosterRows(scope, slice.skip, slice.take);
     })
   );
 
@@ -271,6 +274,12 @@ export async function resolveSheetTerms(args: {
   schoolYear: { startDateKey: string; overrides: TermWindowOverrideInput[] };
   requestedTerm: string | undefined;
   viewer: { id: string; schoolId: string | null; isSuperAdmin: boolean };
+  /**
+   * The viewer's `readUnlockState` for `TERM_GRADES`, when the page already
+   * started it alongside its other reads (it needs no school year), so it
+   * costs no extra round trip here. Read here when omitted.
+   */
+  unlockState?: UnlockState | Promise<UnlockState>;
 }) {
   const todayKey = formatLocalDateKey(schoolToday());
   const windows = getTermWindows(
@@ -282,11 +291,12 @@ export async function resolveSheetTerms(args: {
 
   const unlock = args.viewer.isSuperAdmin
     ? { lockingEnabled: true, unlockedKeys: new Set<string>() }
-    : await readUnlockState({
-        userId: args.viewer.id,
-        schoolId: args.viewer.schoolId,
-        scope: "TERM_GRADES",
-      });
+    : await (args.unlockState ??
+        readUnlockState({
+          userId: args.viewer.id,
+          schoolId: args.viewer.schoolId,
+          scope: "TERM_GRADES",
+        }));
   const isEncodingClosed = (w: TermWindow) =>
     unlock.lockingEnabled && isTermLocked(w, todayKey) && !unlock.unlockedKeys.has(w.term);
 
