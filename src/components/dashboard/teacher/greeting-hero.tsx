@@ -63,14 +63,13 @@ export function GreetingHero({
       // its last line under the date chip.
       className="max-sm:h-auto max-sm:min-h-[15rem]"
       artClassName="right-[calc(18%-272px)] sm:right-[calc(23%-272px)]"
-      phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)]"
       // lg only (1024–1279): the hero box is narrowest here (sidebar takes a
       // quarter of the viewport, and the art is still full-size and
       // right-0), so the illustration reaches further into the text column
-      // than at xl+. A scrim fading out toward the art keeps the greeting
-      // readable without touching the shared art geometry or changing
-      // anything at xl and up.
-      contentClassName="lg:max-xl:bg-gradient-to-r lg:max-xl:from-card/95 lg:max-xl:via-card/70 lg:max-xl:to-transparent lg:max-xl:rounded-lg"
+      // than at xl+. The art's own left edge fades out there, so the greeting
+      // reads on the banner's pastel ground. (A white scrim over the text
+      // used to do this, and washed out the banner behind it.)
+      phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)] lg:max-xl:[&>img]:[mask-image:linear-gradient(to_right,transparent_57%,black_67%)]"
     >
       <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 lg:block">
         {greeting},
@@ -81,10 +80,10 @@ export function GreetingHero({
       <h1 className="mt-0.5 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl text-slate-950 dark:text-white lg:text-5xl">
         {firstName}!&nbsp;<span aria-hidden>👋</span>
       </h1>
-      <p className="mt-2 line-clamp-2 max-w-[13rem] text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">
+      <p className="mt-2 line-clamp-2 max-w-[13rem] text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800 lg:max-xl:max-w-[20rem]">
         {subtitle ?? "Here's what's happening with your class today."}
       </p>
-      <blockquote className="mt-4 hidden max-w-lg text-sm italic leading-relaxed text-slate-600 dark:text-slate-300 lg:block">
+      <blockquote className="mt-4 hidden max-w-lg text-sm italic leading-relaxed lg:max-xl:max-w-[20rem] text-slate-600 dark:text-slate-300 lg:block">
         &ldquo;{quote.text}&rdquo;
         <footer className="not-italic">— {quote.author}</footer>
       </blockquote>

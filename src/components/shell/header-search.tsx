@@ -230,10 +230,11 @@ export function HeaderSearch({
             setActive((i) => (i - 1 + rows.length) % rows.length);
           }
         }}
-        // Card surface, a visible border and a soft shadow: the header is
-        // transparent over the light-rays background, so a muted fill would
-        // blend into it in both themes.
-        inputClassName="h-11 rounded-lg border-border bg-card text-sm shadow-sm placeholder:text-muted-foreground focus-visible:border-input dark:border-white/15 lg:h-9"
+        // Frosted pill to match the glass header: a translucent white fill
+        // with its own blur and a bright hairline border, so it reads as a
+        // lighter pane of the same glass rather than a solid white slab.
+        // Focus firms the fill up so typed text stays crisp.
+        inputClassName="h-11 rounded-full border-white/70 bg-white/45 text-sm shadow-[0_1px_2px_rgb(15_23_42/0.06),inset_0_1px_0_rgb(255_255_255/0.6)] backdrop-blur-md placeholder:text-slate-500 focus-visible:border-primary/40 focus-visible:bg-white/70 dark:border-white/15 dark:bg-white/[0.06] dark:shadow-none dark:placeholder:text-slate-400 dark:focus-visible:bg-white/10 lg:h-9"
       />
 
       {showList && (

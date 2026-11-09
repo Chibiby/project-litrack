@@ -216,7 +216,7 @@ export function AppHeader({
             searchHref={SEARCH_HREF[role]}
             placeholder={SEARCH_PLACEHOLDER[role]}
             pages={searchPages}
-            className="hidden w-full max-w-xl md:max-lg:block md:max-lg:max-w-xs lg:block"
+            className="hidden w-full max-w-sm md:max-lg:block md:max-lg:max-w-xs lg:block"
           />
         )}
 
