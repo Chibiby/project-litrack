@@ -316,7 +316,7 @@ export function AppSidebar({
     const showAccount = !opts?.phone;
 
     return (
-      <div className="flex h-full flex-col bg-surface">
+      <div className="flex h-full flex-col">
         <div
           className={cn(
             "flex min-h-[calc(var(--app-chrome-header-height)+1rem)] shrink-0 flex-col justify-center pt-4",
@@ -504,10 +504,13 @@ export function AppSidebar({
     <TooltipProvider delayDuration={300}>
       <NavPrefetcher cacheKey={prefetchKey} hrefs={prefetchHrefs} />
 
-      {/* Desktop — width paired with CONTENT_OFFSET_CLASS in role-shell / app-shell */}
+      {/* Desktop — width paired with CONTENT_OFFSET_CLASS in role-shell / app-shell.
+          Frosted glass: a translucent surface with a backdrop blur, so the
+          light-rays background shows through softly, matching the scrolled
+          header. */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/80 bg-surface lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/60 bg-[hsl(var(--surface)/0.6)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.55)] lg:flex",
           transitionsEnabled && "transition-[width] duration-200",
           collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
         )}
@@ -530,7 +533,7 @@ export function AppSidebar({
         </SheetTrigger>
         <SheetContent
           side="left"
-          className="w-64 border-r p-0 data-[state=closed]:duration-150 data-[state=open]:duration-200"
+          className="w-64 border-r border-border/60 bg-[hsl(var(--surface)/0.75)] p-0 backdrop-blur-xl backdrop-saturate-150 data-[state=closed]:duration-150 data-[state=open]:duration-200 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.7)]"
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           {renderSidebarContent(() => setMobileOpen(false), { collapsed: false, phone: true })}
