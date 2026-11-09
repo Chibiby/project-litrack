@@ -59,8 +59,9 @@ export function KinderChecklistHero({
         headClassName="max-lg:hidden"
         contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
       >
-        <h1 className="max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
-          {title}
+        <h1 className="max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:max-w-[45%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
+          {/* Non-breaking hyphens: "End-of-Term" never splits across lines. */}
+          {title.replace(/-/g, "\u2011")}
         </h1>
         <p className="mt-1 flex max-w-[56%] items-center gap-1.5 text-sm font-semibold leading-snug text-slate-700 dark:text-slate-200 sm:max-w-[55%] sm:gap-2 sm:text-base lg:max-w-[46%] lg:text-lg">
           <FileText className="size-3.5 shrink-0 sm:size-4" aria-hidden />
