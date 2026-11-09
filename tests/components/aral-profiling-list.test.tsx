@@ -62,8 +62,8 @@ describe("ProfilingList", () => {
     expect(table.getByText("22")).toBeTruthy();
 
     const list = screen.getByRole("list", { name: "ARAL learners" });
-    expect(within(list).getByText("21.")).toBeTruthy();
-    expect(within(list).getByText("22.")).toBeTruthy();
+    expect(within(list).getByText("21")).toBeTruthy();
+    expect(within(list).getByText("22")).toBeTruthy();
   });
 
   it("shows Completed and an Update profile link for a saved profile", () => {
@@ -130,7 +130,7 @@ describe("ProfilingList", () => {
     const dataRow = table.getAllByRole("row")[1];
     const cells = within(dataRow).getAllByRole("cell");
     // Columns: #, Learner, Grade, Section, Profile Status, Last Updated, Action.
-    expect(cells[3].textContent).toBe("—");
+    expect(cells[3].textContent).toMatch(/^—(Not set)?$/);
   });
 
   it("renders the EmptyState and no table when totalCount is 0", () => {

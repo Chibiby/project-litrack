@@ -9,7 +9,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
@@ -40,6 +43,15 @@ const PILL_CLASS =
  * and up, one card per learner below it). Rows are numbered by absolute
  * position across pages, not per-page index.
  */
+
+function ProfileStatusBadge({ done }: { done: boolean }) {
+  return (
+    <Badge variant={done ? "violet" : "outline"} className="shrink-0">
+      {done ? "Completed" : "Pending"}
+    </Badge>
+  );
+}
+
 export function ProfilingList({
   rows,
   totalCount,
@@ -64,6 +76,14 @@ export function ProfilingList({
   sectionParam?: string;
 }) {
   const rowNumber = (i: number) => (page - 1) * pageSize + i + 1;
+
+
+  /** The row's one job (complete or update the profile), so it stays visible. */
+  const profileAction = (r: (typeof rows)[number], className?: string) => (
+    <Button asChild size="sm" variant={r.done ? "outline" : "default"} className={className}>
+      <Link href={r.updateHref}>{r.done ? "Update profile" : "Complete profile"}</Link>
+    </Button>
+  );
 
   return (
     <Surface as="section" className="overflow-hidden rounded-lg">
@@ -95,91 +115,80 @@ export function ProfilingList({
           />
         </div>
       ) : (
-        <>
-          {/* md and up: the full table. */}
-          <div className="hidden overflow-x-auto md:block">
+        <ResponsiveTable
+          table={
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
+                  <TableHead numeric className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
                   <TableHead className={HEAD_CLASS}>Learner</TableHead>
                   <TableHead className={HEAD_CLASS}>Grade</TableHead>
                   <TableHead className={HEAD_CLASS}>Section</TableHead>
                   <TableHead className={HEAD_CLASS}>Profile Status</TableHead>
                   <TableHead className={HEAD_CLASS}>Last Updated</TableHead>
-                  {canEdit && <TableHead className={cn(HEAD_CLASS, "text-right")}>Action</TableHead>}
+                  {canEdit && (
+                    <TableHead className={HEAD_CLASS}>
+                      <span className="sr-only">Action</span>
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r, i) => (
                   <TableRow key={r.id}>
-                    <TableCell className="tabular-nums text-muted-foreground">
+                    <TableCell numeric className="text-muted-foreground">
                       {rowNumber(i)}
                     </TableCell>
-                    <TableCell className="font-medium">{r.fullName}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.gradeLabel}</TableCell>
+                    <TableCell className="max-w-[18rem] font-medium">
+                      <CellText>{r.fullName}</CellText>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{r.gradeLabel}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {r.sectionName ?? "—"}
+                      {r.sectionName ?? <NoValue />}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={r.done ? "violet" : "outline"}>
-                        {r.done ? "Completed" : "Pending"}
-                      </Badge>
+                      <ProfileStatusBadge done={r.done} />
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
                       {r.lastUpdatedDisplay}
                     </TableCell>
                     {canEdit && (
-                      <TableCell className="text-right">
-                        <Button asChild size="sm" variant={r.done ? "outline" : "default"}>
-                          <Link href={r.updateHref}>
-                            {r.done ? "Update profile" : "Complete profile"}
-                          </Link>
-                        </Button>
+                      <TableCell>
+                        <div className="flex justify-end">{profileAction(r)}</div>
                       </TableCell>
                     )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </div>
-
-          {/* Below md: one card per learner. */}
-          <ul className="divide-y divide-border/60 md:hidden" aria-label="ARAL learners">
-            {rows.map((r, i) => (
-              <li key={r.id} className="flex flex-col gap-2 px-3 py-3 sm:px-4">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 text-sm font-medium text-foreground sm:text-base">
-                    <span className="mr-1.5 text-muted-foreground">{rowNumber(i)}.</span>
-                    {r.fullName}
-                  </span>
-                  <Badge variant={r.done ? "violet" : "outline"} className="shrink-0">
-                    {r.done ? "Completed" : "Pending"}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className={PILL_CLASS}>{r.gradeLabel}</span>
-                  {r.sectionName ? <span className={PILL_CLASS}>{r.sectionName}</span> : null}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Last updated: {r.lastUpdatedDisplay}
-                </p>
-                {canEdit && (
-                  <Button
-                    asChild
-                    size="sm"
-                    variant={r.done ? "outline" : "default"}
-                    className="mt-1 w-fit"
-                  >
-                    <Link href={r.updateHref}>
-                      {r.done ? "Update profile" : "Complete profile"}
-                    </Link>
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
+          }
+          stacked={
+            <StackedList aria-label="ARAL learners">
+              {rows.map((r, i) => (
+                <StackedRow
+                  key={r.id}
+                  className="sm:px-4"
+                  leading={
+                    <span className="inline-block w-6 text-right text-xs tabular-nums text-muted-foreground">
+                      {rowNumber(i)}
+                    </span>
+                  }
+                  title={r.fullName}
+                  state={<ProfileStatusBadge done={r.done} />}
+                  meta={
+                    <>
+                      <span className={PILL_CLASS}>{r.gradeLabel}</span>
+                      {r.sectionName ? <span className={PILL_CLASS}>{r.sectionName}</span> : null}
+                      <span>Updated {r.lastUpdatedDisplay}</span>
+                    </>
+                  }
+                >
+                  {canEdit ? profileAction(r, "w-fit") : null}
+                </StackedRow>
+              ))}
+            </StackedList>
+          }
+        />
       )}
       </ListBusyRegion>
 
