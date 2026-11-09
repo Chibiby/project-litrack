@@ -68,7 +68,11 @@ export function PageHero({
       width={2172}
       height={579}
       priority
-      sizes="(min-width: 1024px) 80vw, 250vw"
+      // The art's width follows the band's height (w-auto, h-%), not the
+      // viewport: about 1550px wide at lg+ and about 1000px on phones and
+      // tablets. A viewport-relative size (the old "80vw") made the browser
+      // fetch a 1080px file for a 1550px drawing, which looked pixelated.
+      sizes="(min-width: 1024px) 1560px, 1000px"
       className={cn(
         "absolute top-auto h-[108.83%] w-auto max-w-none lg:right-0",
         artClassName

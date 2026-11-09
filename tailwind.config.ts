@@ -34,6 +34,10 @@ const config: Config = {
         },
         surface: "hsl(var(--surface))",
         "surface-header": "hsl(var(--surface-header))",
+        // Glassmorphism tint: plain white, only ever used at low opacity
+        // (bg-glass/25 and the like) with a dark: override, for the frosted
+        // header, search and sidebar highlight.
+        glass: "rgb(255 255 255 / <alpha-value>)",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * One liquid-glass pill behind the sidebar's active row. It slides up or down
+ * One glass pill behind the sidebar's active row. It slides up or down
  * to the row you click (ease-in-out) instead of each row painting its own
  * highlight, so the eye follows the move.
  *
@@ -78,13 +78,11 @@ export function NavGlassIndicator({
       aria-hidden
       className={cn(
         "pointer-events-none absolute left-0 top-0 z-0 rounded-xl opacity-0",
-        // Liquid glass: a clear tint, a bright rim, a top highlight and a soft
-        // drop shadow, with its own blur so whatever sits behind the rail
-        // bends softly through it. No accent colour.
-        "border border-white/70 bg-white/35 backdrop-blur-md backdrop-saturate-150",
-        "shadow-[inset_0_1px_0_rgb(255_255_255/0.85),inset_0_-1px_0_rgb(255_255_255/0.25),0_6px_16px_-6px_rgb(15_23_42/0.18)]",
-        "dark:border-white/20 dark:bg-white/[0.08]",
-        "dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_16px_-6px_rgb(0_0_0/0.5)]",
+        // Plain glassmorphism: a translucent white fill, a thin light border,
+        // a backdrop blur and a soft shadow. No accent colour, no rim
+        // highlights.
+        "border border-white/40 bg-glass/25 shadow-[0_4px_16px_rgb(15_23_42/0.08)] backdrop-blur-md",
+        "dark:border-white/10 dark:bg-glass/10 dark:shadow-[0_4px_16px_rgb(0_0_0/0.3)]",
         className
       )}
     />

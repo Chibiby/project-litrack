@@ -205,7 +205,7 @@ function NavLink({
             // A mouse user is already sitting on it, so `hover:` has that
             // covered; this is what a keyboard user gets for a row activated by
             // Enter, which would otherwise change nothing but its icon.
-            "text-foreground/80 hover:bg-white/30 hover:text-foreground has-[[data-nav-pending]]:bg-white/30 has-[[data-nav-pending]]:text-foreground dark:hover:bg-white/5 dark:has-[[data-nav-pending]]:bg-white/5"
+            "text-foreground/80 hover:bg-glass/30 hover:text-foreground has-[[data-nav-pending]]:bg-glass/30 has-[[data-nav-pending]]:text-foreground dark:hover:bg-glass/5 dark:has-[[data-nav-pending]]:bg-glass/5"
       )}
     >
       <NavLinkIcon

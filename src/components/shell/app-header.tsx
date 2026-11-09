@@ -165,7 +165,7 @@ export function AppHeader({
         className={cn(
           "flex w-full items-center gap-3 border px-4 transition-[margin,height,width,border-radius,background-color,border-color,box-shadow] duration-300 ease-in-out lg:gap-4 lg:px-6",
           scrolled
-            ? "mx-2 mt-2 h-[calc(100%-0.75rem)] w-[calc(100%-1rem)] rounded-2xl border-white/60 bg-[hsl(var(--surface-header)/0.4)] shadow-[inset_0_1px_0_rgb(255_255_255/0.7),0_10px_30px_-12px_rgb(15_23_42/0.25)] backdrop-blur-md backdrop-saturate-150 lg:mx-3 lg:w-[calc(100%-1.5rem)] dark:border-white/10 dark:bg-[hsl(var(--surface-header)/0.35)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_10px_30px_-12px_rgb(0_0_0/0.6)]"
+            ? "mx-2 mt-2 h-[calc(100%-0.75rem)] w-[calc(100%-1rem)] rounded-2xl border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg lg:mx-3 lg:w-[calc(100%-1.5rem)] dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
             : "h-full rounded-none border-transparent bg-transparent"
         )}
       >

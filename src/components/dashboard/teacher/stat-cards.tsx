@@ -252,11 +252,10 @@ export function StatCard({
       data-stat-card=""
       className={cn(
         "group @container/stat relative flex flex-col overflow-hidden rounded-lg sm:p-5",
-        // Opaque: the card surface with its tone washed into the top-left
-        // corner. No blur and no see-through, so a card looks the same on the
-        // page background as on top of a hero's art.
-        "bg-card bg-gradient-to-br via-card via-60% to-card",
-        "border-border/70",
+        // Frosted glass: a translucent card surface with its tone washed into
+        // the top-left corner, over a backdrop blur.
+        "bg-card/55 bg-gradient-to-br via-card/55 via-60% to-card/55 backdrop-blur-xl dark:bg-card/45 dark:via-card/45 dark:to-card/45",
+        "border-white/60 dark:border-white/10",
         "shadow-[0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[0_8px_24px_-12px_rgb(0_0_0/0.5)]",
         denseOnPhone ? "p-3" : "p-4",
         WASH[tone],
