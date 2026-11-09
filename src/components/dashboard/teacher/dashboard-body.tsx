@@ -63,15 +63,23 @@ export async function TeacherDashboardBody({
   isSuperAdmin: boolean;
   firstName: string;
   subtitle?: string;
-  /** Hero art, chosen from the teacher's profile gender by the page. */
-  bannerSrc: string;
+  /**
+   * Hero art, chosen from the teacher's profile gender by the page. A promise
+   * lets the page start that lookup without holding back the overview below.
+   * It must not reject: the page maps a failed read to the default banner.
+   */
+  bannerSrc: string | Promise<string>;
 }) {
   let data: Awaited<ReturnType<typeof getTeacherOverview>> | null = null;
+  // Both reads are in flight together. Awaiting the banner first made the
+  // overview wait one extra database round trip on every dashboard load.
+  const bannerPromise = Promise.resolve(bannerSrc);
   try {
     data = await getTeacherOverview({ schoolId, teacherId, isSuperAdmin });
   } catch (err) {
     console.error("[TeacherDashboardBody] failed to load:", err);
   }
+  const resolvedBannerSrc = await bannerPromise;
 
   if (!data) {
     return (
@@ -118,7 +126,7 @@ export async function TeacherDashboardBody({
           firstName={firstName}
           todayKey={data.todayKey}
           subtitle={subtitle}
-          bannerSrc={bannerSrc}
+          bannerSrc={resolvedBannerSrc}
           quote={pickQuote()}
         />
         <Surface as="section" className="mt-4 rounded-lg px-5 py-10 text-center">
@@ -150,7 +158,7 @@ export async function TeacherDashboardBody({
         firstName={firstName}
         todayKey={data.todayKey}
         subtitle={subtitle}
-        bannerSrc={bannerSrc}
+        bannerSrc={resolvedBannerSrc}
         quote={quote}
       />
 
