@@ -92,7 +92,7 @@ function AttendanceGridRowImpl({
       <TableCell
         className={cn(
           "sticky left-0 z-10 font-medium",
-          selected ? "bg-muted" : "bg-card"
+          selected ? "bg-muted" : "bg-card group-hover/row:bg-muted"
         )}
       >
         {learner.listingName}

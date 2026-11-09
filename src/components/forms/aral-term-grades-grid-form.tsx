@@ -515,7 +515,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                 <TableHead rowSpan={2} className="w-12 text-center">
                   #
                 </TableHead>
-                <TableHead rowSpan={2} className="min-w-[12rem]">
+                <TableHead rowSpan={2} className="sticky left-0 z-20 min-w-[12rem] bg-card">
                   Complete Name
                 </TableHead>
                 <TableHead rowSpan={2} className="min-w-[7rem]">
@@ -565,7 +565,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                     <TableCell className="text-center text-sm tabular-nums text-muted-foreground">
                       {indexOffset + index + 1}
                     </TableCell>
-                    <TableCell className="font-medium">{learner.fullName}</TableCell>
+                    <TableCell className="sticky left-0 z-10 bg-card group-hover/row:bg-muted font-medium">{learner.fullName}</TableCell>
                     <TableCell className="text-muted-foreground">{learner.sectionLabel}</TableCell>
                     {shown.map((subject, subjectIndex) => (
                       <TableCell

@@ -153,7 +153,7 @@ export function KinderChecklistRow({
 }: KinderChecklistRowProps) {
   return (
     <TableRow>
-      <TableCell className="w-10 tabular-nums text-muted-foreground">{rowNumber}</TableCell>
+      <TableCell numeric className="w-10 text-muted-foreground">{rowNumber}</TableCell>
       <TableCell className="min-w-[16rem] text-sm">{competencyText}</TableCell>
       {TERM_ORDER.map((term) => (
         <TableCell key={term} className="w-32">

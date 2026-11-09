@@ -581,10 +581,10 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
     const row = rows[learner.id] ?? EMPTY_ROW;
     return (
       <TableRow key={learner.id}>
-        <TableCell className="text-sm text-muted-foreground tabular-nums">
+        <TableCell numeric className="text-sm text-muted-foreground">
           {rowNumber}
         </TableCell>
-        <TableCell>
+        <TableCell className="sticky left-0 z-10 bg-card group-hover/row:bg-muted">
           <span className="flex items-center gap-2.5">
             <LearnerAvatar id={learner.id} fullName={learner.fullName} />
             <span className="font-medium">{learner.listingName}</span>
@@ -678,8 +678,8 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">#</TableHead>
-              <TableHead className="min-w-[200px]">Learner</TableHead>
+              <TableHead numeric className="w-10">#</TableHead>
+              <TableHead className="sticky left-0 z-20 min-w-[200px] bg-card">Learner</TableHead>
               {includesEnglish ? <ScaleHead title="English" sub="Reading Level" /> : null}
               <ScaleHead title="Filipino" sub="Reading Level" />
               <ScaleHead title="Word Recognition" sub="Level" />

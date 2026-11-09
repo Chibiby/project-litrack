@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { cn } from "@/lib/utils";
 import {
   KINDER_COMPETENCY_CATALOG,
@@ -159,12 +160,15 @@ function DomainSection({
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="border-t border-border/60">
-          {/* xl and up: one table for the domain, to the mockup's # | Competency | T1 | T2 | T3 | Remarks columns. */}
-          <div className="hidden overflow-x-auto xl:block">
+          {/* One table for the domain (# | Competency | T1 | T2 | T3 | Remarks) once
+              the panel is 900px wide; stacked cards below that. */}
+          <ResponsiveTable
+            breakpoint={900}
+            table={
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">#</TableHead>
+                  <TableHead numeric className="w-10">#</TableHead>
                   <TableHead>Competency</TableHead>
                   <TableHead className="w-32">T1</TableHead>
                   <TableHead className="w-32">T2</TableHead>
@@ -201,7 +205,7 @@ function DomainSection({
                   if (line.kind === "stem") {
                     return (
                       <TableRow key={line.key} className="hover:bg-transparent">
-                        <TableCell className="w-10 tabular-nums text-muted-foreground">
+                        <TableCell numeric className="w-10 text-muted-foreground">
                           {line.number}
                         </TableCell>
                         <TableCell colSpan={5} className="text-sm font-medium text-foreground">
@@ -226,10 +230,9 @@ function DomainSection({
                 })}
               </TableBody>
             </Table>
-          </div>
-
-          {/* Below xl: the same rows as a stacked card list. */}
-          <div className="flex flex-col gap-2 p-3 xl:hidden">
+            }
+            stacked={
+          <div className="flex flex-col gap-2 p-3">
             {lines.map((line) => {
               if (line.kind === "section-header") {
                 return (
@@ -270,6 +273,8 @@ function DomainSection({
               );
             })}
           </div>
+            }
+          />
         </div>
       </CollapsibleContent>
     </Collapsible>
