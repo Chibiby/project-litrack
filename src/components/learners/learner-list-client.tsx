@@ -31,7 +31,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { GENDER_LABELS, GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { LearnerAvatar } from "@/components/learners/learner-avatar";
 import { ReadingBandPill } from "@/components/learners/reading-band-pill";
@@ -623,9 +626,10 @@ function LearnerListPanel({
             />
           </div>
         ) : (
-          <>
-            {/* xl and up: the full table, as in the desktop mockup. */}
-            <div className="hidden overflow-x-auto xl:block">
+          <ResponsiveTable
+            // Ten columns: the full table needs ~1100px of its own width.
+            breakpoint={1100}
+            table={
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -640,17 +644,17 @@ function LearnerListPanel({
                         />
                       </TableHead>
                     )}
-                    <TableHead className={`${HEAD_CLASS} w-10`}>#</TableHead>
+                    <TableHead numeric className={`${HEAD_CLASS} w-10`}>#</TableHead>
                     <TableHead className={HEAD_CLASS}>Learner Name</TableHead>
-                    <TableHead className={HEAD_CLASS}>Age</TableHead>
+                    <TableHead numeric className={HEAD_CLASS}>Age</TableHead>
                     <TableHead className={HEAD_CLASS}>Grade &amp; Section</TableHead>
                     <TableHead className={HEAD_CLASS}>Advisory</TableHead>
                     <TableHead className={HEAD_CLASS}>Gender</TableHead>
                     <TableHead className={HEAD_CLASS}>English Level</TableHead>
                     <TableHead className={HEAD_CLASS}>Filipino Level</TableHead>
                     <TableHead className={HEAD_CLASS}>ARAL Status</TableHead>
-                    <TableHead className={`${HEAD_CLASS} text-right`}>
-                      Actions
+                    <TableHead className={HEAD_CLASS}>
+                      <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -673,7 +677,7 @@ function LearnerListPanel({
                             />
                           </TableCell>
                         )}
-                        <TableCell className="tabular-nums text-muted-foreground">
+                        <TableCell numeric className="text-muted-foreground">
                           {rowNumber(i)}
                         </TableCell>
                         <TableCell>
@@ -697,7 +701,7 @@ function LearnerListPanel({
                             </span>
                           </span>
                         </TableCell>
-                        <TableCell className="tabular-nums">{l.age}</TableCell>
+                        <TableCell numeric>{l.age ?? <NoValue />}</TableCell>
                         <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                           {gradeAndSection(l)}
                         </TableCell>
@@ -707,7 +711,7 @@ function LearnerListPanel({
                               {shortGrade(l.gradeType)} - {l.section.name}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <NoValue />
                           )}
                         </TableCell>
                         <TableCell>{GENDER_LABELS[l.gender]}</TableCell>
@@ -727,11 +731,11 @@ function LearnerListPanel({
                           {l.isAralLearner ? (
                             <span className={ARAL_CHIP}>ARAL</span>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <NoValue />
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center justify-end gap-1.5">
+                          <RowActions className="gap-1.5">
                             {!archivedView && (
                               <Button
                                 type="button"
@@ -749,17 +753,16 @@ function LearnerListPanel({
                             {!isSuperAdmin && archivedView
                               ? archivedActions(l)
                               : rowMenu(l, false)}
-                          </div>
+                          </RowActions>
                         </TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
-            </div>
-
-            {/* Below xl: one line per learner, as in the phone mockup. */}
-            <ul className="divide-y divide-border/60 xl:hidden" aria-label="Learners">
+            }
+            stacked={
+            <ul className="divide-y divide-border/60" aria-label="Learners">
               {learners.map((l, i) => {
                 const isSelected = selected.has(l.id);
                 const pill = l.englishReadingProfile ?? l.filipinoReadingProfile;
@@ -820,7 +823,8 @@ function LearnerListPanel({
                 );
               })}
             </ul>
-          </>
+            }
+          />
         )}
         </ListBusyRegion>
 

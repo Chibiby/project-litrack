@@ -24,21 +24,39 @@ import { cn } from "@/lib/utils";
  * 6. Breakpoint — see above.
  */
 
+/**
+ * Container widths at which the full table takes over. Most tables switch at
+ * 700px; a wide roster (ten columns) passes 1100 so it stacks until its box
+ * can hold every column. The classes are spelled out because Tailwind only
+ * generates class names it can read in the source.
+ */
+const BREAKPOINT = {
+  700: { table: "hidden @[700px]/rt:block", stacked: "@[700px]/rt:hidden" },
+  900: { table: "hidden @[900px]/rt:block", stacked: "@[900px]/rt:hidden" },
+  1100: { table: "hidden @[1100px]/rt:block", stacked: "@[1100px]/rt:hidden" },
+} as const;
+
+export type ResponsiveTableBreakpoint = keyof typeof BREAKPOINT;
+
 export function ResponsiveTable({
   table,
   stacked,
+  breakpoint = 700,
   className,
 }: {
-  /** The full `<Table>`, shown when the container is 700px or wider. */
+  /** The full `<Table>`, shown when the container is at least `breakpoint` wide. */
   table: React.ReactNode;
-  /** The `<StackedList>`, shown below 700px. */
+  /** The `<StackedList>`, shown below `breakpoint`. */
   stacked: React.ReactNode;
+  /** Container width (px) where the table replaces the stacked rows. Default 700. */
+  breakpoint?: ResponsiveTableBreakpoint;
   className?: string;
 }) {
+  const bp = BREAKPOINT[breakpoint];
   return (
     <div className={cn("@container/rt w-full min-w-0", className)}>
-      <div className="hidden @[700px]/rt:block">{table}</div>
-      <div className="@[700px]/rt:hidden">{stacked}</div>
+      <div className={bp.table}>{table}</div>
+      <div className={bp.stacked}>{stacked}</div>
     </div>
   );
 }
