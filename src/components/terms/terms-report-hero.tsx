@@ -66,11 +66,13 @@ export function TermsReportHero({
           kinderBasePath={kinderBasePath}
         />
       }
-      // Phones: the art is a fixed 160px tall and pushed right until the girl
-      // meets the band's edge, so both children sit beside the text as in the
-      // phone mockup; the handwriting fades out under the title.
-      artClassName="max-sm:!h-[140px] max-sm:right-[-112px] sm:right-[calc(50%-375px)] lg:right-[min(0px,calc(100%-1291px))]"
-      phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%)]"
+      // Phones: the advisory picker takes the top-right corner and the term
+      // tabs the bottom, so there is no room left for the art; it is hidden
+      // and the subtitle uses the full width. Tablets: the term tabs make the band
+      // tall, so the art keeps a fixed height pinned to the top instead of
+      // scaling up behind the title.
+      artClassName="max-sm:hidden sm:max-lg:!h-[10.5rem] sm:right-[calc(50%-300px)] lg:right-[min(0px,calc(100%-1291px))]"
+      phoneMaskClassName="max-sm:[&>img]:[mask-image:linear-gradient(to_right,transparent_45%,black_56%)] sm:max-lg:[&>img]:[mask-image:linear-gradient(to_right,transparent_30%,black_45%)] sm:max-lg:[&>img]:!bottom-auto sm:max-lg:[&>img]:top-0"
       headClassName="max-lg:hidden"
       contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
     >
@@ -84,7 +86,7 @@ export function TermsReportHero({
         <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
           {title}
         </h1>
-        <p className="mt-1 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
+        <p className="mt-1 text-xs leading-snug text-slate-600 dark:text-slate-300 max-sm:line-clamp-2 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
           {subtitle}
         </p>
       </div>

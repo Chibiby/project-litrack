@@ -1,4 +1,4 @@
-import { Heart, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { PageHero } from "@/components/shell/page-hero";
 
 /**
@@ -11,17 +11,14 @@ export function AralPageHero({
   eyebrowIcon: EyebrowIcon,
   title,
   subtitle,
-  /** Extra explanatory line under the subtitle, same text column as the rest. */
+  /** Extra explanatory line under the subtitle, same text column as the rest. Hidden on phones. */
   description,
-  tagline = "Together for Brighter Learners!",
 }: {
   eyebrow: string;
   eyebrowIcon: LucideIcon;
   title: string;
   subtitle: string;
   description?: string;
-  /** Set to `null` to omit the tagline line entirely. */
-  tagline?: string | null;
 }) {
   return (
     <PageHero
@@ -40,18 +37,12 @@ export function AralPageHero({
         <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
           {title}
         </h1>
-        <p className="mt-1 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
+        <p className="mt-1 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 max-sm:line-clamp-2 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
           {subtitle}
         </p>
         {description ? (
-          <p className="mt-1 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-base">
+          <p className="mt-1 hidden max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:block sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-base">
             {description}
-          </p>
-        ) : null}
-        {tagline != null ? (
-          <p className="mt-1 flex items-center gap-1 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
-            {tagline}
-            <Heart className="size-3 shrink-0 fill-current sm:size-3.5 lg:size-4" aria-hidden />
           </p>
         ) : null}
       </div>

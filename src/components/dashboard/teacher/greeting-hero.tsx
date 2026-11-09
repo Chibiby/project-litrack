@@ -59,6 +59,9 @@ export function GreetingHero({
   return (
     <PageHero
       bannerSrc={bannerSrc}
+      // Phones: grow past 15rem when the subtitle wraps, instead of clipping
+      // its last line under the date chip.
+      className="max-sm:h-auto max-sm:min-h-[15rem]"
       artClassName="right-[calc(18%-272px)] sm:right-[calc(23%-272px)]"
       phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_65%),linear-gradient(to_bottom,transparent_49%,black_53%)]"
       // lg only (1024–1279): the hero box is narrowest here (sidebar takes a
@@ -75,7 +78,7 @@ export function GreetingHero({
       <p className="text-2xl font-semibold text-blue-600 dark:text-blue-300 lg:hidden">
         {greeting},
       </p>
-      <h1 className="mt-0.5 text-4xl font-extrabold tracking-tight text-slate-950 dark:text-white lg:text-5xl">
+      <h1 className="mt-0.5 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl text-slate-950 dark:text-white lg:text-5xl">
         {firstName}!&nbsp;<span aria-hidden>👋</span>
       </h1>
       <p className="mt-2 line-clamp-2 max-w-[13rem] text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">

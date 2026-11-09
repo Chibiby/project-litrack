@@ -584,7 +584,7 @@ export default async function TeacherLearnersPage({
           Manage and view all learners in your advisories.
           {isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}
         </p>
-        <blockquote className="mt-3 max-w-[10.5rem] text-sm italic leading-relaxed text-slate-600 dark:text-slate-300 sm:max-w-[16rem] lg:mt-4 lg:max-w-lg">
+        <blockquote className="mt-4 hidden max-w-lg text-sm italic leading-relaxed text-slate-600 dark:text-slate-300 lg:block">
           &ldquo;{quote.text}&rdquo;
           <footer className="not-italic">— {quote.author}</footer>
         </blockquote>

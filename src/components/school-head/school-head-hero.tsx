@@ -92,11 +92,11 @@ export function SchoolHeadHero({
         <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
           {title}
         </h1>
-        <p className="mt-1 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
+        <p className="mt-1 max-w-[50%] text-xs leading-snug max-sm:line-clamp-2 text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
           {subtitle}
         </p>
         {meta ? (
-          <p className="mt-0.5 max-w-[50%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%]">
+          <p className="mt-0.5 max-w-[50%] text-xs leading-snug max-sm:hidden text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%]">
             {meta}
           </p>
         ) : null}
