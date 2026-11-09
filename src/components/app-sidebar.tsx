@@ -510,7 +510,7 @@ export function AppSidebar({
           header. */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/60 bg-[hsl(var(--surface)/0.6)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.55)] lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/60 bg-[hsl(var(--surface)/0.35)] backdrop-blur-md backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.3)] lg:flex",
           transitionsEnabled && "transition-[width] duration-200",
           collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
         )}
@@ -533,7 +533,7 @@ export function AppSidebar({
         </SheetTrigger>
         <SheetContent
           side="left"
-          className="w-64 border-r border-border/60 bg-[hsl(var(--surface)/0.75)] p-0 backdrop-blur-xl backdrop-saturate-150 data-[state=closed]:duration-150 data-[state=open]:duration-200 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.7)]"
+          className="w-64 border-r border-border/60 bg-[hsl(var(--surface)/0.55)] p-0 backdrop-blur-lg backdrop-saturate-150 data-[state=closed]:duration-150 data-[state=open]:duration-200 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.5)]"
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           {renderSidebarContent(() => setMobileOpen(false), { collapsed: false, phone: true })}

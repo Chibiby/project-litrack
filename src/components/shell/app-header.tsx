@@ -162,7 +162,7 @@ export function AppHeader({
       className={cn(
         "sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b transition-[background-color,border-color,backdrop-filter] duration-200",
         scrolled
-          ? "border-border/60 bg-[hsl(var(--surface-header)/0.65)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface-header)/0.6)]"
+          ? "border-border/60 bg-[hsl(var(--surface-header)/0.4)] backdrop-blur-md backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface-header)/0.35)]"
           : "border-transparent bg-transparent"
       )}
     >
