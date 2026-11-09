@@ -9,6 +9,7 @@ vi.mock("@/lib/prisma", () => ({
 import {
   countPendingTransferRequests,
   pendingTransfersByLearner,
+  pendingTransfersForLearners,
 } from "@/lib/learners/section-transfer-queries";
 
 const SCHOOL = "school-1";
@@ -49,6 +50,29 @@ describe("pendingTransfersByLearner", () => {
       requestId: "req-2",
       toSectionName: "Mabini",
       requestedById: null,
+    });
+  });
+});
+
+describe("pendingTransfersForLearners", () => {
+  it("scopes to the school and matches learners by the roster's own where", async () => {
+    findMany.mockResolvedValue([
+      { id: "req-1", learnerId: "l-1", requestedById: "teacher-a", toSection: { name: "Rizal" } },
+    ]);
+    const learnerWhere = { schoolId: SCHOOL, teacherId: "teacher-a", deletedAt: null };
+
+    const map = await pendingTransfersForLearners(SCHOOL, learnerWhere);
+
+    const args = findMany.mock.calls[0]![0];
+    expect(args.where).toEqual({
+      schoolId: SCHOOL,
+      status: "PENDING",
+      learner: { is: learnerWhere },
+    });
+    expect(map.get("l-1")).toEqual({
+      requestId: "req-1",
+      toSectionName: "Rizal",
+      requestedById: "teacher-a",
     });
   });
 });
