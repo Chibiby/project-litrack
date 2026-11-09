@@ -34,34 +34,14 @@ async function openPopover() {
 }
 
 describe("MosyExportButton", () => {
-  it("defaults to Excel with the printing layout", async () => {
+  it("defaults to Excel and offers no layout choice", async () => {
     render(<MosyExportButton />);
     await openPopover();
     expect(screen.getByRole("combobox", { name: "Format" }).textContent).toContain(
       "Excel (.xlsx)",
     );
-    expect(screen.getByRole("radio", { name: "For printing" }).getAttribute("data-state")).toBe(
-      "checked",
-    );
-    expect((screen.getByRole("radio", { name: "For records" }) as HTMLButtonElement).disabled).toBe(
-      false,
-    );
-  });
-
-  it("disables For records once PDF is chosen", async () => {
-    render(<MosyExportButton />);
-    await openPopover();
-    fireEvent.click(screen.getByRole("radio", { name: "For records" }));
-    fireEvent.keyDown(screen.getByRole("combobox", { name: "Format" }), { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: "PDF (.pdf)" }));
-    await waitFor(() =>
-      expect((screen.getByRole("radio", { name: "For records" }) as HTMLButtonElement).disabled).toBe(
-        true,
-      ),
-    );
-    expect(screen.getByRole("radio", { name: "For printing" }).getAttribute("data-state")).toBe(
-      "checked",
-    );
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.queryByText("For records")).toBeNull();
   });
 
   it("sends format, purpose and the URL filters, then closes and toasts", async () => {
@@ -69,14 +49,13 @@ describe("MosyExportButton", () => {
     exportMosyReport.mockReturnValue(new Promise((r) => (resolve = r)));
     render(<MosyExportButton />);
     await openPopover();
-    fireEvent.click(screen.getByRole("radio", { name: "For records" }));
     fireEvent.click(screen.getByRole("button", { name: "Download" }));
 
     const busyButton = await screen.findByRole("button", { name: "Preparing…" });
     expect((busyButton as HTMLButtonElement).disabled).toBe(true);
     const fd = exportMosyReport.mock.calls[0][0] as FormData;
     expect(fd.get("format")).toBe("EXCEL");
-    expect(fd.get("purpose")).toBe("RECORDS");
+    expect(fd.get("purpose")).toBe("PRINT");
     expect(fd.get("q")).toBe("ana");
     expect(fd.get("grade")).toBe("g1");
     expect(fd.get("section")).toBe("s2");

@@ -186,16 +186,13 @@ describe("TermsReportPanel", () => {
     });
   });
 
-  it("defaults the export to the For-printing layout, and sends Records once chosen", async () => {
-    window.localStorage.clear();
+  it("always exports the For-printing layout, even with an old Records choice stored", async () => {
+    window.localStorage.setItem("litrack.exportPurpose", "RECORDS");
     renderPanel();
+    expect(screen.queryByRole("radio", { name: /For records/i })).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: /export/i })[0]);
     await waitFor(() => expect(exportTermGrades).toHaveBeenCalledTimes(1));
     expect(exportTermGrades.mock.calls[0][0]).toMatchObject({ purpose: "PRINT" });
-
-    fireEvent.click(screen.getAllByRole("radio", { name: /For records/i })[0]);
-    fireEvent.click(screen.getAllByRole("button", { name: /export/i })[0]);
-    await waitFor(() => expect(exportTermGrades).toHaveBeenCalledTimes(2));
-    expect(exportTermGrades.mock.calls[1][0]).toMatchObject({ purpose: "RECORDS" });
+    window.localStorage.clear();
   });
 });

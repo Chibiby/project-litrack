@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.47.1",
+    date: "2026-11-09",
+    title: "Every export uses the printing layout",
+    announce: true,
+    fixes: [
+      "Excel and PDF downloads now always come in the official printing layout. The For records choice is gone, so there is one less thing to pick before you download.",
+    ],
+  },
+  {
     version: "2.47.0",
     date: "2026-11-09",
     title: "New BOSY Report under Advisory",

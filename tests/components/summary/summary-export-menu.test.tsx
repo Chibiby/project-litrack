@@ -34,11 +34,11 @@ async function openPopover() {
 }
 
 describe("SummaryExportMenu", () => {
-  it("defaults to PDF with the printing layout locked", async () => {
+  it("defaults to PDF and offers no layout choice", async () => {
     render(<SummaryExportMenu facetId="aral-teachers" request={{ level: "overall" }} />);
     await openPopover();
     expect(screen.getByRole("combobox", { name: "Format" }).textContent).toContain("PDF (.pdf)");
-    expect((screen.getByRole("radio", { name: /^For records/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 
   it("downloads a PDF when Download is pressed without changing anything", async () => {

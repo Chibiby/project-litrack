@@ -100,7 +100,7 @@ describe("ReportsHub", () => {
   });
 });
 
-describe("ReportsHub export layout (Print/Records)", () => {
+describe("ReportsHub export layout (always printing)", () => {
   it("generates with the default For-printing layout", async () => {
     renderHub();
     fireEvent.click(screen.getAllByRole("button", { name: /generate report/i })[0]!);
@@ -108,29 +108,14 @@ describe("ReportsHub export layout (Print/Records)", () => {
     expect(generateReport.mock.calls[0]![0]).toMatchObject({ purpose: "PRINT" });
   });
 
-  it("sends RECORDS once For records is chosen", async () => {
+  it("offers no layout choice", () => {
     renderHub();
-    fireEvent.click(screen.getByRole("radio", { name: /For records/i }));
-    fireEvent.click(screen.getAllByRole("button", { name: /generate report/i })[0]!);
-    await vi.waitFor(() => expect(generateReport).toHaveBeenCalled());
-    expect(generateReport.mock.calls[0]![0]).toMatchObject({ purpose: "RECORDS" });
+    expect(screen.queryByRole("radio", { name: /For records/i })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /For printing/i })).toBeNull();
   });
 
-  it("disables the layout choice for PDF, which is always the print template", () => {
+  it("generates PDF with the printing layout", async () => {
     renderHub();
-    fireEvent.click(screen.getByRole("radio", { name: /For records/i }));
-
-    fireEvent.click(screen.getByLabelText("Report Format"));
-    fireEvent.click(screen.getByText("PDF (.pdf)"));
-
-    for (const radio of screen.getAllByRole("radio")) {
-      expect((radio as HTMLButtonElement).disabled).toBe(true);
-    }
-  });
-
-  it("still generates PDF as PRINT even if Records was chosen first", async () => {
-    renderHub();
-    fireEvent.click(screen.getByRole("radio", { name: /For records/i }));
     fireEvent.click(screen.getByLabelText("Report Format"));
     fireEvent.click(screen.getByText("PDF (.pdf)"));
 

@@ -58,11 +58,6 @@ import {
   type ReportKind,
 } from "@/lib/reports/kinds";
 import type { ReportLocks } from "@/lib/reports/availability";
-import {
-  ExportPurposeToggle,
-  useExportPurpose,
-  type ExportPurpose,
-} from "@/components/reports/export-purpose-toggle";
 
 export type ReportsHubOption = { id: string; label: string };
 export type ReportsHubSection = ReportsHubOption & { gradeLevelId: string };
@@ -172,7 +167,6 @@ export function ReportsHub({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [format, setFormat] = useState<ReportFormat>("EXCEL");
-  const [purpose, setPurpose] = useExportPurpose();
   const [busy, setBusy] = useState<string | null>(null);
   const [rows, setRows] = useState(recent);
   const [, startTransition] = useTransition();
@@ -210,14 +204,9 @@ export function ReportsHub({
   function run(
     kind: ReportKind,
     override?: Partial<ReportFilters>,
-    key: string = kind,
-    purposeOverride?: ExportPurpose
+    key: string = kind
   ) {
     if (busy || locks[kind]) return;
-    // PDF is always the print layout — the toggle is disabled for PDF in the
-    // filters row, but a stale row's saved purpose could still say RECORDS.
-    const effectivePurpose: ExportPurpose =
-      format === "PDF" ? "PRINT" : (purposeOverride ?? purpose);
     setBusy(key);
     startTransition(async () => {
       const res = await callAction(() =>
@@ -226,7 +215,7 @@ export function ReportsHub({
           format,
           ...filters,
           ...override,
-          purpose: effectivePurpose,
+          purpose: "PRINT",
         })
       );
       setBusy(null);
@@ -248,7 +237,7 @@ export function ReportsHub({
           scopeLabel: null,
           createdAt: new Date().toISOString(),
           createdByName: "You",
-          filters: { ...filters, ...override, purpose: effectivePurpose },
+          filters: { ...filters, ...override, purpose: "PRINT" },
         },
         ...prev,
       ]);
@@ -272,7 +261,7 @@ export function ReportsHub({
   }
 
   function regenerate(row: RecentReportRow) {
-    run(row.kind, row.filters, `row-${row.id}`, row.filters.purpose ?? undefined);
+    run(row.kind, { ...row.filters, purpose: "PRINT" }, `row-${row.id}`);
   }
 
   function remove(row: RecentReportRow) {
@@ -414,16 +403,6 @@ export function ReportsHub({
                 <SelectItem value="PDF">PDF (.pdf)</SelectItem>
               </SelectContent>
             </Select>
-          </Field>
-
-          <Field label="Layout">
-            <ExportPurposeToggle
-              value={format === "PDF" ? "PRINT" : purpose}
-              onChange={setPurpose}
-              disabled={format === "PDF"}
-              hideLabel
-              className="h-10 justify-center"
-            />
           </Field>
 
           <Button type="button" variant="outline" onClick={reset}>

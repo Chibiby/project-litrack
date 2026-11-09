@@ -13,10 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ExportPurposeToggle,
-  useExportPurpose,
-} from "@/components/reports/export-purpose-toggle";
 import { exportSummary } from "@/lib/actions/summary-export";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
@@ -51,9 +47,9 @@ function triggerDownload(base64: string, filename: string) {
 }
 
 /**
- * Excel (For printing / For records) or PDF of the view on screen, with the
- * same layout choice as the Reports hub. The request carries exactly the scope
- * and period the page used, so the file matches the tables.
+ * Excel or PDF of the view on screen, always in the printing layout. The
+ * request carries exactly the scope and period the page used, so the file
+ * matches the tables.
  */
 export function SummaryExportMenu({
   facetId,
@@ -65,7 +61,6 @@ export function SummaryExportMenu({
   const [open, setOpen] = useState(false);
   // PDF first: Division Summary exports are mostly printed and passed on.
   const [format, setFormat] = useState<Format>("PDF");
-  const [purpose, setPurpose] = useExportPurpose();
   const [pending, startTransition] = useTransition();
 
   function run() {
@@ -75,8 +70,7 @@ export function SummaryExportMenu({
           ...request,
           facet: facetId,
           format,
-          // PDF is always the print layout.
-          purpose: format === "PDF" ? "PRINT" : purpose,
+          purpose: "PRINT",
         })
       );
       if (!res.ok) {
@@ -112,15 +106,6 @@ export function SummaryExportMenu({
               <SelectItem value="EXCEL">Excel (.xlsx)</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Layout</span>
-          <ExportPurposeToggle
-            value={format === "PDF" ? "PRINT" : purpose}
-            onChange={setPurpose}
-            disabled={format === "PDF"}
-            hideLabel
-          />
         </div>
         <Button
           type="button"

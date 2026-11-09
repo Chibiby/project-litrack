@@ -29,7 +29,6 @@ import { LEARNER_LIST_DEFAULT_PAGE_SIZE } from "@/lib/learners/pagination";
 import type { TermGradesExportInput } from "@/lib/validators/term-grade.schema";
 import type { SheetGroup } from "@/lib/terms/sheet-data";
 import { sheetHref, type SheetUrlState } from "@/lib/terms/sheet-view";
-import { ExportPurposeToggle, useExportPurpose } from "@/components/reports/export-purpose-toggle";
 
 /** Same shape as the learner export: base64 in, synthetic anchor click out. */
 function downloadBase64Xlsx(base64: string, filename: string) {
@@ -91,7 +90,6 @@ export function TermsReportPanel({
   const [, startNav] = useTransition();
   const [exportPending, startExport] = useTransition();
   const [savePending, setSavePending] = useState(false);
-  const [purpose, setPurpose] = useExportPurpose();
   const [searchValue, setSearchValue] = useState(state.q);
   const [subjectName, setSubjectName] = useState("all");
   const [subjectStep, setSubjectStep] = useState(0);
@@ -166,7 +164,7 @@ export function TermsReportPanel({
           ...exportScope,
           term: state.term,
           q: state.q.trim() || undefined,
-          purpose,
+          purpose: "PRINT",
         } satisfies TermGradesExportInput)
       );
       if (!res.ok) {
@@ -326,10 +324,6 @@ export function TermsReportPanel({
     </>
   );
 
-  const exportPurposeToggle = (
-    <ExportPurposeToggle value={purpose} onChange={setPurpose} hideLabel className="shrink-0" />
-  );
-
   const exportButton = (
     <Button
       type="button"
@@ -410,7 +404,6 @@ export function TermsReportPanel({
             </PopoverContent>
           </Popover>
         </div>
-        {exportPurposeToggle}
         <UnsavedChangesBadge dirty={dirty} />
       </Surface>
 
@@ -421,7 +414,6 @@ export function TermsReportPanel({
           {facets("desktop")}
           <div className="ml-auto flex items-center gap-3">
             <UnsavedChangesBadge dirty={dirty} />
-            {exportPurposeToggle}
             {exportButton}
             {saveButton}
           </div>

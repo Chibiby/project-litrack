@@ -9,11 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { AdvisorySelect } from "@/components/learners/advisory-select";
-import {
-  ExportPurposeToggle,
-  useExportPurpose,
-  type ExportPurpose,
-} from "@/components/reports/export-purpose-toggle";
+import type { ReportPurpose as ExportPurpose } from "@/lib/reports/report-frame";
 
 export type KinderChecklistLearnerOption = { id: string; fullName: string };
 export type KinderChecklistAdvisoryOption = { id: string; label: string };
@@ -64,13 +60,12 @@ export function KinderChecklistExportControls({
 }) {
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<"excel" | "print" | null>(null);
-  const [purpose, setPurpose] = useExportPurpose();
 
   function handleExcel() {
     setBusy("excel");
     startTransition(async () => {
       try {
-        const res = await callAction(() => onExport(purpose));
+        const res = await callAction(() => onExport("PRINT"));
         if (!res.ok) {
           toastFailure(res);
           return;
@@ -100,7 +95,6 @@ export function KinderChecklistExportControls({
 
   return (
     <div className="flex flex-wrap items-end gap-2 print:hidden">
-      <ExportPurposeToggle value={purpose} onChange={setPurpose} disabled={disabled} />
       <Button
         type="button"
         variant="outline"
