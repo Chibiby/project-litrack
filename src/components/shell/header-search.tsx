@@ -230,7 +230,10 @@ export function HeaderSearch({
             setActive((i) => (i - 1 + rows.length) % rows.length);
           }
         }}
-        inputClassName="h-11 rounded-lg border-transparent bg-muted text-sm focus-visible:border-input focus-visible:bg-background lg:h-9"
+        // Card surface, a visible border and a soft shadow: the header is
+        // transparent over the light-rays background, so a muted fill would
+        // blend into it in both themes.
+        inputClassName="h-11 rounded-lg border-border bg-card text-sm shadow-sm placeholder:text-muted-foreground focus-visible:border-input dark:border-white/15 lg:h-9"
       />
 
       {showList && (

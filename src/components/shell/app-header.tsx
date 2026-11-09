@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CalendarDays, Menu } from "lucide-react";
@@ -22,6 +22,19 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import type { UserRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
+
+/** True once the window has scrolled away from the top. Server render: false. */
+function subscribeScroll(onChange: () => void) {
+  window.addEventListener("scroll", onChange, { passive: true });
+  return () => window.removeEventListener("scroll", onChange);
+}
+function useScrolled(): boolean {
+  return useSyncExternalStore(
+    subscribeScroll,
+    () => window.scrollY > 0,
+    () => false
+  );
+}
 
 const SEARCH_HREF: Record<UserRole, string> = {
   SUPER_ADMIN: ADMIN_ROUTES.schools,
@@ -137,8 +150,22 @@ export function AppHeader({
     year: "numeric",
   }).format(new Date());
 
+  const scrolled = useScrolled();
+
   return (
-    <header className="sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b border-border/80 bg-surface-header">
+    // Transparent at the top of the page, so the light-rays background shows
+    // through behind it. Once the page scrolls, the bar turns into frosted
+    // glass: a translucent surface with a backdrop blur, so content sliding
+    // under it stays a soft blur behind the controls instead of competing
+    // with them.
+    <header
+      className={cn(
+        "sticky top-0 z-30 h-[var(--app-chrome-header-height)] border-b transition-[background-color,border-color,backdrop-filter] duration-200",
+        scrolled
+          ? "border-border/60 bg-[hsl(var(--surface-header)/0.65)] backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-[hsl(var(--surface-header)/0.6)]"
+          : "border-transparent bg-transparent"
+      )}
+    >
       <div className="flex h-full w-full items-center gap-3 px-4 lg:gap-4 lg:px-6">
         {/* Mobile: spacer for the floating Sheet trigger. Desktop: collapse toggle. */}
         <div className="w-8 shrink-0 lg:hidden" />
