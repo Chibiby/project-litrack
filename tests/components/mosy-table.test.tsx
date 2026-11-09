@@ -82,8 +82,8 @@ describe("MosyTable", () => {
     expect(firstCells[6]!.textContent).toBe("Diagnosed LSEN");
     expect(firstCells[7]!.textContent).toBe("Referred to SPED");
     const secondCells = within(second!).getAllByRole("cell");
-    expect(secondCells[6]!.textContent).toBe("—");
-    expect(secondCells[7]!.textContent).toBe("—");
+    expect(secondCells[6]!.textContent).toMatch(/^—(Not set)?$/);
+    expect(secondCells[7]!.textContent).toMatch(/^—(Not set)?$/);
   });
 
   it("prefixes the MOSY level with its language", () => {
@@ -103,7 +103,7 @@ describe("MosyTable", () => {
     expect(visible(levelCell(0))).toContain("Fil:");
     expect(levelCell(0).textContent).toContain("Low Emergent");
     expect(visible(levelCell(1))).toContain("Eng:");
-    expect(levelCell(2).textContent).toBe("—");
+    expect(levelCell(2).textContent).toMatch(/^—(Not set)?$/);
   });
 
   it("gives screen readers the full language name, not the abbreviation", () => {
@@ -135,7 +135,7 @@ describe("MosyTable", () => {
     expect(lines[0]!.querySelector('[aria-hidden="true"]')?.textContent).toBe("Fil:");
     expect(lines[1]!.textContent).toContain("Developing");
     expect(lines[1]!.querySelector('[aria-hidden="true"]')?.textContent).toBe("Eng:");
-    expect(within(second!).getAllByRole("cell")[3]!.textContent).toBe("—");
+    expect(within(second!).getAllByRole("cell")[3]!.textContent).toMatch(/^—(Not set)?$/);
   });
 
   it("shows long remarks in full instead of truncating them", () => {

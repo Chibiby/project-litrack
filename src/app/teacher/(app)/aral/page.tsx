@@ -14,7 +14,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 import { ListNavigationProvider } from "@/components/nav/list-navigation";
@@ -114,6 +118,9 @@ async function AralLearnersTable({
     take,
   });
 
+  const learnerHref = (l: (typeof learners)[number]) =>
+    `/teacher/grade/${l.gradeLevelId}/learners/${l.id}`;
+
   const pageSearchParams: Record<string, string | undefined> = {
     grade: activeGrade !== "all" ? activeGrade : undefined,
     section: section !== "all" ? section : undefined,
@@ -143,48 +150,85 @@ async function AralLearnersTable({
               />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Learner</TableHead>
-                  <TableHead>Age</TableHead>
-                  {showGradeColumn && <TableHead>Grade</TableHead>}
-                  {showSection && <TableHead>Section</TableHead>}
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {learners.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-medium">
-                      <span className="flex items-center gap-2">
-                        <Sparkles className="h-3 w-3 text-violet" /> {l.fullName}
-                      </span>
-                    </TableCell>
-                    <TableCell>{l.age}</TableCell>
-                    {showGradeColumn && (
-                      <TableCell className="text-sm text-muted-foreground">
-                        {gradeLabels[l.gradeLevelId] ?? "—"}
-                      </TableCell>
-                    )}
-                    {showSection && (
-                      <TableCell className="text-sm text-muted-foreground">
-                        {l.section?.name ?? "—"}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-right">
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          href={`/teacher/grade/${l.gradeLevelId}/learners/${l.id}`}
-                        >
-                          View learner
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ResponsiveTable
+              table={
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Learner</TableHead>
+                      <TableHead numeric>Age</TableHead>
+                      {showGradeColumn && <TableHead>Grade</TableHead>}
+                      {showSection && <TableHead>Section</TableHead>}
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {learners.map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell className="max-w-[18rem] font-medium">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <Sparkles className="h-3 w-3 shrink-0 text-violet" aria-hidden />
+                            <CellText>{l.fullName}</CellText>
+                          </span>
+                        </TableCell>
+                        <TableCell numeric>{l.age ?? <NoValue />}</TableCell>
+                        {showGradeColumn && (
+                          <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                            {gradeLabels[l.gradeLevelId] ?? <NoValue />}
+                          </TableCell>
+                        )}
+                        {showSection && (
+                          <TableCell className="text-sm text-muted-foreground">
+                            {l.section?.name ?? <NoValue />}
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <RowActions>
+                            <Button asChild size="sm" variant="outline">
+                              <Link href={learnerHref(l)}>View learner</Link>
+                            </Button>
+                          </RowActions>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+              stacked={
+                <StackedList aria-label="ARAL learners">
+                  {learners.map((l) => (
+                    <StackedRow
+                      key={l.id}
+                      leading={<Sparkles className="h-3 w-3 text-violet" aria-hidden />}
+                      title={l.fullName}
+                      href={learnerHref(l)}
+                      value={
+                        l.age !== null && l.age !== undefined ? (
+                          <>
+                            {l.age}
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">yrs</span>
+                          </>
+                        ) : undefined
+                      }
+                      meta={
+                        showGradeColumn || showSection ? (
+                          <span className="truncate">
+                            {[
+                              showGradeColumn ? gradeLabels[l.gradeLevelId] : null,
+                              showSection ? l.section?.name ?? "No section" : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </ListBusyRegion>
         <LearnerPagination

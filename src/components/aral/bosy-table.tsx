@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
@@ -95,11 +96,12 @@ export function BosyTable({
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <ResponsiveTable
+            table={
             <Table className="min-w-[60rem]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
+                  <TableHead numeric className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
                   <TableHead className={HEAD_CLASS}>Learner name</TableHead>
                   <TableHead className={HEAD_CLASS}>Grade &amp; section</TableHead>
                   <TableHead className={HEAD_CLASS}>BOSY Filipino level</TableHead>
@@ -111,8 +113,8 @@ export function BosyTable({
               <TableBody>
                 {rows.map((r, i) => (
                   <TableRow key={r.id}>
-                    <TableCell className="tabular-nums text-muted-foreground">{rowNumber(i)}</TableCell>
-                    <TableCell className="font-medium">
+                    <TableCell numeric className="text-muted-foreground">{rowNumber(i)}</TableCell>
+                    <TableCell className="max-w-[18rem] font-medium">
                       {r.fullName}
                       {!r.isAralLearner ? (
                         <span className="ml-2 text-xs font-normal text-muted-foreground">(moved out)</span>
@@ -147,7 +149,53 @@ export function BosyTable({
                 ))}
               </TableBody>
             </Table>
-          </div>
+            }
+            stacked={
+              <StackedList aria-label="BOSY report">
+                {rows.map((r, i) => (
+                  <StackedRow
+                    key={r.id}
+                    leading={
+                      <span className="inline-block w-6 text-right text-xs tabular-nums text-muted-foreground">
+                        {rowNumber(i)}
+                      </span>
+                    }
+                    title={r.fullName}
+                    state={
+                      r.tier ? (
+                        <Badge variant="outline" className={cn("whitespace-nowrap", TIER_CHIP[r.tier])}>
+                          {BOSY_TIER_LABELS[r.tier]}
+                        </Badge>
+                      ) : undefined
+                    }
+                    meta={
+                      <>
+                        <span className="truncate">
+                          {r.sectionName ? `${r.gradeLabel} - ${r.sectionName}` : r.gradeLabel}
+                        </span>
+                        {!r.isAralLearner ? <span>(moved out)</span> : null}
+                      </>
+                    }
+                    details={[
+                      {
+                        label: "BOSY Filipino level",
+                        value: <LevelCell label={r.filipinoLabel} difficulties={r.filipinoDifficulties} />,
+                      },
+                      {
+                        label: "BOSY English level",
+                        value: r.readsEnglish ? (
+                          <LevelCell label={r.englishLabel} difficulties={r.englishDifficulties} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Not assessed in this grade</span>
+                        ),
+                      },
+                      { label: "ARAL since", value: r.aralEnrolledLabel ?? <Dash /> },
+                    ]}
+                  />
+                ))}
+              </StackedList>
+            }
+          />
         )}
       </ListBusyRegion>
 

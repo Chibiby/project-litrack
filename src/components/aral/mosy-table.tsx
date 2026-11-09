@@ -11,7 +11,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
@@ -71,7 +74,7 @@ function LanguageTag({ language }: { language: MosyLevelLanguage }) {
 function BosyLevelCell({ row }: { row: MosyRow }) {
   const prev = row.bosyLevel;
   if (!prev || (!prev.filipino && !prev.english)) {
-    return <span className="text-muted-foreground">—</span>;
+    return <NoValue />;
   }
   return (
     <div className="space-y-0.5 text-sm">
@@ -127,6 +130,22 @@ export function MosyTable({
   const [dialog, setDialog] = useState<MosyDialogState | null>(null);
   const canUpdate = canEdit && !locked;
   const rowNumber = (i: number) => (page - 1) * pageSize + i + 1;
+  /** The row's one job, so it stays visible rather than revealing on hover. */
+  const updateButton = (r: (typeof rows)[number]) => (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={!canUpdate}
+      aria-label={`Update MOSY decision for ${r.fullName}`}
+      aria-describedby={locked ? LOCKED_REASON_ID : undefined}
+      title={locked ? LOCKED_REASON : undefined}
+      onClick={() => {
+        if (canUpdate) setDialog({ row: r });
+      }}
+    >
+      Update
+    </Button>
+  );
 
   return (
     <Surface as="section" className="overflow-hidden rounded-lg">
@@ -146,11 +165,12 @@ export function MosyTable({
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <ResponsiveTable
+            table={
             <Table className="min-w-[72rem]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
+                  <TableHead numeric className={cn(HEAD_CLASS, "w-10")}>#</TableHead>
                   <TableHead className={HEAD_CLASS}>Learner name</TableHead>
                   <TableHead className={HEAD_CLASS}>Grade &amp; section</TableHead>
                   <TableHead className={HEAD_CLASS}>BOSY reading level</TableHead>
@@ -158,17 +178,21 @@ export function MosyTable({
                   <TableHead className={HEAD_CLASS}>ARAL status decision</TableHead>
                   <TableHead className={HEAD_CLASS}>Reason</TableHead>
                   <TableHead className={HEAD_CLASS}>Remarks</TableHead>
-                  <TableHead className={cn(HEAD_CLASS, "text-right")}>Action</TableHead>
+                  <TableHead className={HEAD_CLASS}>
+                    <span className="sr-only">Action</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r, i) => {
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="tabular-nums text-muted-foreground">
+                      <TableCell numeric className="text-muted-foreground">
                         {rowNumber(i)}
                       </TableCell>
-                      <TableCell className="font-medium">{r.fullName}</TableCell>
+                      <TableCell className="max-w-[18rem] font-medium">
+                        <CellText>{r.fullName}</CellText>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                         {r.sectionName ? `${r.gradeLabel} - ${r.sectionName}` : r.gradeLabel}
                       </TableCell>
@@ -182,7 +206,7 @@ export function MosyTable({
                             {r.mosyLevelLabel}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <NoValue />
                         )}
                       </TableCell>
                       <TableCell>
@@ -192,7 +216,7 @@ export function MosyTable({
                         {r.reasonLabel ? (
                           r.reasonLabel
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <NoValue />
                         )}
                       </TableCell>
                       <TableCell className="min-w-[10rem] max-w-[16rem] text-sm">
@@ -202,30 +226,57 @@ export function MosyTable({
                         {r.remarks ? (
                           <p className="whitespace-normal break-words">{r.remarks}</p>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <NoValue />
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!canUpdate}
-                          aria-label={`Update MOSY decision for ${r.fullName}`}
-                          aria-describedby={locked ? LOCKED_REASON_ID : undefined}
-                          title={locked ? LOCKED_REASON : undefined}
-                          onClick={() => {
-                            if (canUpdate) setDialog({ row: r });
-                          }}
-                        >
-                          Update
-                        </Button>
+                        {updateButton(r)}
                       </TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
-          </div>
+            }
+            stacked={
+              <StackedList aria-label="MOSY report">
+                {rows.map((r, i) => (
+                  <StackedRow
+                    key={r.id}
+                    leading={
+                      <span className="inline-block w-6 text-right text-xs tabular-nums text-muted-foreground">
+                        {rowNumber(i)}
+                      </span>
+                    }
+                    title={r.fullName}
+                    state={<StatusChip status={r.status} />}
+                    meta={
+                      <span className="truncate">
+                        {r.sectionName ? `${r.gradeLabel} - ${r.sectionName}` : r.gradeLabel}
+                      </span>
+                    }
+                    details={[
+                      { label: "BOSY reading level", value: <BosyLevelCell row={r} /> },
+                      {
+                        label: "MOSY reading level",
+                        value: r.mosyLevelLabel ? (
+                          <span className="text-sm">
+                            <LanguageTag language={r.mosyLanguage} />
+                            {r.mosyLevelLabel}
+                          </span>
+                        ) : (
+                          <NoValue />
+                        ),
+                      },
+                      { label: "Reason", value: r.reasonLabel ?? <NoValue /> },
+                      { label: "Remarks", value: r.remarks ?? <NoValue /> },
+                    ]}
+                    actions={updateButton(r)}
+                  />
+                ))}
+              </StackedList>
+            }
+          />
         )}
       </ListBusyRegion>
 
