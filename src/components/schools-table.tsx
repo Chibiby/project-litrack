@@ -21,6 +21,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
 import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Eye, Pencil } from "lucide-react";
 import { copyText } from "@/lib/ui/copy-text";
@@ -50,6 +52,7 @@ import {
 } from "@/components/nav/list-navigation";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 
 export type SchoolRow = {
   id: string;
@@ -204,6 +207,27 @@ function RegenButton({
         }
       }}
     />
+  );
+}
+
+function DemoChip() {
+  return (
+    <span
+      className="shrink-0 rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+      title="Training data. Hidden from the login page except inside a demo session."
+    >
+      Demo
+    </span>
+  );
+}
+
+function SchoolStatusBadge({ active }: { active: boolean }) {
+  return active ? (
+    <Badge className="shrink-0 bg-primary/10 text-primary hover:bg-primary/10">Active</Badge>
+  ) : (
+    <Badge variant="secondary" className="shrink-0">
+      Inactive
+    </Badge>
   );
 }
 
@@ -439,6 +463,83 @@ function SchoolsTableInner({
     list.totalCount > 0 ? (list.page - 1) * list.pageSize + 1 : 0;
   const to = Math.min(list.page * list.pageSize, list.totalCount);
 
+  /**
+   * One school's actions, shared by the desktop row (revealed on hover) and
+   * the phone row's expanded area (`touch`: 44px targets, labelled).
+   */
+  const schoolActions = (school: SchoolsTableRow, touch: boolean) => (
+    <>
+      <Button
+        asChild
+        variant="ghost"
+        size="sm"
+        className={touch ? mobileTouch : undefined}
+        aria-label={`${detailVerb} ${school.name}`}
+      >
+        <PrefetchLink href={detailHref(school.id)}>
+          <DetailIcon className="h-4 w-4" aria-hidden />
+        </PrefetchLink>
+      </Button>
+      {caps.toggleActive ? (
+        <SchoolActiveToggle
+          schoolId={school.id}
+          isActive={school.isActive}
+          schoolName={school.name}
+          pending={actingId === school.id}
+          onToggle={(nextActive) => toggleActive(school, nextActive)}
+          className={touch ? mobileTouch : undefined}
+        />
+      ) : null}
+      {caps.resetHead ? (
+        <RegenButton
+          schoolId={school.id}
+          schoolName={school.name}
+          onCredential={setCredential}
+          className={touch ? "size-11" : undefined}
+        />
+      ) : null}
+      {caps.delete ? (
+        <ConfirmAction
+          title="Remove this school?"
+          description={`${school.name} will be hidden from active lists. Its data is kept. You can restore it from the Removed tab.`}
+          confirmLabel="Remove"
+          variant="destructive"
+          trigger={
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              className={cn("text-destructive hover:text-destructive", touch && mobileTouch)}
+              aria-label={`Remove ${school.name}`}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </Button>
+          }
+          onConfirm={async () => {
+            const fd = new FormData();
+            fd.set("id", school.id);
+            const res = await callAction(() => deleteSchool(fd));
+            if (isActionFailure(res)) return res;
+            toast.success("School removed");
+          }}
+        />
+      ) : null}
+      {caps.openAsSchoolHead ? (
+        <Link
+          href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
+          prefetch={true}
+          aria-label={`Open ${school.name} as School Head`}
+          className={cn(
+            "inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            touch ? "min-h-11 min-w-11" : "size-9"
+          )}
+        >
+          <ExternalLink className="h-4 w-4" aria-hidden />
+        </Link>
+      ) : null}
+    </>
+  );
+
   return (
     <div className="space-y-4">
       {credential ? (
@@ -605,308 +706,135 @@ function SchoolsTableInner({
         label="schools"
         skeleton={<TableSectionSkeleton rows={8} columns={8} showToolbar={false} />}
       >
-      <div
-        className={cn(
-          "hidden overflow-hidden rounded-xl border border-border/80 bg-card shadow-card lg:block"
-        )}
-      >
-        <Table>
-          <TableHeader>
-            <TableRow className="border-border/60 bg-muted/40 hover:bg-muted/40">
-              <TableHead>School Name</TableHead>
-              <TableHead>School ID</TableHead>
-              {isAdminColumns ? (
-                <>
-                  <TableHead>Region</TableHead>
-                  <TableHead>Division</TableHead>
-                  <TableHead>Users</TableHead>
-                  <TableHead>Learners</TableHead>
-                </>
-              ) : showDistrictColumn ? (
-                <TableHead>District</TableHead>
-              ) : null}
-              <TableHead>Status</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {optimisticSchools.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={isAdminColumns ? 8 : showDistrictColumn ? 5 : 4}
-                  className="py-10 text-center text-muted-foreground"
-                >
-                  {emptyContent}
-                </TableCell>
-              </TableRow>
-            ) : (
-              optimisticSchools.map((school) => (
-                <TableRow key={school.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <PrefetchLink
-                        href={detailHref(school.id)}
-                        className="font-medium underline-offset-4 hover:underline"
-                      >
-                        {school.name}
-                      </PrefetchLink>
-                      {school.isDemo ? (
-                        <span
-                          className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
-                          title="Training data. Hidden from the login page except inside a demo session."
-                        >
-                          Demo
-                        </span>
-                      ) : null}
-                      {caps.openAsSchoolHead ? (
-                        <Link
-                          href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
-                          prefetch={true}
-                          aria-label={`Open ${school.name} as School Head`}
-                          className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                        </Link>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                      {school.schoolIdCode}
-                    </code>
-                  </TableCell>
-                  {isAdminColumns ? (
-                    <>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {school.region || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {school.division || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{school.users}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{school.learners}</Badge>
-                      </TableCell>
-                    </>
-                  ) : showDistrictColumn ? (
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {school.district || "—"}
-                      </span>
-                    </TableCell>
-                  ) : null}
-                  <TableCell>
-                    {school.isActive ? (
-                      <Badge className="bg-primary/10 text-primary hover:bg-primary/10">
-                        Active
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap justify-end gap-1">
-                      <Button
-                        asChild
-                        variant="ghost"
-                        size="sm"
-                        aria-label={`${detailVerb} ${school.name}`}
-                      >
-                        <PrefetchLink href={detailHref(school.id)}>
-                          <DetailIcon className="h-4 w-4" aria-hidden />
-                        </PrefetchLink>
-                      </Button>
-                      {caps.toggleActive ? (
-                        <SchoolActiveToggle
-                          schoolId={school.id}
-                          isActive={school.isActive}
-                          schoolName={school.name}
-                          pending={actingId === school.id}
-                          onToggle={(nextActive) => toggleActive(school, nextActive)}
-                        />
-                      ) : null}
-                      {caps.resetHead ? (
-                        <RegenButton
-                          schoolId={school.id}
-                          schoolName={school.name}
-                          onCredential={setCredential}
-                        />
-                      ) : null}
-                      {caps.delete ? (
-                        <ConfirmAction
-                          title="Remove this school?"
-                          description={`${school.name} will be hidden from active lists. Its data is kept. You can restore it from the Removed tab.`}
-                          confirmLabel="Remove"
-                          variant="destructive"
-                          trigger={
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              type="button"
-                              className="text-destructive hover:text-destructive"
-                              aria-label={`Remove ${school.name}`}
-                            >
-                              <Trash2 className="h-4 w-4" aria-hidden />
-                            </Button>
-                          }
-                          onConfirm={async () => {
-                            const fd = new FormData();
-                            fd.set("id", school.id);
-                            const res = await callAction(() => deleteSchool(fd));
-                            if (isActionFailure(res)) return res;
-                            toast.success("School removed");
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className={cn("lg:hidden", isAdminColumns ? "grid grid-cols-1 gap-3 md:grid-cols-2" : "space-y-3")}>
-        {optimisticSchools.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:col-span-2">
-            {emptyContent}
-          </div>
-        ) : (
-          optimisticSchools.map((school) => (
-            <article
-              key={school.id}
-              className={cn(
-                "min-w-0 border bg-card p-4",
-                isAdminColumns ? "rounded-lg border-border/80 shadow-card" : "rounded-lg shadow-sm"
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <PrefetchLink
-                      href={detailHref(school.id)}
-                      className={cn(
-                        "font-medium underline-offset-4 hover:underline",
-                        "max-lg:inline-flex max-lg:min-h-11 max-lg:items-center"
-                      )}
-                    >
-                      {school.name}
-                    </PrefetchLink>
-                    {school.isDemo ? (
-                      <span className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
-                        Demo
-                      </span>
+      {optimisticSchools.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          {emptyContent}
+        </div>
+      ) : (
+        <ResponsiveTable
+          table={
+            <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-card">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/60 bg-muted/40 hover:bg-muted/40">
+                    <TableHead>School Name</TableHead>
+                    <TableHead>School ID</TableHead>
+                    {isAdminColumns ? (
+                      <>
+                        <TableHead>Region</TableHead>
+                        <TableHead>Division</TableHead>
+                        <TableHead numeric>Users</TableHead>
+                        <TableHead numeric>Learners</TableHead>
+                      </>
+                    ) : showDistrictColumn ? (
+                      <TableHead>District</TableHead>
                     ) : null}
-                  </div>
-                  <code className="mt-1 inline-block rounded bg-muted px-1 py-0.5 text-xs">
-                    {school.schoolIdCode}
-                  </code>
-                </div>
-                {school.isActive ? (
-                  <Badge className="shrink-0 bg-primary/10 text-primary hover:bg-primary/10">Active</Badge>
-                ) : (
-                  <Badge variant="secondary" className="shrink-0">Inactive</Badge>
-                )}
-              </div>
-              {isAdminColumns ? (
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Region</dt>
-                    <dd className="mt-1 text-muted-foreground">{school.region || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Division</dt>
-                    <dd className="mt-1 text-muted-foreground">{school.division || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Users</dt>
-                    <dd className="mt-1"><Badge variant="secondary">{school.users}</Badge></dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Learners</dt>
-                    <dd className="mt-1"><Badge variant="outline">{school.learners}</Badge></dd>
-                  </div>
-                </dl>
-              ) : showDistrictColumn ? (
-                <dl className="mt-4 grid grid-cols-1 gap-3 text-sm">
-                  <div>
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">District</dt>
-                    <dd className="mt-1 text-muted-foreground">{school.district || "—"}</dd>
-                  </div>
-                </dl>
-              ) : null}
-              <div className="mt-4 flex flex-wrap items-center gap-1 border-t pt-3">
-                <Button asChild variant="ghost" size="sm" className={mobileTouch} aria-label={`${detailVerb} ${school.name}`}>
-                  <PrefetchLink href={detailHref(school.id)}>
-                    <DetailIcon className="h-4 w-4" aria-hidden />
-                    {isAdminColumns ? <span className="sr-only">View</span> : <span>Edit</span>}
-                  </PrefetchLink>
-                </Button>
-                {caps.toggleActive ? (
-                  <SchoolActiveToggle
-                    schoolId={school.id}
-                    isActive={school.isActive}
-                    schoolName={school.name}
-                    pending={actingId === school.id}
-                    onToggle={(nextActive) => toggleActive(school, nextActive)}
-                    className={mobileTouch}
-                  />
-                ) : null}
-                {caps.resetHead ? (
-                  <RegenButton
-                    schoolId={school.id}
-                    schoolName={school.name}
-                    onCredential={setCredential}
-                    className="size-11"
-                  />
-                ) : null}
-                {caps.delete ? (
-                  <ConfirmAction
-                    title="Remove this school?"
-                    description={`${school.name} will be hidden from active lists. Its data is kept. You can restore it from the Removed tab.`}
-                    confirmLabel="Remove"
-                    variant="destructive"
-                    trigger={
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        type="button"
-                        className={cn("text-destructive hover:text-destructive", mobileTouch)}
-                        aria-label={`Remove ${school.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </Button>
+                    <TableHead>Status</TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {optimisticSchools.map((school) => (
+                    <TableRow key={school.id}>
+                      <TableCell className="max-w-[22rem]">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <PrefetchLink
+                            href={detailHref(school.id)}
+                            title={school.name}
+                            className="min-w-0 truncate font-medium underline-offset-4 hover:underline"
+                          >
+                            {school.name}
+                          </PrefetchLink>
+                          {school.isDemo ? <DemoChip /> : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <code className="rounded bg-muted px-1 py-0.5 text-xs tabular-nums">
+                          {school.schoolIdCode}
+                        </code>
+                      </TableCell>
+                      {isAdminColumns ? (
+                        <>
+                          <TableCell className="text-muted-foreground">
+                            {school.region || <NoValue />}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {school.division || <NoValue />}
+                          </TableCell>
+                          <TableCell numeric>{(school.users ?? 0).toLocaleString()}</TableCell>
+                          <TableCell numeric>{(school.learners ?? 0).toLocaleString()}</TableCell>
+                        </>
+                      ) : showDistrictColumn ? (
+                        <TableCell className="text-muted-foreground">
+                          {school.district || <NoValue />}
+                        </TableCell>
+                      ) : null}
+                      <TableCell>
+                        <SchoolStatusBadge active={school.isActive} />
+                      </TableCell>
+                      <TableCell>
+                        <RowActions>{schoolActions(school, false)}</RowActions>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          }
+          stacked={
+            <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-card">
+              <StackedList aria-label="Schools">
+                {optimisticSchools.map((school) => (
+                  <StackedRow
+                    key={school.id}
+                    title={school.name}
+                    href={detailHref(school.id)}
+                    value={
+                      isAdminColumns ? (
+                        <>
+                          {(school.learners ?? 0).toLocaleString()}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            learners
+                          </span>
+                        </>
+                      ) : undefined
                     }
-                    onConfirm={async () => {
-                      const fd = new FormData();
-                      fd.set("id", school.id);
-                      const res = await callAction(() => deleteSchool(fd));
-                      if (isActionFailure(res)) return res;
-                      toast.success("School removed");
-                    }}
+                    state={<SchoolStatusBadge active={school.isActive} />}
+                    meta={
+                      <>
+                        {school.isDemo ? <DemoChip /> : null}
+                        <span className="tabular-nums">ID {school.schoolIdCode}</span>
+                        {showDistrictColumn && !isAdminColumns && school.district ? (
+                          <span>{school.district}</span>
+                        ) : null}
+                      </>
+                    }
+                    details={[
+                      ...(isAdminColumns
+                        ? [
+                            { label: "Region", value: school.region || <NoValue /> },
+                            { label: "Division", value: school.division || <NoValue /> },
+                            { label: "Users", value: (school.users ?? 0).toLocaleString() },
+                          ]
+                        : []),
+                      {
+                        label: "Actions",
+                        value: (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {schoolActions(school, true)}
+                          </div>
+                        ),
+                      },
+                    ]}
                   />
-                ) : null}
-                {caps.openAsSchoolHead ? (
-                  <Link
-                    href={`${SCHOOL_HEAD_ROUTES.dashboard}?schoolId=${school.id}`}
-                    prefetch={true}
-                    className="ml-auto inline-flex min-h-10 items-center rounded-md px-3 text-sm text-muted-foreground hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    Open as School Head
-                  </Link>
-                ) : null}
-              </div>
-            </article>
-          ))
-        )}
-      </div>
+                ))}
+              </StackedList>
+            </div>
+          }
+        />
+      )}
       </ListBusyRegion>
 
       {list.totalPages > 1 ? (

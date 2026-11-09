@@ -18,7 +18,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import {
   ListFilterBar,
   describeActiveFilters,
@@ -246,113 +250,98 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
               )}
             </div>
           ) : (
-            <>
-              <div className="hidden overflow-x-auto lg:block">
+            <ResponsiveTable
+              table={
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="pl-4 text-xs">Name</TableHead>
-                      {place ? <TableHead className="text-xs">{placeLabel}</TableHead> : null}
-                      <TableHead className="text-xs">Email / sign-in</TableHead>
-                      <TableHead className="text-xs">Status</TableHead>
-                      <TableHead className="text-xs">Password</TableHead>
-                      <TableHead className="pr-4 text-right text-xs">Actions</TableHead>
+                      <TableHead className="pl-4">Name</TableHead>
+                      {place ? <TableHead>{placeLabel}</TableHead> : null}
+                      <TableHead>Email / sign-in</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Password</TableHead>
+                      <TableHead className="pr-4">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell className="py-2.5 pl-4">
-                          <div className="flex items-center gap-2">
+                        <TableCell className="max-w-[18rem] pl-4">
+                          <div className="flex min-w-0 items-center gap-2">
                             <UserAvatar
                               name={row.fullName}
                               avatarPath={row.avatarPath}
                               size={32}
                               variant="thumb"
                             />
-                            <span className="text-sm font-medium">{row.listingName}</span>
+                            <CellText className="font-medium">{row.listingName}</CellText>
                           </div>
                         </TableCell>
                         {place === "school" ? (
-                          <TableCell className="py-2.5 text-sm text-muted-foreground">
+                          <TableCell className="max-w-[16rem] text-muted-foreground">
                             {row.school ? (
-                              <div className="flex flex-col">
-                                <span>{row.school.name}</span>
-                                <span className="text-xs">{row.school.schoolIdCode}</span>
+                              <div className="flex min-w-0 flex-col">
+                                <CellText>{row.school.name}</CellText>
+                                <span className="text-xs tabular-nums">{row.school.schoolIdCode}</span>
                               </div>
                             ) : (
-                              "—"
+                              <NoValue />
                             )}
                           </TableCell>
                         ) : place === "districts" ? (
-                          <TableCell className="py-2.5 text-sm text-muted-foreground">
-                            {placeText(row, place)}
+                          <TableCell className="max-w-[16rem] text-muted-foreground">
+                            <CellText>{placeText(row, place)}</CellText>
                           </TableCell>
                         ) : null}
-                        <TableCell className="py-2.5">
+                        <TableCell>
                           <SignInCell row={row} />
                         </TableCell>
-                        <TableCell className="py-2.5">
+                        <TableCell>
                           <StatusCell row={row} />
                         </TableCell>
-                        <TableCell className="py-2.5">
+                        <TableCell>
                           <PasswordCell row={row} />
                         </TableCell>
-                        <TableCell className="py-2.5 pr-4 text-right">
-                          <AccountRowActions row={row} />
+                        <TableCell className="pr-4">
+                          <RowActions>
+                            <AccountRowActions row={row} />
+                          </RowActions>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <div className="grid grid-cols-1 gap-3 px-3 pb-1 md:grid-cols-2 lg:hidden">
-                {rows.map((row) => (
-                  <article
-                    key={row.id}
-                    className="min-w-0 rounded-lg border border-border/80 bg-card p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-2">
+              }
+              stacked={
+                <StackedList aria-label={plural}>
+                  {rows.map((row) => (
+                    <StackedRow
+                      key={row.id}
+                      leading={
                         <UserAvatar
                           name={row.fullName}
                           avatarPath={row.avatarPath}
                           size={32}
                           variant="thumb"
                         />
-                        <h3 className="min-w-0 truncate font-medium">{row.listingName}</h3>
-                      </div>
-                      <StatusCell row={row} />
-                    </div>
-                    <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-1">
-                      {place ? (
-                        <div className="min-w-0">
-                          <dt className="text-xs font-medium text-muted-foreground">
-                            {placeLabel}
-                          </dt>
-                          <dd className="mt-1 truncate">{placeText(row, place)}</dd>
-                        </div>
-                      ) : null}
-                      <div className="min-w-0">
-                        <dt className="text-xs font-medium text-muted-foreground">Sign-in</dt>
-                        <dd className="mt-1">
-                          <SignInCell row={row} />
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-medium text-muted-foreground">Password</dt>
-                        <dd className="mt-1">
-                          <PasswordCell row={row} />
-                        </dd>
-                      </div>
-                    </dl>
-                    <div className="mt-4 border-t pt-3">
-                      <AccountRowActions row={row} />
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </>
+                      }
+                      title={row.listingName}
+                      state={<StatusCell row={row} />}
+                      meta={
+                        place ? <span className="truncate">{placeText(row, place)}</span> : undefined
+                      }
+                      details={[
+                        { label: "Sign-in", value: <SignInCell row={row} /> },
+                        { label: "Password", value: <PasswordCell row={row} /> },
+                      ]}
+                      actions={<AccountRowActions row={row} />}
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </ListBusyRegion>
         {list.totalCount > 0 ? (

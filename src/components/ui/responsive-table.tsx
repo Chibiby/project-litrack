@@ -161,10 +161,11 @@ export function StackedRow({
           </div>
         ) : null}
       </div>
-      {hasDetails && open ? (
+      {hasDetails ? (
         <dl
           id={detailsId}
-          className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/40 p-3 text-sm"
+          hidden={!open}
+          className="mt-3 grid [&[hidden]]:hidden grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/40 p-3 text-sm"
         >
           {details!.map((d) => (
             <div key={d.label} className="min-w-0">
