@@ -66,6 +66,9 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+/** The desktop table; the phone list renders the same rows (CSS picks one). */
+const desktopTable = () => document.querySelector("table") as HTMLElement;
+
 describe("DatabaseConsole — backup dialogs", () => {
   it("delete opens a dialog naming the backup and only calls the action on confirm", async () => {
     render(<DatabaseConsole data={DATA} />);
@@ -96,7 +99,7 @@ describe("DatabaseConsole — backup dialogs", () => {
   it("restore needs the typed phrase before 'Restore this backup' is enabled", async () => {
     render(<DatabaseConsole data={DATA} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    fireEvent.click(within(desktopTable()).getByRole("button", { name: "Restore" }));
 
     const dialog = await screen.findByRole("alertdialog");
     expect(window.prompt).not.toHaveBeenCalled();
@@ -122,7 +125,7 @@ describe("DatabaseConsole — backup dialogs", () => {
     );
     render(<DatabaseConsole data={DATA} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    fireEvent.click(within(desktopTable()).getByRole("button", { name: "Restore" }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByRole("textbox"), {
       target: { value: CONFIRM_PHRASES.restore },
@@ -130,8 +133,8 @@ describe("DatabaseConsole — backup dialogs", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Restore this backup" }));
 
     await waitFor(() => expect(restoreFromBackup).toHaveBeenCalledTimes(1));
-    const rowRestore = screen.getByRole("button", { name: "Restore", hidden: true });
-    const rowDelete = screen.getByRole("button", { name: /Delete the daily backup/, hidden: true });
+    const rowRestore = within(desktopTable()).getByRole("button", { name: "Restore", hidden: true });
+    const rowDelete = within(desktopTable()).getByRole("button", { name: /Delete the daily backup/, hidden: true });
     expect((rowRestore as HTMLButtonElement).disabled).toBe(true);
     expect((rowDelete as HTMLButtonElement).disabled).toBe(true);
     finish();
@@ -149,8 +152,8 @@ describe("DatabaseConsole — backup dialogs", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
 
     await waitFor(() => expect(removeBackup).toHaveBeenCalledTimes(1));
-    const rowRestore = screen.getByRole("button", { name: "Restore", hidden: true });
-    const rowDelete = screen.getByRole("button", { name: /Delete the daily backup/, hidden: true });
+    const rowRestore = within(desktopTable()).getByRole("button", { name: "Restore", hidden: true });
+    const rowDelete = within(desktopTable()).getByRole("button", { name: /Delete the daily backup/, hidden: true });
     await waitFor(() => expect((rowRestore as HTMLButtonElement).disabled).toBe(true));
     expect((rowDelete as HTMLButtonElement).disabled).toBe(true);
     finish();

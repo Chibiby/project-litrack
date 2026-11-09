@@ -16,7 +16,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import {
   AlertTriangle,
   ChevronLeft,
@@ -311,6 +315,14 @@ function TeacherStatusBadge({ teacher }: { teacher: TeacherRow }) {
   );
 }
 
+function AralBadge() {
+  return (
+    <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
+      ARAL
+    </Badge>
+  );
+}
+
 function toggleId(set: Set<string>, id: string): Set<string> {
   const next = new Set(set);
   if (next.has(id)) next.delete(id);
@@ -384,6 +396,20 @@ export function SchoolDetailView({
       router.refresh();
     });
   };
+
+  const removeTeacherButton = (teacher: TeacherRow) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="text-destructive hover:text-destructive lg:h-9"
+      disabled={removingTeachers}
+      aria-label={`Remove ${teacher.listingName}`}
+      onClick={() => removeTeachers([teacher.id])}
+    >
+      <Trash2 className="h-4 w-4" aria-hidden />
+    </Button>
+  );
 
   return (
     <div className="space-y-6">
@@ -472,113 +498,105 @@ export function SchoolDetailView({
               No teacher accounts in this school.
             </p>
           ) : (
-            <div className="hidden overflow-x-auto lg:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">
-                      <SelectAll
-                        ids={sortedTeachers.map((t) => t.id)}
-                        selected={pickedTeachers}
-                        onChange={setPickedTeachers}
-                        label="Select every teacher"
-                      />
-                    </TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Advisory</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedTeachers.map((teacher: TeacherRow) => (
-                    <TableRow key={teacher.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={pickedTeachers.has(teacher.id)}
-                          aria-label={`Select ${teacher.listingName}`}
-                          onCheckedChange={() =>
-                            setPickedTeachers((s) => toggleId(s, teacher.id))
-                          }
+            <ResponsiveTable
+              table={
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <SelectAll
+                          ids={sortedTeachers.map((t) => t.id)}
+                          selected={pickedTeachers}
+                          onChange={setPickedTeachers}
+                          label="Select every teacher"
                         />
-                      </TableCell>
-                      <TableCell className="font-medium">{teacher.listingName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {teacher.email}
-                      </TableCell>
-                      <TableCell>
-                        <TeacherStatusBadge teacher={teacher} />
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {teacher.advisorySection ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                         className="lg:h-9 text-destructive hover:text-destructive"
-                          disabled={removingTeachers}
-                          aria-label={`Remove ${teacher.listingName}`}
-                          onClick={() => removeTeachers([teacher.id])}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </TableCell>
+                      </TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Advisory</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          {teachers.length > 0 ? (
-            <div className="lg:hidden">
-              <label className="flex min-h-11 items-center gap-3 border-b border-border/60 text-sm text-muted-foreground">
-                <SelectAll
-                  ids={sortedTeachers.map((t) => t.id)}
-                  selected={pickedTeachers}
-                  onChange={setPickedTeachers}
-                  label="Select every teacher"
-                />
-                Select all
-              </label>
-              <ul className="divide-y divide-border/60" aria-label="Teachers">
-                {sortedTeachers.map((teacher: TeacherRow) => (
-                  <li key={teacher.id} className="flex items-start gap-3 py-3">
-                    <span className="flex min-h-10 items-center">
-                      <Checkbox
-                        checked={pickedTeachers.has(teacher.id)}
-                        aria-label={`Select ${teacher.listingName}`}
-                        onCheckedChange={() => setPickedTeachers((s) => toggleId(s, teacher.id))}
+                  </TableHeader>
+                  <TableBody>
+                    {sortedTeachers.map((teacher: TeacherRow) => (
+                      <TableRow
+                        key={teacher.id}
+                        data-state={pickedTeachers.has(teacher.id) ? "selected" : undefined}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={pickedTeachers.has(teacher.id)}
+                            aria-label={`Select ${teacher.listingName}`}
+                            onCheckedChange={() =>
+                              setPickedTeachers((s) => toggleId(s, teacher.id))
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="max-w-[16rem] font-medium">
+                          <CellText>{teacher.listingName}</CellText>
+                        </TableCell>
+                        <TableCell className="max-w-[18rem] text-sm text-muted-foreground">
+                          <CellText>{teacher.email}</CellText>
+                        </TableCell>
+                        <TableCell>
+                          <TeacherStatusBadge teacher={teacher} />
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {teacher.advisorySection ?? <NoValue />}
+                        </TableCell>
+                        <TableCell>
+                          <RowActions>{removeTeacherButton(teacher)}</RowActions>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+              stacked={
+                <div>
+                  <label className="flex min-h-11 items-center gap-3 border-b border-border/60 text-sm text-muted-foreground">
+                    <SelectAll
+                      ids={sortedTeachers.map((t) => t.id)}
+                      selected={pickedTeachers}
+                      onChange={setPickedTeachers}
+                      label="Select every teacher"
+                    />
+                    Select all
+                  </label>
+                  <StackedList aria-label="Teachers">
+                    {sortedTeachers.map((teacher: TeacherRow) => (
+                      <StackedRow
+                        key={teacher.id}
+                        className="px-0"
+                        leading={
+                          <Checkbox
+                            checked={pickedTeachers.has(teacher.id)}
+                            aria-label={`Select ${teacher.listingName}`}
+                            onCheckedChange={() =>
+                              setPickedTeachers((s) => toggleId(s, teacher.id))
+                            }
+                          />
+                        }
+                        title={teacher.listingName}
+                        state={<TeacherStatusBadge teacher={teacher} />}
+                        meta={<span className="truncate">{teacher.email}</span>}
+                        details={[
+                          {
+                            label: "Advisory",
+                            value: teacher.advisorySection ?? <NoValue />,
+                          },
+                        ]}
+                        actions={removeTeacherButton(teacher)}
                       />
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                        {teacher.listingName}
-                        <TeacherStatusBadge teacher={teacher} />
-                      </div>
-                      <p className="break-all text-sm text-muted-foreground">{teacher.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Advisory: {teacher.advisorySection ?? "—"}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0 text-destructive hover:text-destructive"
-                      disabled={removingTeachers}
-                      aria-label={`Remove ${teacher.listingName}`}
-                      onClick={() => removeTeachers([teacher.id])}
-                    >
-                      <Trash2 aria-hidden />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+                    ))}
+                  </StackedList>
+                </div>
+              }
+            />
+          )}
         </Surface>
 
       {/* Learners — server-paginated, own keyed Suspense so paging/sorting it
@@ -709,6 +727,20 @@ function SchoolLearnersPanelBody({
     return `${ADMIN_ROUTES.school(schoolId)}?${next.toString()}`;
   };
 
+  const removeLearnerButton = (learner: LearnerRow) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="text-destructive hover:text-destructive lg:h-9"
+      disabled={removingLearners}
+      aria-label={`Remove ${learner.listingName}`}
+      onClick={() => removeLearners([learner.id])}
+    >
+      <Trash2 className="h-4 w-4" aria-hidden />
+    </Button>
+  );
+
   return (
     <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -752,8 +784,8 @@ function SchoolLearnersPanelBody({
               No learners in this school.
             </p>
           ) : (
-            <>
-              <div className="hidden overflow-x-auto lg:block">
+            <ResponsiveTable
+              table={
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -769,12 +801,17 @@ function SchoolLearnersPanelBody({
                       <TableHead>Grade</TableHead>
                       <TableHead>Section</TableHead>
                       <TableHead>ARAL</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {learners.map((learner: LearnerRow) => (
-                      <TableRow key={learner.id}>
+                      <TableRow
+                        key={learner.id}
+                        data-state={pickedLearners.has(learner.id) ? "selected" : undefined}
+                      >
                         <TableCell>
                           <Checkbox
                             checked={pickedLearners.has(learner.id)}
@@ -784,90 +821,66 @@ function SchoolLearnersPanelBody({
                             }
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{learner.listingName}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="max-w-[18rem] font-medium">
+                          <CellText>{learner.listingName}</CellText>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                           {learner.gradeLevel}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {learner.section ?? "—"}
+                          {learner.section ?? <NoValue />}
                         </TableCell>
                         <TableCell>
-                          {learner.isAralLearner ? (
-                            <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
-                              ARAL
-                            </Badge>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
+                          {learner.isAralLearner ? <AralBadge /> : <NoValue />}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                           className="lg:h-9 text-destructive hover:text-destructive"
-                            disabled={removingLearners}
-                            aria-label={`Remove ${learner.listingName}`}
-                            onClick={() => removeLearners([learner.id])}
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </Button>
+                        <TableCell>
+                          <RowActions>{removeLearnerButton(learner)}</RowActions>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <div className="lg:hidden">
-                <label className="flex min-h-11 items-center gap-3 border-b border-border/60 text-sm text-muted-foreground">
-                  <SelectAll
-                    ids={learners.map((l) => l.id)}
-                    selected={pickedLearners}
-                    onChange={setPickedLearners}
-                    label="Select every learner on this page"
-                  />
-                  Select all on this page
-                </label>
-                <ul className="divide-y divide-border/60" aria-label="Learners">
-                  {learners.map((learner: LearnerRow) => (
-                    <li key={learner.id} className="flex items-start gap-3 py-3">
-                      <span className="flex min-h-10 items-center">
-                        <Checkbox
-                          checked={pickedLearners.has(learner.id)}
-                          aria-label={`Select ${learner.listingName}`}
-                          onCheckedChange={() => setPickedLearners((s) => toggleId(s, learner.id))}
-                        />
-                      </span>
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                          {learner.listingName}
-                          {learner.isAralLearner ? (
-                            <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
-                              ARAL
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {learner.gradeLevel}
-                          {learner.section ? ` · ${learner.section}` : ""}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 text-destructive hover:text-destructive"
-                        disabled={removingLearners}
-                        aria-label={`Remove ${learner.listingName}`}
-                        onClick={() => removeLearners([learner.id])}
-                      >
-                        <Trash2 aria-hidden />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </>
+              }
+              stacked={
+                <div>
+                  <label className="flex min-h-11 items-center gap-3 border-b border-border/60 text-sm text-muted-foreground">
+                    <SelectAll
+                      ids={learners.map((l) => l.id)}
+                      selected={pickedLearners}
+                      onChange={setPickedLearners}
+                      label="Select every learner on this page"
+                    />
+                    Select all on this page
+                  </label>
+                  <StackedList aria-label="Learners">
+                    {learners.map((learner: LearnerRow) => (
+                      <StackedRow
+                        key={learner.id}
+                        className="px-0"
+                        leading={
+                          <Checkbox
+                            checked={pickedLearners.has(learner.id)}
+                            aria-label={`Select ${learner.listingName}`}
+                            onCheckedChange={() =>
+                              setPickedLearners((s) => toggleId(s, learner.id))
+                            }
+                          />
+                        }
+                        title={learner.listingName}
+                        value={
+                          <span className="text-sm font-medium">
+                            {learner.gradeLevel}
+                            {learner.section ? ` · ${learner.section}` : ""}
+                          </span>
+                        }
+                        state={learner.isAralLearner ? <AralBadge /> : undefined}
+                        actions={removeLearnerButton(learner)}
+                      />
+                    ))}
+                  </StackedList>
+                </div>
+              }
+            />
           )}
         </ListBusyRegion>
         {/*

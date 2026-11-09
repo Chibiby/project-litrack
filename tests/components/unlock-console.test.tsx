@@ -85,6 +85,9 @@ async function confirmIssue() {
   fireEvent.click(within(dialog).getByRole("button", { name: "Confirm revision access" }));
 }
 
+/** The desktop table; the phone list renders the same rows (CSS picks one). */
+const desktopTable = () => document.querySelector("table") as HTMLElement;
+
 describe("UnlockConsole — mode switch", () => {
   it("hides the teacher picker in whole-school mode and posts schoolId with no userId", async () => {
     render(<UnlockConsole schools={SCHOOLS} active={EMPTY_ACTIVE} />);
@@ -163,7 +166,7 @@ describe("UnlockConsole — revoke", () => {
     };
     render(<UnlockConsole schools={SCHOOLS} active={active} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    fireEvent.click(within(desktopTable()).getByRole("button", { name: "Revoke" }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirm revoke" }));
 
@@ -202,7 +205,7 @@ describe("UnlockConsole — expiry dates follow the school's calendar", () => {
     };
     render(<UnlockConsole schools={SCHOOLS} active={active} />);
 
-    expect(screen.getByText("September 8, 2026")).not.toBeNull();
+    expect(within(desktopTable()).getByText("September 8, 2026")).not.toBeNull();
     expect(screen.queryByText("September 7, 2026")).toBeNull();
   });
 });
@@ -260,7 +263,7 @@ describe("UnlockConsole — action failure", () => {
     };
     render(<UnlockConsole schools={SCHOOLS} active={active} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    fireEvent.click(within(desktopTable()).getByRole("button", { name: "Revoke" }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirm revoke" }));
 

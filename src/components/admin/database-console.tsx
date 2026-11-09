@@ -15,7 +15,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import {
   AlertTriangle,
   Database,
@@ -221,6 +223,15 @@ function DangerAction({
   );
 }
 
+
+function BackupKindBadge({ kind }: { kind: string }) {
+  return (
+    <Badge variant={kind === "safety" ? "outline" : "secondary"}>
+      {kind === "safety" ? "undo point" : kind}
+    </Badge>
+  );
+}
+
 export function DatabaseConsole({ data }: { data: ConsoleData }) {
   const [backingUp, startBackup] = useTransition();
   const [undoing, startUndo] = useTransition();
@@ -279,6 +290,48 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
     }
     return true;
   };
+
+
+  const backupActions = (b: (typeof data.backups)[number]) => (
+    <>
+      <Button asChild variant="ghost" size="sm" className="lg:h-9">
+        <a
+          href={`/api/admin/backups/download?path=${encodeURIComponent(b.pathname)}`}
+          aria-label={`Download the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
+        >
+          <Download className="mr-1.5 h-4 w-4" aria-hidden />
+          Download
+        </a>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="lg:h-9"
+        disabled={disabled || rowBusy}
+        onClick={() => {
+          setRestoreTyped("");
+          setRestoreTarget(b);
+        }}
+      >
+        <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden />
+        Restore
+      </Button>
+      {b.kind !== "safety" ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+         className="lg:h-9 text-destructive hover:text-destructive"
+          disabled={disabled || rowBusy}
+          aria-label={`Delete the ${b.kind} backup from ${formatWhen(b.uploadedAt)} permanently`}
+          onClick={() => setDeleteTarget(b)}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+        </Button>
+      ) : null}
+    </>
+  );
 
   return (
     <div className="space-y-6">
@@ -382,79 +435,68 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
             </p>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border/80">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead>Kind</TableHead>
-                  <TableHead>Taken</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.backups.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                      No backups yet. Use “Back up now”, or wait for tonight&rsquo;s scheduled run.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  data.backups.map((b) => (
-                    <TableRow key={b.pathname}>
-                      <TableCell>
-                        <Badge variant={b.kind === "safety" ? "outline" : "secondary"}>
-                          {b.kind === "safety" ? "undo point" : b.kind}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{formatWhen(b.uploadedAt)}</TableCell>
-                      <TableCell className="text-sm tabular-nums">{formatBytes(b.size)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          <Button asChild variant="ghost" size="sm" className="lg:h-9">
-                            <a
-                              href={`/api/admin/backups/download?path=${encodeURIComponent(b.pathname)}`}
-                              aria-label={`Download the ${b.kind} backup from ${formatWhen(b.uploadedAt)}`}
-                            >
-                              <Download className="mr-1.5 h-4 w-4" aria-hidden />
-                              Download
-                            </a>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="lg:h-9"
-                            disabled={disabled || rowBusy}
-                            onClick={() => {
-                              setRestoreTyped("");
-                              setRestoreTarget(b);
-                            }}
-                          >
-                            <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden />
-                            Restore
-                          </Button>
-                          {b.kind !== "safety" ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                             className="lg:h-9 text-destructive hover:text-destructive"
-                              disabled={disabled || rowBusy}
-                              aria-label={`Delete the ${b.kind} backup from ${formatWhen(b.uploadedAt)} permanently`}
-                              onClick={() => setDeleteTarget(b)}
-                            >
-                              <Trash2 className="h-4 w-4" aria-hidden />
-                            </Button>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          {data.backups.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
+              No backups yet. Use “Back up now”, or wait for tonight&rsquo;s scheduled run.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-border/80">
+              <ResponsiveTable
+                table={
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 hover:bg-muted/40">
+                        <TableHead>Kind</TableHead>
+                        <TableHead>Taken</TableHead>
+                        <TableHead numeric>Size</TableHead>
+                        <TableHead>
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.backups.map((b) => (
+                        <TableRow key={b.pathname}>
+                          <TableCell>
+                            <BackupKindBadge kind={b.kind} />
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-sm tabular-nums">
+                            {formatWhen(b.uploadedAt)}
+                          </TableCell>
+                          <TableCell numeric className="text-sm">
+                            {formatBytes(b.size)}
+                          </TableCell>
+                          <TableCell>
+                            <RowActions>{backupActions(b)}</RowActions>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                }
+                stacked={
+                  <StackedList aria-label="Backups">
+                    {data.backups.map((b) => (
+                      <StackedRow
+                        key={b.pathname}
+                        title={formatWhen(b.uploadedAt)}
+                        value={formatBytes(b.size)}
+                        state={<BackupKindBadge kind={b.kind} />}
+                        details={[
+                          {
+                            label: "Actions",
+                            value: (
+                              <div className="flex flex-wrap items-center gap-1">{backupActions(b)}</div>
+                            ),
+                          },
+                        ]}
+                      />
+                    ))}
+                  </StackedList>
+                }
+              />
+            </div>
+          )}
         </Surface>
 
       <AlertDialog

@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, CellText, NoValue, RowActions } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { ConfirmAction } from "@/components/confirm-action";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -245,6 +246,22 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
     router.refresh();
   }
 
+
+  const revokeAction = (row: UnlockRow) => (
+    <ConfirmAction
+      title="Revoke this revision grant?"
+      description={`${row.who} at ${row.schoolName} will lose access to ${UNLOCK_SCOPE_LABELS[row.scope]} for ${periodLabel(row.scope, row.targetKey)} immediately.`}
+      confirmLabel="Confirm revoke"
+      variant="destructive"
+      trigger={
+        <Button variant="outline" size="sm" className="lg:h-9">
+          Revoke
+        </Button>
+      }
+      onConfirm={() => handleRevoke(row)}
+    />
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -444,45 +461,77 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
               icon={UnlockIcon}
             />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Who</TableHead>
-                  <TableHead>School</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Window</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Granted by</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={`${row.kind}-${row.id}`}>
-                    <TableCell>{row.who}</TableCell>
-                    <TableCell>{row.schoolName}</TableCell>
-                    <TableCell>{UNLOCK_SCOPE_LABELS[row.scope]}</TableCell>
-                    <TableCell>{periodLabel(row.scope, row.targetKey)}</TableCell>
-                    <TableCell>{formatLongDate(schoolToday(row.expiresAt))}</TableCell>
-                    <TableCell>{row.grantedByName ?? "—"}</TableCell>
-                    <TableCell className="text-right">
-                      <ConfirmAction
-              title="Revoke this revision grant?"
-                        description={`${row.who} at ${row.schoolName} will lose access to ${UNLOCK_SCOPE_LABELS[row.scope]} for ${periodLabel(row.scope, row.targetKey)} immediately.`}
-                        confirmLabel="Confirm revoke"
-                        variant="destructive"
-                        trigger={
-                          <Button variant="outline" size="sm" className="lg:h-9">
-                            Revoke
-                          </Button>
-                        }
-                        onConfirm={() => handleRevoke(row)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ResponsiveTable
+              table={
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Who</TableHead>
+                      <TableHead>School</TableHead>
+                      <TableHead>Scope</TableHead>
+                      <TableHead>Window</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead>Granted by</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Action</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((row) => (
+                      <TableRow key={`${row.kind}-${row.id}`}>
+                        <TableCell className="max-w-[14rem] font-medium">
+                          <CellText>{row.who}</CellText>
+                        </TableCell>
+                        <TableCell className="max-w-[14rem] text-muted-foreground">
+                          <CellText>{row.schoolName}</CellText>
+                        </TableCell>
+                        <TableCell>{UNLOCK_SCOPE_LABELS[row.scope]}</TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          {periodLabel(row.scope, row.targetKey)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          {formatLongDate(schoolToday(row.expiresAt))}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {row.grantedByName ?? <NoValue />}
+                        </TableCell>
+                        <TableCell>
+                          <RowActions>{revokeAction(row)}</RowActions>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+              stacked={
+                <StackedList aria-label="Active revision grants">
+                  {rows.map((row) => (
+                    <StackedRow
+                      key={`${row.kind}-${row.id}`}
+                      className="px-0"
+                      title={row.who}
+                      value={
+                        <span className="text-sm font-medium">
+                          {periodLabel(row.scope, row.targetKey)}
+                        </span>
+                      }
+                      meta={
+                        <>
+                          <span>{UNLOCK_SCOPE_LABELS[row.scope]}</span>
+                          <span className="truncate">{row.schoolName}</span>
+                        </>
+                      }
+                      details={[
+                        { label: "Expires", value: formatLongDate(schoolToday(row.expiresAt)) },
+                        { label: "Granted by", value: row.grantedByName ?? <NoValue /> },
+                      ]}
+                      actions={revokeAction(row)}
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </div>
       </CardContent>

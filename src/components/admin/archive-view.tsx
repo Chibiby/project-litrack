@@ -23,7 +23,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
+  RowActions,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { LearnerRowActions, TeacherRowActions } from "@/components/admin/archive-row-actions";
 import { SortSelect } from "@/components/ui/sort-select";
@@ -86,6 +90,14 @@ function SchoolCell({ name, deleted }: { name: string | null; deleted: boolean }
     <span className={cn(deleted && "text-muted-foreground line-through")}>
       {name ?? "—"}
     </span>
+  );
+}
+
+function AralBadge() {
+  return (
+    <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
+      ARAL
+    </Badge>
   );
 }
 
@@ -388,8 +400,8 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
               icon={ArchiveIcon}
             />
           ) : (
-            <>
-              <div className="hidden overflow-x-auto lg:block">
+            <ResponsiveTable
+              table={
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -397,49 +409,65 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
                       <TableHead>School</TableHead>
                       <TableHead>Removed on</TableHead>
                       <TableHead>Original email</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data.rows.map((teacher) => (
                       <TableRow key={teacher.id}>
-                        <TableCell className="font-medium">{teacher.listingName}</TableCell>
+                        <TableCell className="max-w-[16rem] font-medium">
+                          <CellText>{teacher.listingName}</CellText>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           <SchoolCell name={teacher.schoolName} deleted={teacher.schoolDeleted} />
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
                           {formatDate(teacher.deletedAt)}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {teacher.originalEmail ?? "Not recoverable"}
+                        <TableCell className="max-w-[16rem] text-sm text-muted-foreground">
+                          {teacher.originalEmail ? (
+                            <CellText>{teacher.originalEmail}</CellText>
+                          ) : (
+                            "Not recoverable"
+                          )}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <TeacherRowActions teacher={teacher} />
+                        <TableCell>
+                          <RowActions>
+                            <TeacherRowActions teacher={teacher} />
+                          </RowActions>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <ul className="divide-y divide-border/60 lg:hidden" aria-label="Removed teachers">
-                {data.rows.map((teacher) => (
-                  <li key={teacher.id} className="flex items-start gap-3 py-3">
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <p className="font-medium text-foreground">{teacher.listingName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        <SchoolCell name={teacher.schoolName} deleted={teacher.schoolDeleted} />
-                        {" · "}
-                        {formatDate(teacher.deletedAt)}
-                      </p>
-                      <p className="break-all text-xs text-muted-foreground">
-                        {teacher.originalEmail ?? "Email not recoverable"}
-                      </p>
-                    </div>
-                    <TeacherRowActions teacher={teacher} />
-                  </li>
-                ))}
-              </ul>
-            </>
+              }
+              stacked={
+                <StackedList aria-label="Removed teachers">
+                  {data.rows.map((teacher) => (
+                    <StackedRow
+                      key={teacher.id}
+                      className="px-0"
+                      title={teacher.listingName}
+                      value={
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {formatDate(teacher.deletedAt)}
+                        </span>
+                      }
+                      meta={<SchoolCell name={teacher.schoolName} deleted={teacher.schoolDeleted} />}
+                      details={[
+                        {
+                          label: "Original email",
+                          value: teacher.originalEmail ?? "Not recoverable",
+                        },
+                      ]}
+                      actions={<TeacherRowActions teacher={teacher} />}
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </ListBusyRegion>
         {/*
@@ -519,8 +547,8 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
               icon={ArchiveIcon}
             />
           ) : (
-            <>
-              <div className="hidden overflow-x-auto lg:block">
+            <ResponsiveTable
+              table={
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -530,69 +558,64 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
                       <TableHead>Section</TableHead>
                       <TableHead>Removed on</TableHead>
                       <TableHead>ARAL</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data.rows.map((learner) => (
                       <TableRow key={learner.id}>
-                        <TableCell className="font-medium">{learner.listingName}</TableCell>
+                        <TableCell className="max-w-[16rem] font-medium">
+                          <CellText>{learner.listingName}</CellText>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           <SchoolCell name={learner.schoolName} deleted={learner.schoolDeleted} />
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                           {learner.gradeLevel}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {learner.section ?? "—"}
+                          {learner.section ?? <NoValue />}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
                           {formatDate(learner.deletedAt)}
                         </TableCell>
                         <TableCell>
-                          {learner.isAralLearner ? (
-                            <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
-                              ARAL
-                            </Badge>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
+                          {learner.isAralLearner ? <AralBadge /> : <NoValue />}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <LearnerRowActions learner={learner} />
+                        <TableCell>
+                          <RowActions>
+                            <LearnerRowActions learner={learner} />
+                          </RowActions>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <ul className="divide-y divide-border/60 lg:hidden" aria-label="Removed learners">
-                {data.rows.map((learner) => (
-                  <li key={learner.id} className="flex items-start gap-3 py-3">
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                        {learner.listingName}
-                        {learner.isAralLearner ? (
-                          <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
-                            ARAL
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        <SchoolCell name={learner.schoolName} deleted={learner.schoolDeleted} />
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {learner.gradeLevel}
-                        {learner.section ? ` · ${learner.section}` : ""}
-                        {" · removed "}
-                        {formatDate(learner.deletedAt)}
-                      </p>
-                    </div>
-                    <LearnerRowActions learner={learner} />
-                  </li>
-                ))}
-              </ul>
-            </>
+              }
+              stacked={
+                <StackedList aria-label="Removed learners">
+                  {data.rows.map((learner) => (
+                    <StackedRow
+                      key={learner.id}
+                      className="px-0"
+                      title={learner.listingName}
+                      value={
+                        <span className="text-sm font-medium">
+                          {learner.gradeLevel}
+                          {learner.section ? ` · ${learner.section}` : ""}
+                        </span>
+                      }
+                      state={learner.isAralLearner ? <AralBadge /> : undefined}
+                      meta={<SchoolCell name={learner.schoolName} deleted={learner.schoolDeleted} />}
+                      details={[{ label: "Removed on", value: formatDate(learner.deletedAt) }]}
+                      actions={<LearnerRowActions learner={learner} />}
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </ListBusyRegion>
         {/* Outside the busy region — see the teachers bucket above for why. */}

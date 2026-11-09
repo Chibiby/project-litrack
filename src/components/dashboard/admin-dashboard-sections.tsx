@@ -12,7 +12,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
@@ -156,36 +158,56 @@ export async function AdminIpAdvisorySection() {
               />
             </div>
           ) : (
-            <Table className="[&_td]:whitespace-nowrap [&_th]:whitespace-nowrap max-sm:[&_td]:px-3 max-sm:[&_th]:px-3">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>School</TableHead>
-                  <TableHead className="text-right">Per teacher</TableHead>
-                  <TableHead className="text-right">IP</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">IP %</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {schools.map((s) => (
-                  <TableRow key={s.schoolId}>
-                    <TableCell className="max-w-[14rem] truncate font-medium">{s.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.learnersPerTeacher}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.ipLearners}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.totalLearners}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.ipPercent}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ResponsiveTable
+              table={
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>School</TableHead>
+                      <TableHead numeric>Per teacher</TableHead>
+                      <TableHead numeric>IP</TableHead>
+                      <TableHead numeric>Total</TableHead>
+                      <TableHead numeric>IP %</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {schools.map((s) => (
+                      <TableRow key={s.schoolId}>
+                        <TableCell className="max-w-[14rem] font-medium">
+                          <CellText>{s.name}</CellText>
+                        </TableCell>
+                        <TableCell numeric>{s.learnersPerTeacher}</TableCell>
+                        <TableCell numeric>{s.ipLearners}</TableCell>
+                        <TableCell numeric>{s.totalLearners}</TableCell>
+                        <TableCell numeric>{s.ipPercent}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+              stacked={
+                <StackedList aria-label="Schools with IP learners">
+                  {schools.map((s) => (
+                    <StackedRow
+                      key={s.schoolId}
+                      title={s.name}
+                      value={
+                        <>
+                          {s.ipLearners}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">IP</span>
+                        </>
+                      }
+                      meta={
+                        <>
+                          <span className="tabular-nums">{s.ipPercent} of {s.totalLearners}</span>
+                          <span className="tabular-nums">{s.learnersPerTeacher} per teacher</span>
+                        </>
+                      }
+                    />
+                  ))}
+                </StackedList>
+              }
+            />
           )}
         </ChartCard>
         <ChartCard
