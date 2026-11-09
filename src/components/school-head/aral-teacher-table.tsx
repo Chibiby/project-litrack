@@ -15,7 +15,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { EmploymentTypeChip } from "@/components/teachers/employment-type-chip";
 import { EMPLOYMENT_TYPE_LABELS } from "@/lib/constants/enum-labels";
@@ -216,8 +219,6 @@ function AralTeacherTablePanel({
     });
   };
 
-  const colSpan = 5;
-
   return (
     <Card>
       <CardContent className="p-0">
@@ -267,174 +268,116 @@ function AralTeacherTablePanel({
             const value = row.id in overrides ? overrides[row.id] : row.aralTeacherId;
             return { row, value, assigned: value ? teacherById.get(value) ?? null : null };
           });
-          return (
-            <>
-        {/* lg and up: the unchanged table. */}
-        <div className="hidden lg:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Learner</TableHead>
-              <TableHead>Grade</TableHead>
-              <TableHead>Section</TableHead>
-              <TableHead>Adviser</TableHead>
-              <TableHead className="min-w-[16rem]">ARAL teacher</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={colSpan}
-                  className="py-6 text-center text-muted-foreground"
-                >
-                  {list.q
-                    ? "No ARAL learners match your search."
-                    : "No ARAL learners yet. Teachers enrol learners into ARAL from their grade view."}
-                </TableCell>
-              </TableRow>
+          if (rows.length === 0) {
+            return (
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                {list.q
+                  ? "No ARAL learners match your search."
+                  : "No ARAL learners yet. Teachers enrol learners into ARAL from their grade view."}
+              </p>
+            );
+          }
+          const assignment = (
+            row: (typeof rows)[number],
+            value: string | null | undefined,
+            assigned: ReturnType<typeof teacherById.get> | null,
+            selectId: string
+          ) =>
+            readOnly ? (
+              value ? (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <Badge
+                    variant="outline"
+                    className="border-violet-200 text-violet-800 dark:text-violet-200"
+                  >
+                    {assigned ? describeTeacher(assigned) : "Assigned"}
+                  </Badge>
+                  <EmploymentTypeChip employmentType={assigned?.employmentType ?? null} />
+                </span>
+              ) : (
+                <Badge variant="outline">Not designated</Badge>
+              )
             ) : (
-              rowsWithValue.map(({ row, value, assigned }) => {
-                const selectId = `aral-teacher-${row.id}`;
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.fullName}</TableCell>
-                    <TableCell className="text-sm">{row.gradeLabel}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {row.sectionName ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {row.adviserName ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      {readOnly ? (
-                        value ? (
-                          <span className="flex flex-wrap items-center gap-1.5">
-                            <Badge
-                              variant="outline"
-                              className="border-violet-200 text-violet-800 dark:text-violet-200"
-                            >
-                              {assigned ? describeTeacher(assigned) : "Assigned"}
-                            </Badge>
-                            <EmploymentTypeChip
-                              employmentType={assigned?.employmentType ?? null}
-                            />
-                          </span>
-                        ) : (
-                          <Badge variant="outline">Not designated</Badge>
-                        )
-                      ) : (
-                        <>
-                          <Label htmlFor={selectId} className="sr-only">
-                            ARAL teacher for {row.fullName}
-                          </Label>
-                          <select
-                            id={selectId}
-                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm max-lg:h-11"
-                            value={value ?? ""}
-                            disabled={savingId === row.id || teachers.length === 0}
-                            onChange={(e) =>
-                              onChangeTeacher(
-                                row,
-                                e.target.value === "" ? null : e.target.value
-                              )
-                            }
-                          >
-                            <option value="">Not designated</option>
-                            {teachers.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {describeTeacherOption(t)}
-                              </option>
-                            ))}
-                          </select>
-                          {savingId === row.id ? (
-                            <p className="mt-1 text-xs text-muted-foreground">Saving…</p>
-                          ) : null}
-                        </>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-        </div>
-
-        {/* Below lg: one stacked row per learner. */}
-        <ul className="divide-y divide-border/60 lg:hidden" aria-label="ARAL learners">
-          {rows.length === 0 ? (
-            <li className="px-4 py-6 text-center text-sm text-muted-foreground">
-              {list.q
-                ? "No ARAL learners match your search."
-                : "No ARAL learners yet. Teachers enrol learners into ARAL from their grade view."}
-            </li>
-          ) : (
-            rowsWithValue.map(({ row, value, assigned }) => {
-              const selectId = `aral-teacher-m-${row.id}`;
-              return (
-                <li key={row.id} className="flex flex-col gap-2 px-3 py-3 sm:px-4">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">{row.fullName}</p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {row.gradeLabel}
-                      {row.sectionName ? ` · ${row.sectionName}` : ""}
-                    </p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      Adviser: {row.adviserName ?? "—"}
-                    </p>
-                  </div>
-                  {readOnly ? (
-                    value ? (
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <Badge
-                          variant="outline"
-                          className="border-violet-200 text-violet-800 dark:text-violet-200"
-                        >
-                          {assigned ? describeTeacher(assigned) : "Assigned"}
-                        </Badge>
-                        <EmploymentTypeChip
-                          employmentType={assigned?.employmentType ?? null}
-                        />
-                      </span>
-                    ) : (
-                      <Badge variant="outline">Not designated</Badge>
-                    )
-                  ) : (
-                    <>
-                      <Label htmlFor={selectId} className="sr-only">
-                        ARAL teacher for {row.fullName}
-                      </Label>
-                      <select
-                        id={selectId}
-                        className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm max-lg:h-11"
-                        value={value ?? ""}
-                        disabled={savingId === row.id || teachers.length === 0}
-                        onChange={(e) =>
-                          onChangeTeacher(
-                            row,
-                            e.target.value === "" ? null : e.target.value
-                          )
-                        }
-                      >
-                        <option value="">Not designated</option>
-                        {teachers.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {describeTeacherOption(t)}
-                          </option>
-                        ))}
-                      </select>
-                      {savingId === row.id ? (
-                        <p className="mt-1 text-xs text-muted-foreground">Saving…</p>
-                      ) : null}
-                    </>
-                  )}
-                </li>
-              );
-            })
-          )}
-        </ul>
-            </>
+              <>
+                <Label htmlFor={selectId} className="sr-only">
+                  ARAL teacher for {row.fullName}
+                </Label>
+                <select
+                  id={selectId}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm max-lg:h-11"
+                  value={value ?? ""}
+                  disabled={savingId === row.id || teachers.length === 0}
+                  onChange={(e) =>
+                    onChangeTeacher(row, e.target.value === "" ? null : e.target.value)
+                  }
+                >
+                  <option value="">Not designated</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {describeTeacherOption(t)}
+                    </option>
+                  ))}
+                </select>
+                {savingId === row.id ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Saving…</p>
+                ) : null}
+              </>
+            );
+          return (
+            <ResponsiveTable
+              table={
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Learner</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Section</TableHead>
+                      <TableHead>Adviser</TableHead>
+                      <TableHead className="min-w-[16rem]">ARAL teacher</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rowsWithValue.map(({ row, value, assigned }) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="max-w-[16rem] font-medium">
+                          <CellText>{row.fullName}</CellText>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">{row.gradeLabel}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {row.sectionName ?? <NoValue />}
+                        </TableCell>
+                        <TableCell className="max-w-[14rem] text-sm text-muted-foreground">
+                          {row.adviserName ? <CellText>{row.adviserName}</CellText> : <NoValue />}
+                        </TableCell>
+                        <TableCell>
+                          {assignment(row, value, assigned, `aral-teacher-${row.id}`)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+              stacked={
+                <StackedList aria-label="ARAL learners">
+                  {rowsWithValue.map(({ row, value, assigned }) => (
+                    <StackedRow
+                      key={row.id}
+                      className="sm:px-4"
+                      title={row.fullName}
+                      meta={
+                        <span className="truncate">
+                          {row.gradeLabel}
+                          {row.sectionName ? ` · ${row.sectionName}` : ""}
+                        </span>
+                      }
+                      details={[{ label: "Adviser", value: row.adviserName ?? <NoValue /> }]}
+                    >
+                      {assignment(row, value, assigned, `aral-teacher-m-${row.id}`)}
+                    </StackedRow>
+                  ))}
+                </StackedList>
+              }
+            />
           );
         })()}
         </ListBusyRegion>

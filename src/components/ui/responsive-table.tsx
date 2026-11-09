@@ -83,6 +83,11 @@ export interface StackedRowProps {
   details?: StackedDetail[];
   /** Row actions. Shown at the end of the row; always visible on touch. */
   actions?: React.ReactNode;
+  /**
+   * The row's primary inline control (an assignment select, a mark input).
+   * Always visible, full width under the identity, never hidden in details.
+   */
+  children?: React.ReactNode;
   className?: string;
 }
 
@@ -96,6 +101,7 @@ export function StackedRow({
   meta,
   details,
   actions,
+  children,
   className,
 }: StackedRowProps) {
   const [open, setOpen] = React.useState(false);
@@ -148,7 +154,7 @@ export function StackedRow({
                 type="button"
                 aria-expanded={open}
                 aria-controls={detailsId}
-                aria-label={open ? "Hide details" : "Show details"}
+                aria-label={`${open ? "Hide" : "Show"} details${tooltip ? ` for ${tooltip}` : ""}`}
                 onClick={() => setOpen((o) => !o)}
                 className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -161,6 +167,7 @@ export function StackedRow({
           </div>
         ) : null}
       </div>
+      {children ? <div className="mt-2 min-w-0">{children}</div> : null}
       {hasDetails ? (
         <dl
           id={detailsId}

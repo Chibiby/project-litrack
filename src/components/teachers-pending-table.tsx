@@ -11,13 +11,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  CellText,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { ConfirmAction } from "@/components/confirm-action";
 import { toast } from "sonner";
 import { approveTeacher, rejectTeacher } from "@/lib/actions/school-head";
 import type { ActionFailure } from "@/lib/errors/result";
 import { callAction } from "@/lib/ui/call-action";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import {
   listOptimisticReducer,
   runOptimistic,
@@ -140,6 +142,36 @@ export function TeachersPendingTable({
     }).finally(() => setActingKey(null));
   };
 
+
+  const decisionControls = (row: PendingTeacherRow, className?: string) => {
+    const rowBusy = actingKey?.startsWith(`${row.id}:`) ?? false;
+    return (
+      <>
+        {approveControl(row, className)}
+        <ConfirmAction
+          title="Decline registration?"
+          description={`${row.fullName} will not be able to sign in. You can allow them to register again later from the Declined tab.`}
+          confirmLabel="Decline"
+          variant="destructive"
+          disabled={rowBusy}
+          trigger={
+            <Button
+              size="sm"
+              variant="ghost"
+              className={cn("text-destructive", className)}
+              loading={actingKey === `${row.id}:reject`}
+              loadingText="Declining…"
+              disabled={rowBusy}
+            >
+              Decline
+            </Button>
+          }
+          onConfirm={() => runReject(row.id)}
+        />
+      </>
+    );
+  };
+
   return (
     <Card ref={rootRef}>
       <CardContent className="p-0">
@@ -153,117 +185,75 @@ export function TeachersPendingTable({
         >
           Pending requests ({visibleRows.length})
         </h2>
-        <div className="hidden lg:block">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Requested</TableHead>
-              {!readOnly ? <TableHead className="text-right">Actions</TableHead> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visibleRows.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={readOnly ? 3 : 4}
-                  className="py-6 text-center text-muted-foreground"
-                >
-                  No pending registration requests.
-                </TableCell>
-              </TableRow>
-            ) : (
-              visibleRows.map((row) => {
-                const rowBusy = actingKey?.startsWith(`${row.id}:`) ?? false;
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.fullName}</TableCell>
-                    <TableCell className="text-sm">{row.email}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(row.requestedAt)}
-                    </TableCell>
+        {visibleRows.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+            No pending registration requests.
+          </p>
+        ) : (
+          <ResponsiveTable
+            table={
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Requested</TableHead>
                     {!readOnly ? (
-                      <TableCell className="space-x-1 text-right align-top">
-                        {approveControl(row)}
-                        <ConfirmAction
-                          title="Decline registration?"
-                          description={`${row.fullName} will not be able to sign in. You can allow them to register again later from the Declined tab.`}
-                          confirmLabel="Decline"
-                          variant="destructive"
-                          disabled={rowBusy}
-                          trigger={
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive"
-                              loading={actingKey === `${row.id}:reject`}
-                              loadingText="Declining…"
-                              disabled={rowBusy}
-                            >
-                              Decline
-                            </Button>
-                          }
-                          onConfirm={() => runReject(row.id)}
-                        />
-                      </TableCell>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     ) : null}
                   </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-        </div>
-
-        {/* Below lg: one stacked row per pending request. */}
-        <ul className="divide-y divide-border/60 lg:hidden" aria-label="Pending requests">
-          {visibleRows.length === 0 ? (
-            <li className="px-4 py-6 text-center text-sm text-muted-foreground">
-              No pending registration requests.
-            </li>
-          ) : (
-            visibleRows.map((row) => {
-              const rowBusy = actingKey?.startsWith(`${row.id}:`) ?? false;
-              return (
-                <li key={row.id} className="flex flex-col gap-2 px-3 py-3 sm:px-4">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">{row.fullName}</p>
-                    <p className="truncate text-sm text-muted-foreground">{row.email}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Requested {formatDate(row.requestedAt)}
-                    </p>
-                  </div>
-                  {!readOnly ? (
-                    <div className="flex flex-wrap gap-2">
-                      {approveControl(row, "lg:h-9")}
-                      <ConfirmAction
-                        title="Decline registration?"
-                        description={`${row.fullName} will not be able to sign in. You can allow them to register again later from the Declined tab.`}
-                        confirmLabel="Decline"
-                        variant="destructive"
-                        disabled={rowBusy}
-                        trigger={
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="lg:h-9 text-destructive"
-                            loading={actingKey === `${row.id}:reject`}
-                            loadingText="Declining…"
-                            disabled={rowBusy}
-                          >
-                            Decline
-                          </Button>
-                        }
-                        onConfirm={() => runReject(row.id)}
-                      />
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })
-          )}
-        </ul>
+                </TableHeader>
+                <TableBody>
+                  {visibleRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="max-w-[16rem] font-medium">
+                        <CellText>{row.fullName}</CellText>
+                      </TableCell>
+                      <TableCell className="max-w-[18rem] text-sm">
+                        <CellText>{row.email}</CellText>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
+                        {formatDate(row.requestedAt)}
+                      </TableCell>
+                      {!readOnly ? (
+                        <TableCell>
+                          {/* The decision is this list's whole job, so its
+                              buttons stay visible instead of revealing on hover. */}
+                          <div className="flex items-center justify-end gap-1">
+                            {decisionControls(row)}
+                          </div>
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            }
+            stacked={
+              <StackedList aria-label="Pending requests">
+                {visibleRows.map((row) => (
+                  <StackedRow
+                    key={row.id}
+                    className="sm:px-4"
+                    title={row.fullName}
+                    value={
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {formatDate(row.requestedAt)}
+                      </span>
+                    }
+                    meta={<span className="truncate">{row.email}</span>}
+                  >
+                    {!readOnly ? (
+                      <div className="flex flex-wrap gap-2">{decisionControls(row, "lg:h-9")}</div>
+                    ) : null}
+                  </StackedRow>
+                ))}
+              </StackedList>
+            }
+          />
+        )}
       </CardContent>
     </Card>
   );

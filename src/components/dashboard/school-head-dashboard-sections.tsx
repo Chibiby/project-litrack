@@ -195,19 +195,19 @@ export async function SchoolHeadIpSection({
               <TableRow>
                 <TableHead>Grade</TableHead>
                 <TableHead>Section</TableHead>
-                <TableHead className="text-right">IP</TableHead>
-                <TableHead className="text-right">IP %</TableHead>
+                <TableHead numeric>IP</TableHead>
+                <TableHead numeric>IP %</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((r) => (
                 <TableRow key={r.key}>
-                  <TableCell>{r.grade}</TableCell>
+                  <TableCell className="font-medium">{r.grade}</TableCell>
                   <TableCell>{r.section}</TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell numeric>
                     {r.ipLearners} / {r.totalLearners}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell numeric>
                     {r.ipPercent}
                   </TableCell>
                 </TableRow>

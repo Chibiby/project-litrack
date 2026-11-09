@@ -11,7 +11,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  NoValue,
 } from "@/components/ui/table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Users, GraduationCap, Percent } from "lucide-react";
@@ -101,32 +103,53 @@ export default async function SchoolHeadIpLearnersPage({ searchParams }: PagePro
               />
             </SurfaceBody>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>Section</TableHead>
-                    <TableHead className="text-right">IP</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">IP %</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((r) => (
-                    <TableRow key={r.key}>
-                      <TableCell>{r.grade}</TableCell>
-                      <TableCell>{r.section}</TableCell>
-                      <TableCell className="text-right tabular-nums">{r.ipLearners}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {r.totalLearners}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{r.ipPercent}</TableCell>
+            <ResponsiveTable
+              table={
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Section</TableHead>
+                      <TableHead numeric>IP</TableHead>
+                      <TableHead numeric>Total</TableHead>
+                      <TableHead numeric>IP %</TableHead>
                     </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r) => (
+                      <TableRow key={r.key}>
+                        <TableCell className="whitespace-nowrap font-medium">{r.grade}</TableCell>
+                        <TableCell>{r.section || <NoValue />}</TableCell>
+                        <TableCell numeric>{r.ipLearners}</TableCell>
+                        <TableCell numeric>{r.totalLearners}</TableCell>
+                        <TableCell numeric>{r.ipPercent}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              }
+              stacked={
+                <StackedList aria-label="IP learners by grade and section">
+                  {rows.map((r) => (
+                    <StackedRow
+                      key={r.key}
+                      title={`${r.grade}${r.section ? ` · ${r.section}` : ""}`}
+                      value={
+                        <>
+                          {r.ipLearners}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">IP</span>
+                        </>
+                      }
+                      meta={
+                        <span className="tabular-nums">
+                          {r.ipPercent} of {r.totalLearners} learners
+                        </span>
+                      }
+                    />
                   ))}
-                </TableBody>
-              </Table>
-            </div>
+                </StackedList>
+              }
+            />
           )}
         </Surface>
 
@@ -148,16 +171,16 @@ export default async function SchoolHeadIpLearnersPage({ searchParams }: PagePro
                 <TableHeader>
                   <TableRow>
                     <TableHead>Group</TableHead>
-                    <TableHead className="text-right">Count</TableHead>
-                    <TableHead className="text-right">%</TableHead>
+                    <TableHead numeric>Count</TableHead>
+                    <TableHead numeric>%</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {kinds.map((k) => (
                     <TableRow key={k.name}>
                       <TableCell className="font-medium">{k.name}</TableCell>
-                      <TableCell className="text-right tabular-nums">{k.value}</TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell numeric>{k.value}</TableCell>
+                      <TableCell numeric>
                         {totalIp > 0 ? `${((k.value / totalIp) * 100).toFixed(1)}%` : "—"}
                       </TableCell>
                     </TableRow>
