@@ -5,6 +5,7 @@ import { cache } from "react";
 import { getServerEnv } from "@/lib/env";
 import { currentReadMode } from "@/lib/db/read-mode";
 import { markDbError } from "@/lib/db-errors";
+import { withDbRetry } from "@/lib/db/retry";
 import {
   pickHyperdriveUrl,
   resolvePgDriverUrl,
@@ -69,6 +70,14 @@ const UNCONFIGURED_DATABASE_URL =
   "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
 
 /**
+ * Opening a socket to Hyperdrive / the pooler takes well under a second, so a
+ * short limit lets `withDbRetry` try a fresh connection while the user waits.
+ */
+const DB_CONNECT_TIMEOUT_MS = 5_000;
+/** Generous: the heaviest Division Summary export reads finish far sooner. */
+const DB_QUERY_TIMEOUT_MS = 30_000;
+
+/**
  * Resolve the connection URL at call time, never at module evaluation.
  *
  * On Cloudflare, `getCloudflareContext()` only has a value inside a request.
@@ -92,6 +101,14 @@ export function createPrismaClient(
     // TLS connection to the database: about 340 ms of handshake on a 50 ms
     // query, measured from a local machine to Neon.
     ...(process.env.LITRACK_DEPLOY_TARGET === "cloudflare" ? { maxUses: 1 } : {}),
+    // pg waits forever by default, for a connection and for a reply. On
+    // Workers a request has no wall-clock limit while the browser stays
+    // connected, so one stuck socket hung its server action indefinitely —
+    // and Next runs server actions one at a time, so every later click and
+    // navigation queued behind it until the page was reloaded. Bounded, the
+    // wait fails as "database unavailable" and the queue moves on.
+    connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    query_timeout: DB_QUERY_TIMEOUT_MS,
   });
 
   return withDbErrorMarking(
@@ -124,15 +141,21 @@ type TransactionRunner = (arg: unknown, options?: unknown) => Promise<unknown>;
  */
 export function markTransactionFailures(run: TransactionRunner): TransactionRunner {
   return (arg, options) => {
+    // A transaction is retried only when its connection could not be opened
+    // (`withDbRetry` decides that from the error) — never once work was sent.
     if (typeof arg !== "function") {
-      return Promise.resolve(run(arg, options)).catch((err: unknown) => {
-        throw markDbError(err);
-      });
+      return withDbRetry(() => Promise.resolve(run(arg, options)), TRANSACTION).catch(
+        (err: unknown) => {
+          throw markDbError(err);
+        },
+      );
     }
     const callback = arg as (tx: unknown) => unknown;
     let fromCallback = false;
+    let callbackStarted = false;
     let callbackError: unknown;
     const wrapped = async (tx: unknown) => {
+      callbackStarted = true;
       try {
         return await callback(tx);
       } catch (err) {
@@ -141,11 +164,37 @@ export function markTransactionFailures(run: TransactionRunner): TransactionRunn
         throw err;
       }
     };
-    return Promise.resolve(run(wrapped, options)).catch((err: unknown) => {
+    // Once the callback has run, its side effects may have happened, so the
+    // failure is wrapped to pass through `withDbRetry` without a retry.
+    const attempt = () =>
+      Promise.resolve(run(wrapped, options)).catch((err: unknown) => {
+        throw callbackStarted ? new CallbackRan(err) : err;
+      });
+    return withDbRetry(attempt, TRANSACTION).catch((thrown: unknown) => {
+      const err = thrown instanceof CallbackRan ? thrown.original : thrown;
       if (fromCallback && err === callbackError) throw err;
       throw markDbError(err);
     });
   };
+}
+
+const TRANSACTION = { operation: "$transaction", inTransaction: true } as const;
+
+/** Carries a failure past `withDbRetry` untouched, so it is never retried. */
+class CallbackRan {
+  constructor(readonly original: unknown) {}
+}
+
+/**
+ * Prisma passes the request it runs as `__internalParams`, which carries
+ * `transaction` for a query on a `tx` client or in a batch (Prisma 6.19). If
+ * that ever stops being there, assume a transaction: retries switch off, which
+ * is safe (tests/unit/prisma-db-retry.test.ts would catch it).
+ */
+function runsInTransaction(params: Record<string, unknown>): boolean {
+  const internal = params.__internalParams;
+  if (typeof internal !== "object" || internal === null) return true;
+  return Boolean((internal as { transaction?: unknown }).transaction);
 }
 
 /**
@@ -167,9 +216,13 @@ export function withDbErrorMarking(client: PrismaClient): PrismaClient {
   const extended = client.$extends({
     name: "litrack-db-error-marking",
     query: {
-      async $allOperations({ args, query }) {
+      async $allOperations({ args, query, operation, ...rest }) {
         try {
-          return await query(args);
+          // A query inside a transaction is never retried on its own: the
+          // transaction owns its connection, and `$transaction` retries a
+          // transaction that could not start.
+          if (runsInTransaction(rest)) return await query(args);
+          return await withDbRetry(() => query(args), { operation, inTransaction: false });
         } catch (err) {
           throw markDbError(err);
         }

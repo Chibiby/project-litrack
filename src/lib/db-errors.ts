@@ -109,6 +109,7 @@ const SCHEMA_SIGNATURES: RegExp[] = [
 const UNAVAILABLE_SIGNATURES: RegExp[] = [
   /connection terminated/i, // pg: "Connection terminated unexpectedly" / "… due to connection timeout"
   /timeout exceeded when trying to connect/i, // pg-pool
+  /query read timeout/i, // pg client-side query_timeout
   /too many (?:clients|connections)/i, // 53300
   /remaining connection slots/i, // 53300, reserved-slots phrasing
   /network connection lost/i, // Workers socket

@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.50.2",
+    date: "2026-11-10",
+    title: "Buttons no longer keep loading until you refresh",
+    announce: true,
+    fixes: [
+      "A button that kept spinning until you refreshed the page now finishes. If the connection drops for a moment, LITRACK quietly tries again for you.",
+      "If the connection stays down, you now see a message saying so instead of an endless spinner, and your next click works.",
+    ],
+  },
+  {
     version: "2.50.1",
     date: "2026-11-10",
     title: "Lists on phones show full names again",

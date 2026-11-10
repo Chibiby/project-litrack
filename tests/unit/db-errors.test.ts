@@ -181,6 +181,7 @@ describe("classifyDbFailure — what the client engine actually surfaces", () =>
     for (const text of [
       "Connection terminated unexpectedly",
       "timeout exceeded when trying to connect",
+      "Query read timeout",
       "Network connection lost.",
     ]) {
       expect(classifyDbFailure(new Error(text))).toBe("UNKNOWN");
