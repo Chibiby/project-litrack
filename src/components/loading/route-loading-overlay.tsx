@@ -62,15 +62,15 @@ export function RouteLoadingOverlay({
       {children}
       {slow ? (
         <div
-          // Frosted glass over the skeleton, the same plain glassmorphism as the
-          // header and cards: a light translucent fill and a strong backdrop
-          // blur, so the skeleton shows through as a soft blur rather than a
-          // flat white wash. The books sit on their own small glass pane.
-          className="pointer-events-none absolute inset-0 z-10 animate-in bg-glass/20 fade-in backdrop-blur-md duration-300 dark:bg-background/30"
+          // Clear glass over the skeleton: no fill at all, only a light
+          // backdrop blur, so the page background and the glass skeleton show
+          // through rather than a white wash. The books sit on their own small
+          // pane of the same plain glass as the header.
+          className="pointer-events-none absolute inset-0 z-10 animate-in fade-in backdrop-blur-[3px] duration-300"
           aria-hidden="true"
         >
           <div className="sticky top-0 flex h-[min(100svh,100%)] min-h-64 items-center justify-center">
-            <div className="rounded-2xl border border-white/50 bg-glass/30 px-6 py-5 shadow-[0_8px_32px_rgb(15_23_42/0.10),inset_0_1px_0_rgb(255_255_255/0.6)] backdrop-blur-lg dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]">
+            <div className="rounded-2xl border border-white/40 bg-glass/[0.08] px-6 py-5 shadow-[0_8px_32px_rgb(15_23_42/0.10),inset_0_1px_0_rgb(255_255_255/0.5)] backdrop-blur-lg dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]">
               <BookLoader decorative />
             </div>
           </div>

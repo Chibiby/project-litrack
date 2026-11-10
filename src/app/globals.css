@@ -159,11 +159,24 @@
   }
 }
 
+/* Skeleton blocks are glass, like the cards they stand in for: a faint
+   translucent slate fill, a backdrop blur and a hairline highlight drawn as
+   an inset shadow (so it adds no size). The page's light-ray background shows
+   through them instead of a solid grey or white slab. The sheen that sweeps
+   across is translucent white, not the opaque card colour. */
 .skeleton-shimmer {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius);
-  background-color: hsl(var(--muted));
+  background-color: rgb(148 163 184 / 0.16);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.45);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.dark .skeleton-shimmer {
+  background-color: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
 }
 
 .skeleton-shimmer::after {
@@ -174,10 +187,19 @@
   background-image: linear-gradient(
     90deg,
     transparent 0,
-    hsl(var(--card)) 50%,
+    rgb(255 255 255 / 0.45) 50%,
     transparent 100%
   );
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer::after {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0,
+    rgb(255 255 255 / 0.08) 50%,
+    transparent 100%
+  );
 }
 
 @media (prefers-reduced-motion: reduce) {
