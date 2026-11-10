@@ -157,7 +157,9 @@ export function AppHeader({
     // through behind it. Once the page scrolls, the bar lifts off into a
     // floating pane of frosted glass: inset from the edges, rounded, with a
     // translucent fill and backdrop blur, so content sliding under it stays
-    // a soft blur behind the controls. The header box itself keeps its
+    // a soft blur behind the controls. The side inset (16px, 24px from lg)
+    // equals the page's own `p-4 lg:p-6`, so the pane lines up with the
+    // cards below it. The header box itself keeps its
     // height either way, so nothing below it moves. (It is a flex box so the
     // pane's top margin is kept rather than collapsing through it.)
     <header className="sticky top-0 z-30 flex h-[var(--app-chrome-header-height)]">
@@ -165,7 +167,7 @@ export function AppHeader({
         className={cn(
           "flex w-full items-center gap-3 border px-4 transition-[margin,height,width,border-radius,background-color,border-color,box-shadow] duration-300 ease-in-out lg:gap-4 lg:px-6",
           scrolled
-            ? "mx-2 mt-2 h-[calc(100%-0.75rem)] w-[calc(100%-1rem)] rounded-2xl border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg lg:mx-3 lg:w-[calc(100%-1.5rem)] dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
+            ? "mx-4 mt-2 h-[calc(100%-0.75rem)] w-[calc(100%-2rem)] rounded-2xl border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg lg:mx-6 lg:w-[calc(100%-3rem)] dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
             : "h-full rounded-none border-transparent bg-transparent"
         )}
       >
