@@ -78,11 +78,12 @@ export function NavGlassIndicator({
       aria-hidden
       className={cn(
         "pointer-events-none absolute left-0 top-0 z-0 rounded-xl opacity-0",
-        // Plain glassmorphism: a translucent white fill, a thin light border,
-        // a backdrop blur and a soft shadow. No accent colour, no rim
-        // highlights.
-        "border border-white/40 bg-glass/25 shadow-[0_4px_16px_rgb(15_23_42/0.08)] backdrop-blur-md",
-        "dark:border-white/10 dark:bg-glass/10 dark:shadow-[0_4px_16px_rgb(0_0_0/0.3)]",
+        // A brighter pane of the same glass the rail is made of: a denser
+        // white fill, a bright border and a top-edge highlight, so the pill
+        // stands out on the frosted rail instead of vanishing into it. Still
+        // no accent colour.
+        "border border-white/80 bg-glass/60 shadow-[0_4px_14px_rgb(15_23_42/0.10),inset_0_1px_0_rgb(255_255_255/0.9)] backdrop-blur-md",
+        "dark:border-white/15 dark:bg-glass/[0.12] dark:shadow-[0_4px_14px_rgb(0_0_0/0.35),inset_0_1px_0_rgb(255_255_255/0.08)]",
         className
       )}
     />

@@ -75,7 +75,10 @@ export function UserAccountMenu({
     <Button
       variant="ghost"
       className={cn(
-        "h-auto rounded-md bg-primary/10 text-left shadow-none hover:bg-primary/15 focus-visible:ring-1 focus-visible:ring-border focus-visible:ring-offset-0",
+        // Plain glass, matching the rail it sits on and its active-row pill: a
+        // translucent white fill, a bright hairline border and a top-edge
+        // highlight, firming up on hover. No blue tint.
+        "h-auto rounded-xl border border-white/60 bg-glass/40 text-left shadow-[0_2px_8px_rgb(15_23_42/0.06),inset_0_1px_0_rgb(255_255_255/0.7)] backdrop-blur-md hover:bg-glass/60 focus-visible:ring-1 focus-visible:ring-border focus-visible:ring-offset-0 dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)] dark:hover:bg-glass/10",
         collapsed ? "justify-center px-2 py-2" : "gap-2 px-2.5 py-2",
         className
       )}

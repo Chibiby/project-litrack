@@ -205,7 +205,7 @@ function NavLink({
             // A mouse user is already sitting on it, so `hover:` has that
             // covered; this is what a keyboard user gets for a row activated by
             // Enter, which would otherwise change nothing but its icon.
-            "text-foreground/80 hover:bg-glass/30 hover:text-foreground has-[[data-nav-pending]]:bg-glass/30 has-[[data-nav-pending]]:text-foreground dark:hover:bg-glass/5 dark:has-[[data-nav-pending]]:bg-glass/5"
+            "text-foreground/80 hover:bg-glass/35 hover:text-foreground has-[[data-nav-pending]]:bg-glass/35 has-[[data-nav-pending]]:text-foreground dark:hover:bg-glass/[0.06] dark:has-[[data-nav-pending]]:bg-glass/[0.06]"
       )}
     >
       <NavLinkIcon
@@ -502,16 +502,20 @@ export function AppSidebar({
       <NavPrefetcher cacheKey={prefetchKey} hrefs={prefetchHrefs} />
 
       {/* Desktop — width paired with CONTENT_OFFSET_CLASS in role-shell / app-shell.
-          No fill of its own: the light-rays background runs straight through
-          the rail, and only the active row's glass pill sits on it. */}
+          The aside keeps that full width so the content offset is unchanged;
+          inside it the rail floats as a rounded pane of frosted glass, inset
+          8px top and bottom (the floating header's top margin) and 12px from
+          the left, the same recipe as the scrolled header. */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col bg-transparent lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col py-2 pl-3 lg:flex",
           transitionsEnabled && "transition-[width] duration-200",
           collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
         )}
       >
-        {renderSidebarContent(undefined, { collapsed })}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]">
+          {renderSidebarContent(undefined, { collapsed })}
+        </div>
       </aside>
 
       {/* Mobile Sheet — always full labels; collapse is desktop-only */}
