@@ -73,7 +73,7 @@ async function LearnersCards({ params }: { params: LearnersHubParams }) {
     console.error("[AdminLearnersPage] failed to load summary:", err);
     return <SummaryUnavailable what="learner" />;
   }
-  const card = { inlineOnPhone: true, denseOnPhone: true } as const;
+  const card = { denseOnPhone: true } as const;
   return (
     <SummaryGrid scope={scope} label="Learner overview">
       {/* Learners, IP and ARAL use the dashboard's figures and words. */}

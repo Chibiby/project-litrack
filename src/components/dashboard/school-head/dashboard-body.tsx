@@ -182,7 +182,6 @@ export async function loadSchoolHeadDashboard({
               hint="All learners in the school"
               icon={ListChecks}
               tone="amber"
-              decor="bars"
               action={{ label: "View learners", href: ipLearnersHref(view) }}
             />
             <StatCard
@@ -191,7 +190,6 @@ export async function loadSchoolHeadDashboard({
               hint="Active teaching accounts"
               icon={Users}
               tone="primary"
-              decor="people"
               action={{ label: "Manage teachers", href: teachersHref(view) }}
             />
             <StatCard
@@ -200,7 +198,6 @@ export async function loadSchoolHeadDashboard({
               hint="Grades this school offers"
               icon={GraduationCap}
               tone="emerald"
-              decor="sprout"
               action={{ label: "View grade levels", href: schoolGradeLevelsHref(view) }}
             />
             <StatCard
@@ -209,7 +206,6 @@ export async function loadSchoolHeadDashboard({
               hint="Across all grades"
               icon={Layers}
               tone="emerald"
-              decor="wave"
               action={{ label: "View sections", href: schoolGradeLevelsHref(view) }}
             />
             <StatCard
@@ -218,7 +214,6 @@ export async function loadSchoolHeadDashboard({
               hint="In the ARAL program"
               icon={Sparkles}
               tone="violet"
-              decor="sprout"
               action={{ label: "View ARAL program", href: aralHref(view) }}
             />
             <StatCard
@@ -227,7 +222,6 @@ export async function loadSchoolHeadDashboard({
               hint="Waiting on your decision"
               icon={UserPlus}
               tone={data.pendingTeacherCount > 0 ? "amber" : "neutral"}
-              decor="clock"
               action={{ label: "Review approvals", href: teachersPendingHref(view) }}
             />
           </SchoolHeadStatRow>

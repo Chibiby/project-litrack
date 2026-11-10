@@ -18,8 +18,6 @@ export function ProfilingStatCards({ stats }: { stats: ProfilingStats }) {
         hint="Learners for profiling"
         icon={Users}
         tone="violet"
-        decor="people"
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -28,8 +26,6 @@ export function ProfilingStatCards({ stats }: { stats: ProfilingStats }) {
         hint="Still need a profile"
         icon={ClipboardList}
         tone="amber"
-        decor="clock"
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -38,8 +34,6 @@ export function ProfilingStatCards({ stats }: { stats: ProfilingStats }) {
         hint="Profiles completed"
         icon={CheckCircle2}
         tone="emerald"
-        decor="bars"
-        inlineOnPhone
         denseOnPhone
         progress={stats.completionPct}
         progressLabel={`${stats.completed} of ${stats.total} ARAL learner${stats.total === 1 ? "" : "s"} profiled`}
@@ -50,8 +44,6 @@ export function ProfilingStatCards({ stats }: { stats: ProfilingStats }) {
         hint={stats.hint}
         icon={CalendarClock}
         tone="primary"
-        decor="wave"
-        inlineOnPhone
         denseOnPhone
         valueClassName="text-base sm:text-xl"
       />

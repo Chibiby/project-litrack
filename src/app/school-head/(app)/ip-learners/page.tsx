@@ -60,7 +60,6 @@ export default async function SchoolHeadIpLearnersPage({ searchParams }: PagePro
                 hint="Enrolled this school year"
                 icon={Users}
                 tone="amber"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />
@@ -70,7 +69,6 @@ export default async function SchoolHeadIpLearnersPage({ searchParams }: PagePro
                 hint="Of all enrolled learners"
                 icon={Percent}
                 tone="primary"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />
@@ -80,7 +78,6 @@ export default async function SchoolHeadIpLearnersPage({ searchParams }: PagePro
                 hint="Across active teachers"
                 icon={GraduationCap}
                 tone="emerald"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />

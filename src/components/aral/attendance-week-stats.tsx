@@ -25,8 +25,6 @@ export function AttendanceWeekStats({ stats }: { stats: WeekStats }) {
         hint="ARAL learners in view"
         icon={Users}
         tone="amber"
-        decor="people"
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -35,8 +33,6 @@ export function AttendanceWeekStats({ stats }: { stats: WeekStats }) {
         hint={`out of ${stats.possible} possible days`}
         icon={CheckCircle2}
         tone="emerald"
-        decor="bars"
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -45,8 +41,6 @@ export function AttendanceWeekStats({ stats }: { stats: WeekStats }) {
         hint="This week's rate"
         icon={Percent}
         tone="primary"
-        decor="wave"
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -55,8 +49,6 @@ export function AttendanceWeekStats({ stats }: { stats: WeekStats }) {
         hint={`${stats.daysRecorded} of ${stats.schoolDays} days recorded`}
         icon={CalendarDays}
         tone="violet"
-        decor="clock"
-        inlineOnPhone
         denseOnPhone
         progress={completionPct}
       />

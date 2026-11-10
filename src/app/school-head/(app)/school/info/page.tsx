@@ -79,7 +79,6 @@ export default async function SchoolInfoPage({ searchParams }: PageProps) {
                 hint="Grades this school offers"
                 icon={GraduationCap}
                 tone="emerald"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />
@@ -89,7 +88,6 @@ export default async function SchoolInfoPage({ searchParams }: PageProps) {
                 hint="Across all active grades"
                 icon={Layers}
                 tone="emerald"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />
@@ -99,7 +97,6 @@ export default async function SchoolInfoPage({ searchParams }: PageProps) {
                 hint="Learners enroll against this year"
                 icon={CalendarRange}
                 tone="primary"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />

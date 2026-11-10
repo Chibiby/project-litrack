@@ -54,7 +54,6 @@ async function LearnersTile({ scope }: { scope: SummaryScope }) {
       hint="Enrolled in the active school year"
       icon={Users}
       tone="amber"
-      decor="bars"
       action={{ label: "Learners summary", href: DISTRICT_ROUTES.summary("learners") }}
     />
   );
@@ -70,7 +69,6 @@ async function AralLearnersTile({ scope, month }: { scope: SummaryScope; month: 
       hint="In the ARAL reading program"
       icon={BookOpenCheck}
       tone="violet"
-      decor="sprout"
       action={{
         label: "Reading behaviour",
         href: `${DISTRICT_ROUTES.summary("reading-behavior")}?month=${month}`,
@@ -94,7 +92,6 @@ async function AttendanceTile({ scope, month }: { scope: SummaryScope; month: st
       hint={`ARAL learners, ${monthLabel(month)}`}
       icon={CalendarDays}
       tone="violet"
-      decor="wave"
       action={{
         label: "Attendance summary",
         href: `${DISTRICT_ROUTES.summary("attendance")}?from=${month}&to=${month}`,
@@ -115,7 +112,6 @@ async function ComplianceTile({ scope }: { scope: SummaryScope }) {
       hint={`Of ${formatCount(active)} active schools`}
       icon={ShieldAlert}
       tone={flagged > 0 ? "amber" : "neutral"}
-      decor="clock"
       action={{ label: "Non-compliance", href: DISTRICT_ROUTES.summary("compliance") }}
     />
   );

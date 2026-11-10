@@ -84,7 +84,6 @@ export function KinderChecklistHero({
             hint="Kindergarten section"
             icon={GraduationCap}
             tone="violet"
-            inlineOnPhone
             denseOnPhone
             valueClassName="text-xl sm:text-2xl"
           />
@@ -98,7 +97,6 @@ export function KinderChecklistHero({
             }
             icon={Users}
             tone="primary"
-            inlineOnPhone
             denseOnPhone
             valueClassName="text-xl sm:text-2xl"
           />
@@ -108,7 +106,6 @@ export function KinderChecklistHero({
             hint="Competencies rated"
             icon={FileCheck2}
             tone="emerald"
-            inlineOnPhone
             denseOnPhone
             progress={pct}
             progressLabel={`${touched} of ${total} competencies rated`}

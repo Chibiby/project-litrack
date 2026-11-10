@@ -51,8 +51,6 @@ export async function LearnerStatCards({
         hint="All enrolled learners"
         icon={Users}
         tone="amber"
-        decor="people"
-        inlineOnPhone
       />
       <StatCard
         title="ARAL Learners"
@@ -60,8 +58,6 @@ export async function LearnerStatCards({
         hint="In the ARAL program"
         icon={Sprout}
         tone="emerald"
-        decor="bars"
-        inlineOnPhone
       />
       <StatCard
         title="Male Learners"
@@ -69,8 +65,6 @@ export async function LearnerStatCards({
         hint={share(male)}
         icon={User}
         tone="primary"
-        decor="wave"
-        inlineOnPhone
       />
       <StatCard
         title="Female Learners"
@@ -78,8 +72,6 @@ export async function LearnerStatCards({
         hint={share(female)}
         icon={UserRound}
         tone="pink"
-        decor="wave"
-        inlineOnPhone
       />
     </StatCardRow>
   );

@@ -146,7 +146,6 @@ export default async function SchoolWorkspacePage({ searchParams }: GradeLevelsP
                 hint="Grades this school offers"
                 icon={GraduationCap}
                 tone="emerald"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />
@@ -156,7 +155,6 @@ export default async function SchoolWorkspacePage({ searchParams }: GradeLevelsP
                 hint="Across all active grades"
                 icon={Layers}
                 tone="emerald"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />
@@ -166,7 +164,6 @@ export default async function SchoolWorkspacePage({ searchParams }: GradeLevelsP
                 hint="Learners enroll against this year"
                 icon={CalendarRange}
                 tone="primary"
-                inlineOnPhone
                 denseOnPhone
                 valueClassName="text-xl sm:text-2xl"
               />

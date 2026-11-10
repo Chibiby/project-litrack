@@ -56,7 +56,7 @@ export function SummaryUnavailable({ what }: { what: string }) {
   );
 }
 
-const card = { inlineOnPhone: true, denseOnPhone: true } as const;
+const card = { denseOnPhone: true } as const;
 
 export function TeachersSummaryCards({ summary, scope }: { summary: TeachersSummary; scope: string }) {
   return (

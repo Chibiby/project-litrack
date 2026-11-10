@@ -63,7 +63,7 @@ async function LearnersCards({ view }: { view: SchoolHeadView }) {
     console.error("[SchoolHeadLearnersPage] failed to load summary:", err);
     return <SummaryUnavailable what="learner" />;
   }
-  const card = { inlineOnPhone: true, denseOnPhone: true } as const;
+  const card = { denseOnPhone: true } as const;
   return (
     <SummaryGrid scope={view.schoolName ?? "Your school"} label="Learner overview">
       <StatCard title="Learners" value={n(summary.totalLearners)} hint="In this school" icon={GraduationCap} tone="amber" {...card} />

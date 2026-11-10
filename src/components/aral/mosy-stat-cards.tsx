@@ -7,18 +7,18 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { StatCard, type StatDecor, type StatTone, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
+import { StatCard, type StatTone, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 import type { MosyStatCard, MosyStats } from "@/lib/aral/mosy";
 
 const CARD_STYLE: Record<
   MosyStatCard["key"],
-  { icon: LucideIcon; tone: StatTone; decor: StatDecor }
+  { icon: LucideIcon; tone: StatTone }
 > = {
-  total: { icon: Users, tone: "violet", decor: "people" },
-  updated: { icon: ClipboardCheck, tone: "primary", decor: "wave" },
-  forDecision: { icon: Hourglass, tone: "amber", decor: "clock" },
-  movedOut: { icon: DoorOpen, tone: "neutral", decor: "sprout" },
-  stay: { icon: CheckCircle2, tone: "emerald", decor: "bars" },
+  total: { icon: Users, tone: "violet" },
+  updated: { icon: ClipboardCheck, tone: "primary" },
+  forDecision: { icon: Hourglass, tone: "amber" },
+  movedOut: { icon: DoorOpen, tone: "neutral" },
+  stay: { icon: CheckCircle2, tone: "emerald" },
 };
 
 /** The five MOSY summary cards, from `computeMosyStats`. Same `StatCard` as Profiling. */
@@ -35,8 +35,6 @@ export function MosyStatCards({ stats }: { stats: MosyStats }) {
             hint={card.hint}
             icon={style.icon}
             tone={style.tone}
-            decor={style.decor}
-            inlineOnPhone
             denseOnPhone
           />
         );

@@ -1,14 +1,14 @@
 import { cn } from "@/lib/utils";
 import { BookOpen, Sprout, TrendingUp, Trophy, Users, type LucideIcon } from "lucide-react";
-import { StatCard, type StatDecor, type StatTone, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
+import { StatCard, type StatTone, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 import type { BosyStatCard } from "@/lib/aral/bosy";
 
-const CARD_STYLE: Record<BosyStatCard["key"], { icon: LucideIcon; tone: StatTone; decor: StatDecor }> = {
-  total: { icon: Users, tone: "violet", decor: "people" },
-  tier1: { icon: Sprout, tone: "amber", decor: "sprout" },
-  tier2: { icon: BookOpen, tone: "primary", decor: "wave" },
-  tier3: { icon: TrendingUp, tone: "pink", decor: "bars" },
-  tier4: { icon: Trophy, tone: "emerald", decor: "bars" },
+const CARD_STYLE: Record<BosyStatCard["key"], { icon: LucideIcon; tone: StatTone }> = {
+  total: { icon: Users, tone: "violet" },
+  tier1: { icon: Sprout, tone: "amber" },
+  tier2: { icon: BookOpen, tone: "primary" },
+  tier3: { icon: TrendingUp, tone: "pink" },
+  tier4: { icon: Trophy, tone: "emerald" },
 };
 
 /** The five BOSY summary cards. Same `StatCard` and grid as the MOSY page. */
@@ -25,8 +25,6 @@ export function BosyStatCards({ cards }: { cards: BosyStatCard[] }) {
             hint={card.hint}
             icon={style.icon}
             tone={style.tone}
-            decor={style.decor}
-            inlineOnPhone
             denseOnPhone
           />
         );

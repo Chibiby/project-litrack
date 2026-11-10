@@ -23,10 +23,13 @@ import {
 import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import {
   AlertTriangle,
+  BookOpen,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   GraduationCap,
+  Layers,
   Trash2,
   Users,
 } from "lucide-react";
@@ -38,6 +41,7 @@ import { clearSchoolEverything } from "@/lib/actions/database";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
 import { SortSelect } from "@/components/ui/sort-select";
+import { StatCard, STAT_GRID } from "@/components/dashboard/teacher/stat-cards";
 import { compareNames } from "@/lib/sort/compare";
 import { defineSort, type SortOption } from "@/lib/sort/registry";
 import {
@@ -140,15 +144,6 @@ function Fact({ label, value }: { label: string; value: string | null }) {
     <div className="min-w-0">
       <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 break-words text-sm font-medium">{value?.trim() || "—"}</dd>
-    </div>
-  );
-}
-
-function CountTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-xl font-semibold tabular-nums">{value.toLocaleString()}</p>
     </div>
   );
 }
@@ -448,12 +443,14 @@ export function SchoolDetailView({
             <Fact label="Address" value={school.address} />
           </dl>
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <CountTile label="Teachers" value={counts.teachers} />
-            <CountTile label="Learners" value={counts.learners} />
-            <CountTile label="Sections" value={counts.sections} />
-            <CountTile label="Grade levels" value={counts.gradeLevels} />
-            <CountTile label="School years" value={counts.schoolYears} />
+          {/* The app-wide stat card, so these counts match every other figure
+              row instead of being a one-off muted tile. */}
+          <div className={STAT_GRID}>
+            <StatCard title="Teachers" value={counts.teachers.toLocaleString()} hint="In this school" icon={Users} tone="primary" denseOnPhone />
+            <StatCard title="Learners" value={counts.learners.toLocaleString()} hint="In this school" icon={BookOpen} tone="violet" denseOnPhone />
+            <StatCard title="Sections" value={counts.sections.toLocaleString()} hint="Across all grades" icon={Layers} tone="emerald" denseOnPhone />
+            <StatCard title="Grade levels" value={counts.gradeLevels.toLocaleString()} hint="Set up for this school" icon={GraduationCap} tone="amber" denseOnPhone />
+            <StatCard title="School years" value={counts.schoolYears.toLocaleString()} hint="On record" icon={CalendarDays} tone="pink" denseOnPhone />
           </div>
         </Surface>
 

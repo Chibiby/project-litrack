@@ -35,7 +35,6 @@ export function ReadingLevelStatCards({
         hint={statusBody}
         icon={CalendarDays}
         tone={statusTone}
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -44,8 +43,6 @@ export function ReadingLevelStatCards({
         hint={`${stats.completionPct}% assessed`}
         icon={Users}
         tone="primary"
-        decor="people"
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -54,8 +51,6 @@ export function ReadingLevelStatCards({
         hint={`Out of ${stats.total} learners`}
         icon={ClipboardList}
         tone="amber"
-        decor="bars"
-        inlineOnPhone
         denseOnPhone
       />
       <StatCard
@@ -66,7 +61,6 @@ export function ReadingLevelStatCards({
         tone="emerald"
         progress={stats.completionPct}
         progressLabel={`${stats.assessed} of ${stats.total} learners assessed in ${monthLabel}`}
-        inlineOnPhone
         denseOnPhone
       />
       <div className="col-span-2 xl:col-span-1 [&>*]:h-full">
@@ -76,8 +70,6 @@ export function ReadingLevelStatCards({
           hint="Based on assessed learners"
           icon={TrendingUp}
           tone="pink"
-          decor="wave"
-          inlineOnPhone
           denseOnPhone
           valueClassName="text-base sm:text-xl lg:text-2xl"
         />

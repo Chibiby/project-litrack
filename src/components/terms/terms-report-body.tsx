@@ -96,8 +96,6 @@ export function TermsReportSummary({
             hint="All enrolled learners"
             icon={Users}
             tone="violet"
-            decor="people"
-            inlineOnPhone
             denseOnPhone
           />
           <StatCard
@@ -106,8 +104,6 @@ export function TermsReportSummary({
             hint="Learners with complete grades"
             icon={FileCheck2}
             tone="emerald"
-            decor="wave"
-            inlineOnPhone
             denseOnPhone
             progress={stats.completionPct}
           />
@@ -117,8 +113,6 @@ export function TermsReportSummary({
             hint={`${stats.complete} of ${stats.total} learners`}
             icon={BarChart3}
             tone="primary"
-            decor="wave"
-            inlineOnPhone
             denseOnPhone
           />
           <StatCard
@@ -127,8 +121,6 @@ export function TermsReportSummary({
             hint={allLetterScale ? "Not computed for letter marks" : "Based on saved grades"}
             icon={Trophy}
             tone="amber"
-            decor="wave"
-            inlineOnPhone
             denseOnPhone
           />
         </StatCardRow>

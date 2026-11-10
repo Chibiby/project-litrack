@@ -4,15 +4,16 @@ import { cn } from "@/lib/utils";
 import { ArrowUpRight, type LucideIcon } from "lucide-react";
 
 /**
- * The shared stat card: a tinted icon tile in a left column; the figure, then
+ * The shared stat card: a glass icon tile in a left column; the figure, then
  * the title, then its hint stacked in a right column.
  *
  * A card with a destination is itself the link — there is no separate button.
  * It lifts, deepens its shadow, rings in its tone and shows an arrow on hover
  * or keyboard focus, and presses in on click, so it reads as clickable.
  *
- * Each card keeps a faint wash of its tone and optional decorative art in the
- * bottom-right corner, pale enough that the figure stays the loudest thing.
+ * Each card keeps a faint wash of its tone in the top-left corner and a plain
+ * glass icon tile. This is the one stat card design for the whole app: every
+ * figure row uses it rather than its own card.
  */
 
 export type StatTone =
@@ -29,18 +30,23 @@ export type StatTone =
    */
   | "neutral";
 
-/** Decorative art drawn behind the card's right side. Purely visual. */
-export type StatDecor = "wave" | "bars" | "sprout" | "clock" | "people";
-
+/** The icon's colour. The tile behind it is plain glass (`TILE_GLASS`). */
 const TILE: Record<StatTone, string> = {
-  violet: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200",
-  amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
-  emerald:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
-  primary: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
-  pink: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-200",
-  neutral: "bg-muted text-muted-foreground",
+  violet: "text-violet-700 dark:text-violet-200",
+  amber: "text-amber-700 dark:text-amber-200",
+  emerald: "text-emerald-700 dark:text-emerald-200",
+  primary: "text-blue-700 dark:text-blue-200",
+  pink: "text-pink-700 dark:text-pink-200",
+  neutral: "text-muted-foreground",
 };
+
+/**
+ * Plain, uncoloured glassmorphism for the icon tile, the same recipe as the
+ * header and the sidebar highlight: a translucent white fill, backdrop blur, a
+ * thin bright border, a top-edge highlight and a soft shadow.
+ */
+const TILE_GLASS =
+  "border border-white/60 bg-glass/40 dark:bg-glass/10 shadow-[0_4px_12px_rgb(15_23_42/0.08),inset_0_1px_0_rgb(255_255_255/0.7)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_4px_12px_rgb(0_0_0/0.3),inset_0_1px_0_rgb(255_255_255/0.08)]";
 
 /** Hover arrow colour. */
 const LINK: Record<StatTone, string> = {
@@ -82,119 +88,13 @@ const BAR: Record<StatTone, string> = {
   neutral: "bg-muted-foreground",
 };
 
-/** Colour the decor's `currentColor` resolves to. */
-const DECOR_COLOR: Record<StatTone, string> = {
-  violet: "text-violet-400 dark:text-violet-500",
-  amber: "text-amber-300 dark:text-amber-600",
-  emerald: "text-emerald-300 dark:text-emerald-600",
-  primary: "text-blue-400 dark:text-blue-400",
-  pink: "text-pink-300 dark:text-pink-500",
-  neutral: "text-muted-foreground/40",
-};
-
-function Decor({
-  kind,
-  tone,
-  compact = false,
-}: {
-  kind: StatDecor;
-  tone: StatTone;
-  /** Smaller below lg, for the narrow inline cards. */
-  compact?: boolean;
-}) {
-  const id = `stat-decor-${kind}-${tone}`;
-  // Shown only once the card is 20rem wide: in narrower cards the text column
-  // reaches the bottom-right corner and the art would sit on the words.
-  const base = cn(
-    "pointer-events-none absolute hidden @[20rem]/stat:block",
-    DECOR_COLOR[tone]
-  );
-
-  if (kind === "clock") {
-    return (
-      <svg
-        aria-hidden
-        viewBox="0 0 40 40"
-        className={cn(base, "-bottom-2 -right-2 size-16 opacity-40 sm:size-20")}
-      >
-        <circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="3" />
-        <path d="M20 11v10l6 4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-  }
-
-  // The art sits in the bottom-right corner, behind the text column.
-  const box = cn(
-    "bottom-0 right-1 opacity-60",
-    compact ? "h-16 w-24 sm:h-20 sm:w-28" : "h-20 w-28 sm:h-24 sm:w-36"
-  );
-
-  if (kind === "wave") {
-    return (
-      <svg aria-hidden viewBox="0 0 120 80" preserveAspectRatio="none" className={cn(base, box)}>
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M0 80 C 30 78, 45 62, 65 48 S 95 8, 108 12 C 116 14, 120 24, 120 36 V 80 Z"
-          fill={`url(#${id})`}
-        />
-      </svg>
-    );
-  }
-
-  if (kind === "bars") {
-    return (
-      <svg aria-hidden viewBox="0 0 120 80" className={cn(base, box)}>
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.7" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <rect x="58" y="36" width="14" height="44" rx="7" fill={`url(#${id})`} />
-        <rect x="80" y="20" width="14" height="60" rx="7" fill={`url(#${id})`} />
-        <rect x="102" y="2" width="14" height="78" rx="7" fill={`url(#${id})`} />
-      </svg>
-    );
-  }
-
-  if (kind === "people") {
-    return (
-      <svg aria-hidden viewBox="0 0 120 80" className={cn(base, box, "opacity-45")}>
-        <circle cx="62" cy="36" r="11" fill="currentColor" />
-        <path d="M40 80 C 40 60, 50 52, 62 52 S 84 60, 84 80 Z" fill="currentColor" />
-        <circle cx="96" cy="30" r="13" fill="currentColor" opacity="0.8" />
-        <path d="M70 80 C 70 56, 82 48, 96 48 S 122 56, 122 80 Z" fill="currentColor" opacity="0.8" />
-      </svg>
-    );
-  }
-
-  // sprout
-  return (
-    <svg aria-hidden viewBox="0 0 120 80" className={cn(base, box, "opacity-50")}>
-      <circle cx="84" cy="10" r="8" fill="currentColor" />
-      <path d="M84 30 V 80" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      <path d="M82 50 C 64 50, 52 38, 50 22 C 68 22, 82 32, 82 50 Z" fill="currentColor" />
-      <path d="M86 50 C 104 50, 116 38, 118 22 C 100 22, 86 32, 86 50 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
 export interface StatCardProps {
   title: string;
   value: number | string;
   hint: string;
-  /** Drawn in a tinted tile in the card's left column. */
+  /** Drawn in a glass tile in the card's left column. */
   icon?: LucideIcon;
   tone: StatTone;
-  /** Optional decorative art in the card's bottom-right corner. */
-  decor?: StatDecor;
-  /** Smaller art below lg, for narrow cards. */
-  inlineOnPhone?: boolean;
   /**
    * Tighter padding and a smaller figure below sm, so a two-up phone row keeps
    * its titles readable.
@@ -235,8 +135,6 @@ export function StatCard({
   hint,
   icon: Icon,
   tone,
-  decor,
-  inlineOnPhone = false,
   denseOnPhone = false,
   action,
   href,
@@ -271,8 +169,6 @@ export function StatCard({
           "cursor-pointer active:translate-y-0 active:scale-[0.98] active:shadow-[0_2px_6px_-2px_rgb(15_23_42/0.15)] motion-reduce:active:scale-100"
       )}
     >
-      {decor ? <Decor kind={decor} tone={tone} compact={inlineOnPhone} /> : null}
-
       {clickable ? (
         <ArrowUpRight
           aria-hidden
@@ -299,6 +195,7 @@ export function StatCard({
               "flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105 motion-reduce:group-hover:scale-100",
               denseOnPhone ? "@[14rem]/stat:size-[3.75rem]" : "@[14rem]/stat:size-[4.25rem]",
               "@[18rem]/stat:size-20",
+              TILE_GLASS,
               TILE[tone]
             )}
           >

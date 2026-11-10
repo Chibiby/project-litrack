@@ -87,7 +87,6 @@ export async function loadAdminDashboard({
               hint={`${metrics?.schoolsActive ?? 0} active · ${inactive} inactive`}
               icon={School}
               tone="primary"
-              decor="bars"
               action={{ label: "View schools", href: ADMIN_ROUTES.schools }}
             />
             <StatCard
@@ -96,7 +95,6 @@ export async function loadAdminDashboard({
               hint="Sign-in accounts"
               icon={UserCog}
               tone="emerald"
-              decor="people"
               action={{ label: "View heads", href: ADMIN_ROUTES.schoolHeads }}
             />
             <StatCard
@@ -105,7 +103,6 @@ export async function loadAdminDashboard({
               hint="Active teaching accounts"
               icon={Users}
               tone="primary"
-              decor="people"
               action={{ label: "View teachers", href: ADMIN_ROUTES.teachers }}
             />
             <StatCard
@@ -114,7 +111,6 @@ export async function loadAdminDashboard({
               hint="Across every school"
               icon={GraduationCap}
               tone="amber"
-              decor="wave"
               action={{ label: "IP learners", href: ADMIN_ROUTES.learners }}
             />
             <StatCard
@@ -123,7 +119,6 @@ export async function loadAdminDashboard({
               hint="In the ARAL program"
               icon={Sparkles}
               tone="violet"
-              decor="sprout"
               href={ADMIN_ROUTES.divisionSummary}
             />
             <StatCard
@@ -132,7 +127,6 @@ export async function loadAdminDashboard({
               hint="Awaiting School Head approval"
               icon={AlertTriangle}
               tone={pending > 0 ? "amber" : "neutral"}
-              decor="clock"
               action={{ label: "Review", href: ADMIN_ROUTES.teachers }}
             />
           </SchoolHeadStatRow>

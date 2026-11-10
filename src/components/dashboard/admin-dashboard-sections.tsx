@@ -122,8 +122,6 @@ export async function AdminIpAdvisorySection() {
           hint={`${data?.national.totalLearners ?? 0} enrolled · ${data?.national.activeTeachers ?? 0} active teachers`}
           icon={Users}
           tone="primary"
-          decor="people"
-          inlineOnPhone
           denseOnPhone
         />
         <StatCard
@@ -132,8 +130,6 @@ export async function AdminIpAdvisorySection() {
           hint={`${data?.national.ipPercent ?? "—"} of enrolled learners`}
           icon={GraduationCap}
           tone="amber"
-          decor="bars"
-          inlineOnPhone
           denseOnPhone
           href={ADMIN_ROUTES.learners}
         />

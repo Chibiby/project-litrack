@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * coverage — `bg-amber-50` renders as a near-white slab against a dark page.
  *
  * `warning` and `aral` spell out their dark variants because there is no
- * `--warning` token; that follows `MetricCard`'s violet tone rather than
+ * `--warning` token; that follows the stat card's violet tone rather than
  * inventing a new theme variable for one component. `info` is token-only, so it
  * themes for free.
  *

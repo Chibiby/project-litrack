@@ -98,7 +98,6 @@ async function loadAralHero({
             hint="In the ARAL program"
             icon={Sparkles}
             tone="violet"
-            inlineOnPhone
             denseOnPhone
           />
           <StatCard
@@ -107,7 +106,6 @@ async function loadAralHero({
             hint="Already designated"
             icon={UserCheck}
             tone="emerald"
-            inlineOnPhone
             denseOnPhone
           />
           <StatCard
@@ -116,7 +114,6 @@ async function loadAralHero({
             hint="Needs a designated teacher"
             icon={UserX}
             tone={programWithoutTeacher > 0 ? "amber" : "neutral"}
-            inlineOnPhone
             denseOnPhone
           />
         </>
