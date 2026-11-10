@@ -137,8 +137,9 @@ function AppShellFallback({
         />
 
         <div
+          // Margin not animated, for the same reason as RoleShell: easing it
+          // re-laid out every frosted card per frame and made the toggle lag.
           className={cn(
-            hydrated && "transition-[margin] duration-200",
             expanded
               ? CONTENT_OFFSET_CLASS.expanded
               : CONTENT_OFFSET_CLASS.collapsed

@@ -139,10 +139,12 @@ export function RoleShell({
             transitionsEnabled={hydrated}
           />
 
-          {/* Exact ml match to sidebar width — no underlap (do not use smaller pl). */}
+          {/* Exact ml match to sidebar width — no underlap (do not use smaller pl).
+              The margin is NOT animated: easing it re-laid out and re-blurred
+              every frosted card on the page on every frame, which made the
+              sidebar toggle stutter. The page moves once; only the rail eases. */}
           <div
             className={cn(
-              hydrated && "transition-[margin] duration-200",
               expanded
                 ? CONTENT_OFFSET_CLASS.expanded
                 : CONTENT_OFFSET_CLASS.collapsed

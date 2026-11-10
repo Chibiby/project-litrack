@@ -60,16 +60,29 @@ export function NavGlassIndicator({
     // Re-place only when the list really changes size (rail collapsing, a
     // group reflowing). ResizeObserver also fires once right after observe();
     // that call must not snap the pill mid-slide, so it is skipped.
+    //
+    // While the rail's width animates, the observer fires on every frame.
+    // Measuring and moving the pill each time forced a layout per frame and
+    // made the collapse stutter, so the pill hides for the resize and is
+    // placed once, after the size has stopped changing.
     if (typeof ResizeObserver === "undefined") return;
     let last = `${list.offsetWidth}x${list.offsetHeight}`;
+    let settle: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(() => {
+      // Layout is already clean when the observer runs, so this read is free.
       const size = `${list.offsetWidth}x${list.offsetHeight}`;
       if (size === last) return;
       last = size;
-      place(false);
+      pill.style.transition = "opacity 120ms ease-out";
+      pill.style.opacity = "0";
+      clearTimeout(settle);
+      settle = setTimeout(() => place(false), 140);
     });
     observer.observe(list);
-    return () => observer.disconnect();
+    return () => {
+      clearTimeout(settle);
+      observer.disconnect();
+    };
   }, [activeKey]);
 
   return (

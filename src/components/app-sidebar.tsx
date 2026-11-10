@@ -166,12 +166,15 @@ function NavLink({
       </div>
     );
 
-    if (!collapsed) return row;
-
+    // Always wrapped, with the tooltip content only on the rail: keeping the
+    // element tree identical in both states means a collapse/expand updates
+    // these rows instead of unmounting and remounting every one of them.
     return (
       <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>{row}</TooltipTrigger>
-        <TooltipContent side="right">{`${item.label} — ${inert.reason}`}</TooltipContent>
+        {collapsed ? (
+          <TooltipContent side="right">{`${item.label} — ${inert.reason}`}</TooltipContent>
+        ) : null}
       </Tooltip>
     );
   }
@@ -232,12 +235,12 @@ function NavLink({
     </PrefetchLink>
   );
 
-  if (!collapsed) return link;
-
+  // Same stable tree as the inert row above: toggling the rail must not
+  // remount every nav link (and its prefetch and icon state) twice per click.
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right">{item.label}</TooltipContent>
+      {collapsed ? <TooltipContent side="right">{item.label}</TooltipContent> : null}
     </Tooltip>
   );
 }
@@ -405,7 +408,7 @@ export function AppSidebar({
             ))}
             {/* Last child with no top margin: `space-y-5` would otherwise push
                 the absolute pill 1.25rem below the row it measures. */}
-            <NavGlassIndicator className="!mt-0" activeKey={`${activeItemId ?? ""}:${isCollapsed}`} />
+            <NavGlassIndicator className="!mt-0" activeKey={activeItemId ?? ""} />
           </nav>
           {!isCollapsed && (
             <div className="mt-5">
@@ -509,7 +512,7 @@ export function AppSidebar({
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 hidden flex-col py-2 pl-3 lg:flex",
-          transitionsEnabled && "transition-[width] duration-200",
+          transitionsEnabled && "transition-[width] duration-200 ease-out will-change-[width]",
           collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
         )}
       >

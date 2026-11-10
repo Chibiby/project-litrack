@@ -212,9 +212,13 @@ export function StatCard({
           >
             {value}
           </p>
+          {/* One line only, like the hint: a long title ends in "…" (the full
+              text stays in the tooltip) so every card in a row keeps the same
+              height. */}
           <h2
+            title={title}
             className={cn(
-              "break-words font-semibold text-foreground sm:text-base",
+              "truncate font-semibold text-foreground sm:text-base",
               denseOnPhone ? "text-xs" : "text-sm"
             )}
           >

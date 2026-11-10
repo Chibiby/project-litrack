@@ -2,14 +2,21 @@ import { formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 
 export type MonthCell = { day: number; key: string; isToday: boolean } | null;
 
-/** Sunday-first weeks for the month containing `todayKey`, padded with nulls. */
-export function buildMonthGrid(todayKey: string): {
+/**
+ * Sunday-first weeks for one month, padded with nulls. The month shown is the
+ * one containing `monthKey` (default: `todayKey`), so a calendar can page to
+ * other months while still marking today.
+ */
+export function buildMonthGrid(
+  todayKey: string,
+  monthKey: string = todayKey
+): {
   monthLabel: string;
   weeks: MonthCell[][];
 } {
-  const today = parseLocalDateKey(todayKey);
-  const year = today.getFullYear();
-  const month = today.getMonth();
+  const shown = parseLocalDateKey(monthKey);
+  const year = shown.getFullYear();
+  const month = shown.getMonth();
   const first = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 

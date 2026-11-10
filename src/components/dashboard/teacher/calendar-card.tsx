@@ -1,15 +1,17 @@
 import { Surface } from "@/components/ui/surface";
-import { buildMonthGrid } from "@/lib/dashboard/month-grid";
+import { MonthCalendar } from "@/components/shell/month-calendar";
 import { parseLocalDateKey } from "@/lib/date-keys";
 import type { DashboardQuote } from "@/lib/dashboard/quotes";
-import { cn } from "@/lib/utils";
-
-const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
 /**
- * Right-rail calendar (mockup image 3). Decorative, not a picker: nothing on
- * the dashboard is date-navigable. Shows the weeks around today so the rail
- * stays level with the stat row and panels beside it.
+ * Right-rail calendar (mockup image 3). Read-only, not a picker: it shows the
+ * whole month with today marked, and pages back and forward a month at a time.
+ * The month view is `MonthCalendar`, the same one the header's date opens, so
+ * the two always match.
+ *
+ * Plain glass, like the floating header: a translucent white fill, a thin
+ * bright border and a backdrop blur. The sky strip is softened so the glass
+ * reads through it.
  */
 export function CalendarCard({
   todayKey,
@@ -18,13 +20,6 @@ export function CalendarCard({
   todayKey: string;
   quote: DashboardQuote;
 }) {
-  const { weeks } = buildMonthGrid(todayKey);
-  const todayWeek = Math.max(
-    weeks.findIndex((w) => w.some((c) => c?.isToday)),
-    0
-  );
-  const shown = weeks.slice(Math.max(todayWeek - 1, 0), todayWeek + 2);
-
   const dateLabel = new Intl.DateTimeFormat("en-PH", {
     weekday: "long",
     month: "long",
@@ -33,11 +28,15 @@ export function CalendarCard({
   }).format(parseLocalDateKey(todayKey));
 
   return (
-    <Surface as="section" aria-label="Calendar" className="overflow-hidden rounded-lg">
+    <Surface
+      as="section"
+      aria-label="Calendar"
+      className="overflow-hidden rounded-2xl border-white/50 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
+    >
       <svg
         viewBox="0 0 280 64"
         aria-hidden
-        className="block h-16 w-full"
+        className="block h-16 w-full opacity-70 dark:opacity-40"
         preserveAspectRatio="none"
       >
         <defs>
@@ -55,30 +54,7 @@ export function CalendarCard({
         <p className="border-l-2 border-violet-500 pl-2 text-sm font-semibold text-foreground">
           {dateLabel}
         </p>
-        {/* A div grid, not a table element: tables are reserved for the ui/table primitive, and this is a picture of a month, not tabular data. */}
-        <div role="presentation" className="mt-3 grid grid-cols-7 gap-y-1 text-center text-xs">
-          {WEEKDAYS.map((d, i) => (
-            <span key={`h${i}`} aria-hidden className="pb-1 font-medium text-muted-foreground">
-              {d}
-            </span>
-          ))}
-          {shown.flat().map((c, i) =>
-            c ? (
-              <span
-                key={c.key}
-                aria-current={c.isToday ? "date" : undefined}
-                className={cn(
-                  "mx-auto flex size-7 items-center justify-center rounded-full tabular-nums text-foreground",
-                  c.isToday && "bg-violet-600 font-semibold text-white"
-                )}
-              >
-                {c.day}
-              </span>
-            ) : (
-              <span key={`e${i}`} aria-hidden />
-            )
-          )}
-        </div>
+        <MonthCalendar todayKey={todayKey} className="mt-3" />
         <p className="mt-3 text-sm italic leading-relaxed text-muted-foreground">
           — &ldquo;{quote.text}&rdquo;
         </p>

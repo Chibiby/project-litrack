@@ -6,7 +6,9 @@ import Link from "next/link";
 import { CalendarDays, Menu } from "lucide-react";
 import { UserAccountMenu } from "@/components/user-account-menu";
 import { roleHomePath, type AppRole } from "@/lib/auth/roles";
-import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
+import { SCHOOL_TIME_ZONE, formatLocalDateKey, schoolToday } from "@/lib/date-keys";
+import { MonthCalendar } from "@/components/shell/month-calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HeaderSearch } from "@/components/shell/header-search";
 import {
   NotificationsMenu,
@@ -149,6 +151,7 @@ export function AppHeader({
     day: "numeric",
     year: "numeric",
   }).format(new Date());
+  const todayKey = formatLocalDateKey(schoolToday());
 
   const scrolled = useScrolled();
 
@@ -165,9 +168,13 @@ export function AppHeader({
     <header className="sticky top-0 z-30 flex h-[var(--app-chrome-header-height)]">
       <div
         className={cn(
-          "flex w-full items-center gap-3 border px-4 transition-[margin,height,width,border-radius,background-color,border-color,box-shadow] duration-300 ease-in-out lg:gap-4 lg:px-6",
+          // flex-1 rather than an explicit width: the pane's width follows from
+          // its margins, so only margins animate on scroll. An animated width
+          // also eased behind the page whenever the sidebar was toggled, which
+          // read as lag.
+          "flex min-w-0 flex-1 items-center gap-3 border px-4 transition-[margin,height,border-radius,background-color,border-color,box-shadow] duration-300 ease-in-out lg:gap-4 lg:px-6",
           scrolled
-            ? "mx-4 mt-2 h-[calc(100%-0.75rem)] w-[calc(100%-2rem)] rounded-2xl border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg lg:mx-6 lg:w-[calc(100%-3rem)] dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
+            ? "mx-4 mt-2 h-[calc(100%-0.75rem)] rounded-2xl border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg lg:mx-6 dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
             : "h-full rounded-none border-transparent bg-transparent"
         )}
       >
@@ -235,13 +242,29 @@ export function AppHeader({
           )}
           <ThemeToggle />
           <Separator orientation="vertical" className="h-6" />
-          <p
-            className="hidden items-center gap-2 whitespace-nowrap text-sm font-medium text-foreground xl:flex"
-            suppressHydrationWarning
-          >
-            <CalendarDays aria-hidden className="size-4 text-muted-foreground" />
-            {todayLabel}
-          </p>
+          {/* The date opens a read-only month calendar (the same one the
+              dashboard card shows), in a glass popover. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium text-foreground hover:bg-glass/40 data-[state=open]:bg-glass/50 dark:hover:bg-glass/10 dark:data-[state=open]:bg-glass/10 xl:flex"
+                aria-label={`${todayLabel}. Open calendar`}
+                suppressHydrationWarning
+              >
+                <CalendarDays aria-hidden className="size-4 text-muted-foreground" />
+                {todayLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={10}
+              className="w-80 rounded-2xl border-white/50 bg-glass/40 shadow-[0_12px_40px_rgb(15_23_42/0.14),inset_0_1px_0_rgb(255_255_255/0.6)] backdrop-blur-xl dark:border-white/10 dark:bg-[hsl(var(--surface)/0.55)] dark:shadow-[0_12px_40px_rgb(0_0_0/0.45)]"
+            >
+              <MonthCalendar todayKey={todayKey} />
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Phone: account avatar in place of the desktop cluster (image 4). */}
