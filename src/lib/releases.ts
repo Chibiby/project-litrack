@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.48.1",
+    date: "2026-11-10",
+    title: "The floating top bar lines up with your page",
+    announce: true,
+    fixes: [
+      "When you scroll, the floating top bar now lines up with the cards and tables below it instead of sticking out past them on each side.",
+    ],
+  },
+  {
     version: "2.48.0",
     date: "2026-11-10",
     title: "A lighter, glassier look and tables that fit your screen",
