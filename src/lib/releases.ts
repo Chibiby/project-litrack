@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.50.0",
+    date: "2026-11-10",
+    title: "A calendar in the top bar and a smoother side menu",
+    announce: true,
+    fixes: [
+      "Click today's date in the top bar to open a calendar. You can page through the months.",
+      "The calendar on your dashboard now shows the whole month, and you can move to earlier or later months.",
+      "Both calendars use the same see-through glass look as the rest of LITRACK.",
+      "Summary card titles now stay on one line. Hover a cut-off title to read it in full.",
+      "Opening and closing the side menu is smoother.",
+    ],
+  },
+  {
     version: "2.49.0",
     date: "2026-11-10",
     title: "A floating glass side menu and cleaner summary cards",
