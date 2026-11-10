@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -164,7 +165,10 @@ export function TeacherRoleDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="ghost">
+        {/* Outlined with an icon: as a ghost button it read as plain text
+            beside the role name, and nobody saw that it could be tapped. */}
+        <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 px-2.5">
+          <Pencil className="size-3.5" aria-hidden />
           Edit role
         </Button>
       </DialogTrigger>
