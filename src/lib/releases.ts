@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.50.1",
+    date: "2026-11-10",
+    title: "Lists on phones show full names again",
+    announce: true,
+    fixes: [
+      "On a phone, lists of learners, teachers and School Heads no longer squeeze names down to a few letters. Tap the arrow on a row to see its details and actions.",
+      "Section rename and remove controls on the School Setup page now open from each section's arrow on a phone.",
+      { text: "School Head accounts that showed no name in the list now show their account name.", roles: ["SUPER_ADMIN"] },
+      { text: "The Support inbox fits a phone screen, so message times and unread counts show again.", roles: ["SUPER_ADMIN"] },
+      { text: "\"Edit role\" on the Teachers page now looks like a button.", roles: ["SCHOOL_HEAD"] },
+    ],
+  },
+  {
     version: "2.50.0",
     date: "2026-11-10",
     title: "A calendar in the top bar and a smoother side menu",
