@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.49.0",
+    date: "2026-11-10",
+    title: "A floating glass side menu and cleaner summary cards",
+    announce: true,
+    fixes: [
+      "The side menu now floats as a rounded glass panel beside the page, like the top bar.",
+      "The highlight on the page you are on is easier to see, and your name at the bottom of the side menu matches the glass look.",
+      "Every summary card across LITRACK now looks the same: a clear glass icon box and no background drawings.",
+      "The counts on a school's details page now use the same summary cards as everywhere else.",
+      "While a page loads, the gray placeholder blocks and the book animation are see-through glass instead of a white cover.",
+    ],
+  },
+  {
     version: "2.48.1",
     date: "2026-11-10",
     title: "The floating top bar lines up with your page",
