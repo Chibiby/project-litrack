@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowRightLeft, Undo2 } from "lucide-react";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { TransferLearnersDialog } from "@/components/learners/transfer-learners-dialog";
 import {
@@ -97,6 +98,30 @@ export function useTeacherTransfers({
     );
   };
 
+  /**
+   * The same entry as `menuItem`, as a labelled button for a phone row's
+   * expanded panel. Null when the row offers neither.
+   */
+  const panelButton = (l: TransferableRow, disabled?: boolean) => {
+    if (!config) return null;
+    const cancel = cancelFor(l);
+    if (cancel) {
+      return (
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setCancelTarget(cancel)}>
+          <Undo2 className="size-4" aria-hidden />
+          Cancel transfer request
+        </Button>
+      );
+    }
+    if (!eligible(l)) return null;
+    return (
+      <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => openFor([l])}>
+        <ArrowRightLeft className="size-4" aria-hidden />
+        Request transfer
+      </Button>
+    );
+  };
+
   /** The profile dialog's footer action; `beforeOpen` closes the profile first. */
   const profileAction = (
     l: TransferableRow | undefined,
@@ -138,5 +163,5 @@ export function useTeacherTransfers({
     </>
   ) : null;
 
-  return { enabled: config !== undefined, openFor, menuItem, profileAction, dialogs };
+  return { enabled: config !== undefined, openFor, menuItem, panelButton, profileAction, dialogs };
 }

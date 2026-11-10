@@ -26,7 +26,7 @@ import {
   NoValue,
   RowActions,
 } from "@/components/ui/table";
-import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
+import { ExpandableStackedItem, ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { ConfirmAction } from "@/components/confirm-action";
 import { LearnerPagination } from "@/components/learners/learner-pagination";
 import { UserAvatar } from "@/components/user-avatar";
@@ -401,6 +401,26 @@ type TeacherManageActionsProps = {
  * local override is needed to keep the 640–1023px tablet band at a full
  * height — only the `lg` collapse to `h-9` needs restating here.
  */
+/** ARAL load and profiling state, on a phone row's always-visible line. */
+function TeacherStatusBadges({ row }: { row: ActiveTeacherRow }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {row.aralLearnerCount > 0 ? (
+        <Badge variant="outline" className="border-violet-200 text-violet-800 dark:text-violet-200">
+          {row.aralLearnerCount} ARAL learner{row.aralLearnerCount === 1 ? "" : "s"}
+        </Badge>
+      ) : null}
+      {row.profileCompleted ? (
+        <Badge variant="secondary">Profiled</Badge>
+      ) : (
+        <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-300">
+          Awaiting profiling
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 function TeacherManageButtons({
   row,
   mode,
@@ -1150,21 +1170,30 @@ function TeachersManagedTable({
             </li>
           ) : (
             rowsWithBusy.map(({ row, rowBusy }) => (
-              <li key={row.id} className="flex flex-col gap-3 px-3 py-3 sm:px-4">
-                <div className="flex items-start gap-3">
-                  <UserAvatar
-                    name={row.fullName}
-                    avatarPath={row.avatarPath}
-                    size={40}
-                    variant="thumb"
-                  />
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate font-medium text-foreground">
-                      {row.listingName}
-                    </p>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {row.email}
-                    </p>
+              <ExpandableStackedItem
+                key={row.id}
+                label={row.listingName}
+                summary={
+                  <div className="flex items-start gap-3">
+                    <UserAvatar
+                      name={row.fullName}
+                      avatarPath={row.avatarPath}
+                      size={40}
+                      variant="thumb"
+                    />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="truncate font-medium text-foreground">
+                        {row.listingName}
+                      </p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {row.email}
+                      </p>
+                      <TeacherStatusBadges row={row} />
+                    </div>
+                  </div>
+                }
+              >
+                <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
                       {row.designation === null ? (
                         "Hasn't finished profiling"
@@ -1210,45 +1239,26 @@ function TeachersManagedTable({
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {row.aralLearnerCount > 0 ? (
-                        <Badge
-                          variant="outline"
-                          className="border-violet-200 text-violet-800 dark:text-violet-200"
-                        >
-                          {row.aralLearnerCount} ARAL learner
-                          {row.aralLearnerCount === 1 ? "" : "s"}
-                        </Badge>
-                      ) : null}
-                      {row.profileCompleted ? (
-                        <Badge variant="secondary">Profiled</Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="border-amber-300 text-amber-800 dark:text-amber-300"
-                        >
-                          Awaiting profiling
-                        </Badge>
-                      )}
-                    </div>
                     <p className="text-xs text-muted-foreground">
                       Approved {row.approvedAt ? formatDate(row.approvedAt) : "—"}
                     </p>
-                  </div>
                 </div>
                 {!readOnly ? (
-                  <div className="flex flex-wrap gap-2">
-                    <TeacherManageButtons
-                      row={row}
-                      mode={mode}
-                      busy={rowBusy}
-                      onSetActive={onSetActive}
-                      onRemove={onRemove}
-                      onRemovePhoto={onRemovePhoto}
-                    />
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Actions</p>
+                    <div className="flex flex-wrap gap-2">
+                      <TeacherManageButtons
+                        row={row}
+                        mode={mode}
+                        busy={rowBusy}
+                        onSetActive={onSetActive}
+                        onRemove={onRemove}
+                        onRemovePhoto={onRemovePhoto}
+                      />
+                    </div>
                   </div>
                 ) : null}
-              </li>
+              </ExpandableStackedItem>
             ))
           )}
         </ul>

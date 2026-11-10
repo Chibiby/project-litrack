@@ -462,7 +462,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
                           value: teacher.originalEmail ?? "Not recoverable",
                         },
                       ]}
-                      actions={<TeacherRowActions teacher={teacher} />}
+                      detailActions={<TeacherRowActions teacher={teacher} labelled />}
                     />
                   ))}
                 </StackedList>
@@ -610,7 +610,7 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
                       state={learner.isAralLearner ? <AralBadge /> : undefined}
                       meta={<SchoolCell name={learner.schoolName} deleted={learner.schoolDeleted} />}
                       details={[{ label: "Removed on", value: formatDate(learner.deletedAt) }]}
-                      actions={<LearnerRowActions learner={learner} />}
+                      detailActions={<LearnerRowActions learner={learner} labelled />}
                     />
                   ))}
                 </StackedList>

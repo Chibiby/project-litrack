@@ -338,7 +338,9 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
                         { label: "Sign-in", value: <SignInCell row={row} /> },
                         { label: "Password", value: <PasswordCell row={row} /> },
                       ]}
-                      actions={<AccountRowActions row={row} />}
+                      // Three labelled buttons crushed the name to one letter on
+                      // a phone, so they live in the expanded panel instead.
+                      detailActions={<AccountRowActions row={row} align="start" />}
                     />
                   ))}
                 </StackedList>

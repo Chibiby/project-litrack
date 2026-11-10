@@ -2,6 +2,8 @@
 
 import { useId, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -321,14 +323,16 @@ export function GradeSectionsPanel({
               {readOnly ? (
                 <span className="text-sm font-medium max-lg:min-w-0 max-lg:break-words">{s.name}</span>
               ) : (
-                <SectionRowActions
-                  sectionId={s.id}
-                  name={s.name}
-                  learnerCount={s.learnerCount}
-                  pending={pending}
-                  onRequestRemove={() => setRemoveTarget({ id: s.id, name: s.name })}
-                  onRename={(name) => renameRow(s.id, name)}
-                />
+                <CollapsibleSectionRow name={s.name} learnerCount={s.learnerCount}>
+                  <SectionRowActions
+                    sectionId={s.id}
+                    name={s.name}
+                    learnerCount={s.learnerCount}
+                    pending={pending}
+                    onRequestRemove={() => setRemoveTarget({ id: s.id, name: s.name })}
+                    onRename={(name) => renameRow(s.id, name)}
+                  />
+                </CollapsibleSectionRow>
               )}
             </li>
           ))}
@@ -407,6 +411,53 @@ export function GradeSectionsPanel({
           </form>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Below `lg`, a section shows its name and learner count with a chevron, and
+ * the rename box and Remove open under it, the same expand-to-act pattern as
+ * the phone lists. From `lg` the controls are always shown, as before.
+ */
+function CollapsibleSectionRow({
+  name,
+  learnerCount,
+  children,
+}: {
+  name: string;
+  learnerCount: number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  return (
+    <div className="w-full">
+      <div className="flex items-center gap-2 lg:hidden">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{name}</p>
+          <p className="text-xs text-muted-foreground">
+            {learnerCount} {learnerCount === 1 ? "learner" : "learners"}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={`${open ? "Hide" : "Show"} controls for section ${name}`}
+          onClick={() => setOpen((o) => !o)}
+          className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronDown
+            aria-hidden
+            className={cn("size-4 transition-transform duration-200", open && "rotate-180")}
+          />
+        </button>
+      </div>
+      {/* `hidden` hides it on a phone until opened; `lg:block` always shows it. */}
+      <div id={panelId} hidden={!open} className="mt-2 lg:mt-0 lg:block">
+        {children}
+      </div>
     </div>
   );
 }

@@ -25,6 +25,7 @@ import {
   impersonateUser,
 } from "@/lib/actions/accounts";
 import type { AccountRow } from "@/lib/admin/accounts";
+import { cn } from "@/lib/utils";
 
 /**
  * The Password column. A teacher or Super Admin row can only ever carry
@@ -149,7 +150,17 @@ export function PasswordCell({ row }: { row: AccountRow }) {
  *  - Reset password: School Heads reset to the School ID; teachers and
  *    district admins get a fresh random one-time credential. Shown once.
  */
-export function AccountRowActions({ row }: { row: AccountRow }) {
+export function AccountRowActions({
+  row,
+  align = "end",
+}: {
+  row: AccountRow;
+  /**
+   * `end` for the table's actions column. `start` inside a phone row's
+   * expanded panel, where the buttons wrap from the left edge.
+   */
+  align?: "start" | "end";
+}) {
   const router = useRouter();
   const [credential, setCredential] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -202,8 +213,8 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
 
   return (
     <>
-      <div className="flex flex-col items-end gap-1">
-        <div className="flex justify-end gap-2">
+      <div className={cn("flex flex-col gap-1", align === "end" ? "items-end" : "items-start")}>
+        <div className={cn("flex gap-2", align === "end" ? "justify-end" : "flex-wrap justify-start")}>
           <Button type="button" variant="outline" size="sm" onClick={() => setProfileOpen(true)}>
             View profile
           </Button>
@@ -260,7 +271,9 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
             Not the account this school signs in with.
           </p>
         ) : null}
-        {isDistrictAdmin ? <DistrictAdminDistricts districts={row.districtAdminDistricts ?? []} /> : null}
+        {isDistrictAdmin ? (
+          <DistrictAdminDistricts districts={row.districtAdminDistricts ?? []} align={align} />
+        ) : null}
       </div>
 
       <Dialog
@@ -312,12 +325,21 @@ export function AccountRowActions({ row }: { row: AccountRow }) {
   );
 }
 
-function DistrictAdminDistricts({ districts }: { districts: string[] }) {
+function DistrictAdminDistricts({
+  districts,
+  align,
+}: {
+  districts: string[];
+  align: "start" | "end";
+}) {
   if (districts.length === 0) {
     return <p className="text-xs text-muted-foreground">No districts assigned</p>;
   }
   return (
-    <ul className="flex flex-wrap justify-end gap-1" aria-label="Assigned districts">
+    <ul
+      className={cn("flex flex-wrap gap-1", align === "end" ? "justify-end" : "justify-start")}
+      aria-label="Assigned districts"
+    >
       {districts.map((district) => (
         <li
           key={district}

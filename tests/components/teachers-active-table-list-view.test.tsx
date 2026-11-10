@@ -125,6 +125,10 @@ describe("TeachersActiveTable — mobile list view", () => {
     const listItem = within(list).getByText("Reyes, Jose").closest("li");
     expect(listItem).not.toBeNull();
 
+    // The phone row folds its controls under a chevron.
+    fireEvent.click(
+      within(listItem as HTMLElement).getByRole("button", { name: "Show details for Reyes, Jose" })
+    );
     fireEvent.click(
       within(listItem as HTMLElement).getByRole("button", { name: "Remove" })
     );

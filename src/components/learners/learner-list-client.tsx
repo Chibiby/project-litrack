@@ -34,7 +34,7 @@ import {
   NoValue,
   RowActions,
 } from "@/components/ui/table";
-import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { GENDER_LABELS, GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { LearnerAvatar } from "@/components/learners/learner-avatar";
 import { ReadingBandPill } from "@/components/learners/reading-band-pill";
@@ -556,6 +556,61 @@ function LearnerListPanel({
     </>
   );
 
+  /**
+   * A phone row's actions, as labelled buttons in its expanded panel: the
+   * same choices as the ⋮ menu, with View profile first.
+   */
+  const panelActions = (l: LearnerListRow) => {
+    if (!isSuperAdmin && archivedView) {
+      return <div className="flex flex-wrap gap-2">{archivedActions(l)}</div>;
+    }
+    const canEnroll = !isSuperAdmin && !l.isAralLearner && !l.archivedAt;
+    const canArchive = !isSuperAdmin && !l.archivedAt;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {!archivedView ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-md"
+            onClick={() => setProfileLearnerId(l.id)}
+          >
+            <Eye className="size-4" aria-hidden />
+            View profile
+          </Button>
+        ) : null}
+        {canEnroll ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-md border-violet-300 text-violet-700 hover:text-violet-800 dark:border-violet-700 dark:text-violet-300"
+            disabled={pending}
+            onClick={() => openEnrollOne(l)}
+          >
+            <Sparkles className="size-4" aria-hidden />
+            Enroll as ARAL
+          </Button>
+        ) : null}
+        {transfers.panelButton(l, pending)}
+        {canArchive ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="rounded-md"
+            disabled={pending}
+            onClick={() => requestArchive([l])}
+          >
+            <UserMinus className="size-4" aria-hidden />
+            Remove
+          </Button>
+        ) : null}
+      </div>
+    );
+  };
+
   const rowNumber = (i: number) => (page - 1) * pageSize + i + 1;
 
   return (
@@ -762,67 +817,69 @@ function LearnerListPanel({
               </Table>
             }
             stacked={
-            <ul className="divide-y divide-border/60" aria-label="Learners">
+            // Same expand-to-act row as the Super Admin lists: the name keeps the
+            // row's width, and the reading levels and every action open in place
+            // under it instead of crowding a ⋮ button beside the name.
+            <StackedList aria-label="Learners">
               {learners.map((l, i) => {
                 const isSelected = selected.has(l.id);
-                const pill = l.englishReadingProfile ?? l.filipinoReadingProfile;
+                const adv = l.section ? advisoryById.get(l.section.id) : undefined;
                 return (
-                  <li
+                  <StackedRow
                     key={l.id}
-                    className={cn(
-                      "flex items-center gap-2.5 px-3 py-3 sm:gap-3 sm:px-4",
-                      isSelected && "bg-muted/60",
-                      l.archivedAt && "opacity-70"
-                    )}
-                  >
-                    {selectable && (
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(v) => toggleOne(l.id, v === true)}
-                        aria-label={`Select ${l.fullName} in list`}
-                      />
-                    )}
-                    <span className="w-5 shrink-0 text-center text-sm tabular-nums text-muted-foreground">
-                      {rowNumber(i)}
-                    </span>
-                    <LearnerAvatar id={l.id} fullName={l.fullName} />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-auto min-w-0 flex-1 flex-col items-start gap-0 whitespace-normal px-1 py-0.5 text-left hover:bg-transparent"
-                      onClick={() => (archivedView ? undefined : setProfileLearnerId(l.id))}
-                    >
-                      <span className="line-clamp-1 text-sm font-medium text-foreground sm:text-base">
-                        {l.listingName}
-                      </span>
-                      <span className="line-clamp-1 text-xs font-normal text-muted-foreground sm:text-sm">
-                        Age {l.age} · {gradeAndSection(l)}
-                        {l.isAralLearner ? " · ARAL" : ""}
-                      </span>
-                      {l.archivedAt ? (
-                        <span className="line-clamp-1 text-xs font-normal text-muted-foreground sm:text-sm">
-                          {removalDeletionLabel(l.archivedAt)}
+                    className={cn("sm:px-4", isSelected && "bg-muted/60", l.archivedAt && "opacity-70")}
+                    leading={
+                      <span className="flex items-center gap-2.5">
+                        {selectable && (
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(v) => toggleOne(l.id, v === true)}
+                            aria-label={`Select ${l.fullName} in list`}
+                          />
+                        )}
+                        <span className="w-5 shrink-0 text-center text-sm tabular-nums text-muted-foreground">
+                          {rowNumber(i)}
                         </span>
-                      ) : null}
-                      {l.pendingTransfer ? (
-                        <TransferRequestedBadge
-                          toSectionName={l.pendingTransfer.toSectionName}
-                          className="mt-0.5"
-                        />
-                      ) : null}
-                    </Button>
-                    <ReadingBandPill
-                      profile={pill}
-                      gradeType={l.gradeType}
-                      className="hidden min-[400px]:inline-flex"
-                    />
-                    {!isSuperAdmin && archivedView
-                      ? archivedActions(l)
-                      : rowMenu(l, true)}
-                  </li>
+                        <LearnerAvatar id={l.id} fullName={l.fullName} />
+                      </span>
+                    }
+                    title={l.listingName}
+                    meta={
+                      <>
+                        <span className="truncate">
+                          Age {l.age ?? "—"} · {gradeAndSection(l)}
+                        </span>
+                        {l.isAralLearner ? <span className={ARAL_CHIP}>ARAL</span> : null}
+                        {l.archivedAt ? <span>{removalDeletionLabel(l.archivedAt)}</span> : null}
+                        {l.pendingTransfer ? (
+                          <TransferRequestedBadge toSectionName={l.pendingTransfer.toSectionName} />
+                        ) : null}
+                      </>
+                    }
+                    details={[
+                      {
+                        label: "English level",
+                        value: (
+                          <ReadingBandPill profile={l.englishReadingProfile} gradeType={l.gradeType} />
+                        ),
+                      },
+                      {
+                        label: "Filipino level",
+                        value: (
+                          <ReadingBandPill profile={l.filipinoReadingProfile} gradeType={l.gradeType} />
+                        ),
+                      },
+                      { label: "Gender", value: GENDER_LABELS[l.gender] },
+                      {
+                        label: "Advisory",
+                        value: adv && l.section ? `${shortGrade(l.gradeType)} - ${l.section.name}` : "—",
+                      },
+                    ]}
+                    detailActions={panelActions(l)}
+                  />
                 );
               })}
-            </ul>
+            </StackedList>
             }
           />
         )}

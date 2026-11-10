@@ -58,6 +58,11 @@ type LearnersDirectoryProps = {
   bulkActions?: React.ReactNode;
   /** Per-row controls in a trailing Actions column. */
   rowActions?: (row: LearnerHubRow) => React.ReactNode;
+  /**
+   * The same controls as labelled buttons for a phone row's expanded panel.
+   * When given, the phone row shows a chevron instead of `rowActions`.
+   */
+  rowPanelActions?: (row: LearnerHubRow) => React.ReactNode;
   /** Status shown under the learner's name, e.g. a waiting transfer request. */
   rowBadge?: (row: LearnerHubRow) => React.ReactNode;
 };
@@ -139,6 +144,7 @@ function LearnersDirectoryInner({
   selection,
   bulkActions,
   rowActions,
+  rowPanelActions,
   rowBadge,
 }: LearnersDirectoryProps) {
   const active = describeActiveFilters(filters, list.q);
@@ -282,21 +288,27 @@ function LearnersDirectoryInner({
                         ) : undefined
                       }
                       title={row.listingName}
-                      value={
-                        <span className="text-sm font-medium">
+                      // Grade and section sit under the name, not beside it: a
+                      // long section name beside the name cut the name to a
+                      // few letters on a phone.
+                      state={
+                        <span className="font-medium text-foreground">
                           {row.gradeLabel}
                           {row.sectionName ? ` · ${row.sectionName}` : ""}
                         </span>
                       }
-                      state={<ProgramBadges row={row} />}
                       meta={
                         <>
+                          {row.isAral || row.isIp ? <ProgramBadges row={row} /> : null}
                           {rowBadge ? rowBadge(row) : null}
-                          <span>{GENDER_LABELS[row.gender]}</span>
                         </>
                       }
-                      details={hideSchool ? undefined : [{ label: "School", value: row.school.name }]}
-                      actions={rowActions ? rowActions(row) : undefined}
+                      details={[
+                        { label: "Sex", value: GENDER_LABELS[row.gender] },
+                        ...(hideSchool ? [] : [{ label: "School", value: row.school.name }]),
+                      ]}
+                      actions={!rowPanelActions && rowActions ? rowActions(row) : undefined}
+                      detailActions={rowPanelActions ? rowPanelActions(row) : undefined}
                     />
                   ))}
                 </StackedList>

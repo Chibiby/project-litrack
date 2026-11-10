@@ -477,7 +477,12 @@ export async function getAccountsPage(
       id: user.id,
       role: user.role,
       fullName: user.fullName || `${user.firstName} ${user.lastName}`.trim(),
-      listingName: formatListingNameFromRecord(user),
+      // Some older School Head accounts carry only `fullName`, with empty
+      // first and last names. Without the fallback their row had no name.
+      listingName:
+        formatListingNameFromRecord(user) ||
+        user.fullName ||
+        `${user.firstName} ${user.lastName}`.trim(),
       avatarPath: user.avatarPath,
       schoolId: user.schoolId,
       school: user.school,

@@ -25,6 +25,13 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+/** Below `lg` each section folds its controls under a chevron; open them all. */
+function openSectionRows() {
+  for (const toggle of screen.getAllByRole("button", { name: /^Show controls for section/ })) {
+    fireEvent.click(toggle);
+  }
+}
+
 const SECTIONS = [
   { id: "s1", name: "Sampaguita", learnerCount: 12 },
   { id: "s2", name: "Rosal", learnerCount: 0 },
@@ -33,6 +40,7 @@ const SECTIONS = [
 describe("GradeSectionsPanel — removing a section", () => {
   it("disables Remove for a section with learners and says why on screen", () => {
     render(<GradeSectionsPanel gradeLevelId="g1" sections={SECTIONS} />);
+    openSectionRows();
 
     const buttons = screen.getAllByRole("button", { name: "Remove" });
     expect(buttons).toHaveLength(2);
@@ -46,6 +54,7 @@ describe("GradeSectionsPanel — removing a section", () => {
 
   it("says an empty section is hidden from teachers and its advisers are unassigned", async () => {
     render(<GradeSectionsPanel gradeLevelId="g1" sections={SECTIONS} />);
+    openSectionRows();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]);
     const dialog = await screen.findByRole("alertdialog");
@@ -60,6 +69,7 @@ describe("GradeSectionsPanel — removing a section", () => {
       error: "Move the 3 learners in Rosal to another section first.",
     });
     render(<GradeSectionsPanel gradeLevelId="g1" sections={SECTIONS} />);
+    openSectionRows();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]);
     const dialog = await screen.findByRole("alertdialog");

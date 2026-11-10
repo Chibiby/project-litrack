@@ -162,7 +162,10 @@ export function AdminChatBrowser({
 
   return (
     <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
-      <div className="grid min-h-[34rem] lg:grid-cols-[20.5rem_minmax(0,1fr)]">
+      {/* grid-cols-[minmax(0,1fr)] below lg: an implicit column sizes to its
+          content, and the long conversation rows pushed the list past a
+          phone's edge, cutting off the search box and the message times. */}
+      <div className="grid min-h-[34rem] grid-cols-[minmax(0,1fr)] lg:grid-cols-[20.5rem_minmax(0,1fr)]">
         <aside className={cn("border-r bg-card", selected && "max-lg:hidden")}>
           <div className="border-b px-3 py-3.5">
             <div className="mb-3 flex items-center justify-between px-1">

@@ -103,6 +103,13 @@ export interface StackedRowProps {
   /** Row actions. Shown at the end of the row; always visible on touch. */
   actions?: React.ReactNode;
   /**
+   * Row actions that are too wide to sit beside the name (two or more labelled
+   * buttons). They move into the expanded panel under an "Actions" label, the
+   * way the schools list does it, so the name and status keep the row's width.
+   * Giving this alone, without `details`, still renders the expand toggle.
+   */
+  detailActions?: React.ReactNode;
+  /**
    * The row's primary inline control (an assignment select, a mark input).
    * Always visible, full width under the identity, never hidden in details.
    */
@@ -120,12 +127,13 @@ export function StackedRow({
   meta,
   details,
   actions,
+  detailActions,
   children,
   className,
 }: StackedRowProps) {
   const [open, setOpen] = React.useState(false);
   const detailsId = React.useId();
-  const hasDetails = Boolean(details && details.length > 0);
+  const hasDetails = Boolean((details && details.length > 0) || detailActions);
   const tooltip = titleText ?? (typeof title === "string" ? title : undefined);
 
   const identity = href ? (
@@ -193,14 +201,71 @@ export function StackedRow({
           hidden={!open}
           className="mt-3 grid [&[hidden]]:hidden grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/40 p-3 text-sm"
         >
-          {details!.map((d) => (
+          {(details ?? []).map((d) => (
             <div key={d.label} className="min-w-0">
               <dt className="text-xs text-muted-foreground">{d.label}</dt>
               <dd className="mt-0.5 min-w-0 break-words">{d.value}</dd>
             </div>
           ))}
+          {detailActions ? (
+            <div className="col-span-2 min-w-0">
+              <dt className="text-xs text-muted-foreground">Actions</dt>
+              <dd className="mt-1.5 min-w-0">{detailActions}</dd>
+            </div>
+          ) : null}
         </dl>
       ) : null}
+    </li>
+  );
+}
+
+/**
+ * A phone list item whose summary stays visible and whose controls fold under
+ * a chevron, for rows too rich for `StackedRow`'s label/value details (editors,
+ * pickers, several labelled buttons). Same toggle and panel look as
+ * `StackedRow`, so every list on a phone opens the same way.
+ */
+export function ExpandableStackedItem({
+  summary,
+  label,
+  children,
+  className,
+}: {
+  /** Always visible: identity and status. */
+  summary: React.ReactNode;
+  /** Names the row in the toggle's accessible label. */
+  label: string;
+  /** Revealed in place when the row is expanded. */
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const panelId = React.useId();
+  return (
+    <li className={cn("px-3 py-3 sm:px-4", className)}>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">{summary}</div>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={`${open ? "Hide" : "Show"} details for ${label}`}
+          onClick={() => setOpen((o) => !o)}
+          className="flex size-9 shrink-0 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronDown
+            aria-hidden
+            className={cn("size-4 transition-transform duration-200", open && "rotate-180")}
+          />
+        </button>
+      </div>
+      <div
+        id={panelId}
+        hidden={!open}
+        className="mt-3 space-y-3 rounded-md bg-muted/40 p-3 text-sm [&[hidden]]:hidden"
+      >
+        {children}
+      </div>
     </li>
   );
 }

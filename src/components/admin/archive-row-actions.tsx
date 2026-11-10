@@ -37,7 +37,18 @@ function joinParts(parts: string[]): string {
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
-export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) {
+/**
+ * `labelled` is for a phone row's expanded panel: the buttons gain their
+ * words and start at the left edge, since there is room there and a bare icon
+ * reads less clearly away from the table's column header.
+ */
+export function LearnerRowActions({
+  learner,
+  labelled = false,
+}: {
+  learner: ArchivedLearnerRow;
+  labelled?: boolean;
+}) {
   const router = useRouter();
   const { purgeCounts } = learner;
 
@@ -80,7 +91,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
   };
 
   return (
-    <div className="flex justify-end gap-2">
+    <div className={labelled ? "flex flex-wrap gap-2" : "flex justify-end gap-2"}>
       <ConfirmAction
         title="Restore this learner?"
         description={`Restore ${learner.fullName}? This clears the removal and returns the learner to ${learner.schoolName}'s active roster.`}
@@ -97,6 +108,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
             aria-label={`Restore ${learner.fullName}`}
           >
             <RotateCcw className="h-4 w-4" aria-hidden />
+            {labelled ? <span>Restore</span> : null}
           </Button>
         }
         onConfirm={restore}
@@ -115,6 +127,7 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
             aria-label={`Delete ${learner.fullName} permanently`}
           >
             <Trash2 className="h-4 w-4" aria-hidden />
+            {labelled ? <span>Delete permanently</span> : null}
           </Button>
         }
         onConfirm={purge}
@@ -123,7 +136,14 @@ export function LearnerRowActions({ learner }: { learner: ArchivedLearnerRow }) 
   );
 }
 
-export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) {
+export function TeacherRowActions({
+  teacher,
+  labelled = false,
+}: {
+  teacher: ArchivedTeacherRow;
+  /** See `LearnerRowActions`. */
+  labelled?: boolean;
+}) {
   const router = useRouter();
 
   const purgeDescription =
@@ -162,7 +182,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
   };
 
   return (
-    <div className="flex justify-end gap-2">
+    <div className={labelled ? "flex flex-wrap gap-2" : "flex justify-end gap-2"}>
       <ConfirmAction
         title="Restore this account?"
         description={`Restore ${teacher.fullName}'s account? The account comes back, but ${TEACHER_RESTORE_NOTICE}`}
@@ -179,6 +199,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
             aria-label={`Restore ${teacher.fullName}`}
           >
             <RotateCcw className="h-4 w-4" aria-hidden />
+            {labelled ? <span>Restore</span> : null}
           </Button>
         }
         onConfirm={restore}
@@ -197,6 +218,7 @@ export function TeacherRowActions({ teacher }: { teacher: ArchivedTeacherRow }) 
             aria-label={`Delete ${teacher.fullName} permanently`}
           >
             <Trash2 className="h-4 w-4" aria-hidden />
+            {labelled ? <span>Delete permanently</span> : null}
           </Button>
         }
         onConfirm={purge}

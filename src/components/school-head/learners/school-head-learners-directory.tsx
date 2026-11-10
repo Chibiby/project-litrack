@@ -185,6 +185,75 @@ export function SchoolHeadLearnersDirectory({
     );
   };
 
+  /** `rowActions` as labelled buttons, for a phone row's expanded panel. */
+  const rowPanelActions = (row: LearnerHubRow) => {
+    const pending = pendingByLearner[row.id];
+    const floating = row.grade === "FLOATING";
+    const transferBlocked = transfersUnavailable || row.archived || floating;
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-wrap gap-2">
+          {pending ? (
+            <Button asChild type="button" size="sm" variant="outline">
+              <a
+                href={`#transfer-request-${pending.requestId}`}
+                onClick={(e) => {
+                  if (!document.getElementById(`transfer-request-${pending.requestId}`)) {
+                    e.preventDefault();
+                    window.location.hash = "transfer-requests";
+                    document.getElementById("transfer-requests")?.scrollIntoView();
+                  }
+                }}
+              >
+                <Inbox className="size-4" aria-hidden />
+                Review request
+              </a>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={transferBlocked}
+              onClick={() => setTransferIds([row.id])}
+            >
+              <ArrowRightLeft className="size-4" aria-hidden />
+              Transfer
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={row.archived}
+            onClick={() =>
+              setGradeTarget({
+                id: row.id,
+                name: row.listingName,
+                gradeLevelId: row.gradeLevelId,
+                gradeLabel: row.gradeLabel,
+                floating,
+              })
+            }
+          >
+            <GraduationCap className="size-4" aria-hidden />
+            Change grade
+          </Button>
+        </div>
+        {/* The menu shows why an item is off beside it; here it goes underneath. */}
+        {!pending && transferBlocked ? (
+          <span className="text-xs text-muted-foreground">
+            {transfersUnavailable
+              ? "Transfer is unavailable right now."
+              : row.archived
+                ? "Removed learners cannot be transferred or moved."
+                : "A floating learner moves with Change grade."}
+          </span>
+        ) : null}
+      </div>
+    );
+  };
+
   const pickedOnPage = rows.filter((r) => selected.has(r.id)).map((r) => r.id);
 
   return (
@@ -196,6 +265,7 @@ export function SchoolHeadLearnersDirectory({
         selection={transfersUnavailable ? undefined : { selectedIds: selected, onChange: setSelected }}
         rowBadge={rowBadge}
         rowActions={rowActions}
+        rowPanelActions={rowPanelActions}
         bulkActions={
           transfersUnavailable ? (
             unavailableLine

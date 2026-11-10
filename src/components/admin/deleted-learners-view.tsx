@@ -243,7 +243,7 @@ export function DeletedLearnersView({
                       { label: "Removed on", value: formatDate(row.removedAt) },
                       { label: "Deleted on", value: formatDate(row.deletedAt) },
                     ]}
-                    actions={restoreButton(row)}
+                    detailActions={restoreButton(row)}
                   />
                 ))}
               </StackedList>
