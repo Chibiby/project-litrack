@@ -13,6 +13,7 @@ import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { teacherBannerSrc } from "@/lib/dashboard/banner";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { Callout } from "@/components/ui/callout";
+import { DashboardGlass } from "@/components/dashboard/dashboard-glass";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { CalendarCard } from "@/components/dashboard/teacher/calendar-card";
 import { SchoolHeadGreetingHero } from "@/components/dashboard/school-head/greeting-hero";
@@ -68,7 +69,7 @@ export async function loadAdminDashboard({
   const inactive = metrics?.schoolsInactive ?? 0;
 
   const body = (
-    <div className="flex min-w-0 flex-col gap-4">
+    <DashboardGlass className="flex min-w-0 flex-col gap-4">
       {!metrics ? (
         <Callout title="Some figures could not be loaded">
           The connection to the records database failed. Your data is safe — reload the
@@ -153,7 +154,7 @@ export async function loadAdminDashboard({
       <Suspense fallback={<ListCardSkeleton items={5} />}>
         <AdminRecentSchoolsSection />
       </Suspense>
-    </div>
+    </DashboardGlass>
   );
 
   return { hero, body };

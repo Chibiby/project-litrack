@@ -238,6 +238,60 @@
   border-left: 4px solid hsl(var(--violet));
 }
 
+/* Dashboard glassmorphism (every role's dashboard). Scoped to .dashboard-glass
+   so the shared cards (Surface, StatCard, ChartCard) stay solid on other pages. */
+.dashboard-glass {
+  --glass-fill: hsl(var(--card) / 0.55);
+  --glass-edge: 0 0% 100% / 0.65;
+}
+.dark .dashboard-glass {
+  --glass-fill: hsl(var(--card) / 0.45);
+  --glass-edge: 0 0% 100% / 0.1;
+}
+.dashboard-glass .shadow-card {
+  background-color: var(--glass-fill);
+  border-color: hsl(var(--glass-edge));
+  box-shadow:
+    inset 0 1px 0 0 hsl(var(--glass-edge)),
+    0 8px 32px -12px rgb(15 23 42 / 0.18);
+  /* Via Tailwind: a raw backdrop-filter here is dropped by the CSS build. */
+  @apply backdrop-blur-xl backdrop-saturate-150;
+}
+/* StatCard paints a tone wash fading into solid --card; fade into glass instead. */
+.dashboard-glass .via-card {
+  --tw-gradient-stops: var(--tw-gradient-from), var(--glass-fill) 60%, var(--glass-fill);
+}
+/* Table header rows and the chart card's header rule read through the glass. */
+.dashboard-glass .shadow-card .border-border\/60 {
+  border-color: hsl(var(--glass-edge));
+}
+/* One light ray behind the whole dashboard. Fixed to the viewport so every
+   card blurs the same light as it scrolls past — no seams between panels. */
+.dashboard-glass-ray {
+  position: fixed;
+  top: -30vh;
+  left: 18vw;
+  width: 34vw;
+  height: 160vh;
+  transform: rotate(-32deg);
+  transform-origin: top center;
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--primary) / 0.22),
+    hsl(var(--primary) / 0.08) 45%,
+    transparent 80%
+  );
+  filter: blur(70px);
+}
+.dark .dashboard-glass-ray {
+  background: linear-gradient(
+    to bottom,
+    hsl(205 100% 78% / 0.2),
+    hsl(217 91% 60% / 0.08) 45%,
+    transparent 80%
+  );
+}
+
 /* Printable reports → browser Print / Save as PDF */
 @media print {
   body {

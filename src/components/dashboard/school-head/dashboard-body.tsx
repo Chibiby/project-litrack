@@ -1,4 +1,5 @@
 import { Suspense, type ReactNode } from "react";
+import { DashboardGlass } from "@/components/dashboard/dashboard-glass";
 import { Surface } from "@/components/ui/surface";
 import { Callout } from "@/components/ui/callout";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
@@ -145,7 +146,7 @@ export async function loadSchoolHeadDashboard({
   );
 
   const body = (
-    <div className="flex flex-col gap-4">
+    <DashboardGlass className="flex flex-col gap-4">
       <AdviserlessSectionsNotice sections={data.adviserlessSections} />
 
       {!data.activeYear ? (
@@ -300,7 +301,7 @@ export async function loadSchoolHeadDashboard({
           isSuperAdminView={view.isSuperAdminView}
         />
       </Suspense>
-    </div>
+    </DashboardGlass>
   );
 
   return { hero, body };

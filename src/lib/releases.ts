@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.51.0",
+    date: "2026-11-10",
+    title: "A new glass look for every dashboard",
+    announce: true,
+    fixes: [
+      "Dashboards now have a see-through glass look, with a soft light behind the cards.",
+      { text: "The IP learners by group chart is a cleaner pie with a legend underneath. Point at a slice to see its count.", roles: ["SUPER_ADMIN", "SCHOOL_HEAD"] },
+    ],
+  },
+  {
     version: "2.50.2",
     date: "2026-11-10",
     title: "Buttons no longer keep loading until you refresh",

@@ -308,22 +308,44 @@ export function GradeLevelBarChart({
 }
 
 /**
- * Slice palette for categorical pies. Violet is deliberately absent — it is
- * reserved for ARAL — so theme tokens lead and fixed hues fill the rest.
+ * Slice palette for categorical pies: shades of the blue primary, lightest
+ * first, in the style of the shadcn "Pie Chart - Legend". Violet stays out —
+ * it is reserved for ARAL.
  */
 const PIE_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--secondary))",
-  "hsl(160 70% 40%)",
-  "hsl(350 75% 55%)",
-  "hsl(190 80% 42%)",
-  "hsl(20 85% 52%)",
-  "hsl(215 16% 47%)",
+  "hsl(213 94% 78%)",
+  "hsl(214 92% 66%)",
+  "hsl(217 91% 56%)",
+  "hsl(221 83% 48%)",
+  "hsl(224 76% 40%)",
+  "hsl(226 71% 32%)",
+  "hsl(228 66% 25%)",
 ];
+
+type PieLegendEntry = { value?: string; color?: string };
+
+/** Centred, wrapping legend: a small square swatch and the name, no values. */
+function PieLegend({ payload }: { payload?: readonly PieLegendEntry[] }) {
+  if (!payload?.length) return null;
+  return (
+    <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-3 text-xs text-foreground">
+      {payload.map((entry) => (
+        <li key={entry.value} className="flex items-center gap-1.5">
+          <span
+            className="size-2.5 shrink-0 rounded-[2px]"
+            style={{ backgroundColor: entry.color }}
+            aria-hidden
+          />
+          {entry.value}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function DashboardPieChart({
   data,
-  height = 260,
+  height = 280,
 }: {
   data: { name: string; value: number }[];
   height?: number;
@@ -332,18 +354,31 @@ export function DashboardPieChart({
     <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
-          <Tooltip contentStyle={tooltipStyle} />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Tooltip
+            contentStyle={{
+              ...tooltipStyle,
+              background: "hsl(var(--popover))",
+              color: "hsl(var(--popover-foreground))",
+            }}
+            formatter={(value, name) => [Number(value ?? 0).toLocaleString(), name]}
+          />
+          <Legend verticalAlign="bottom" content={<PieLegend />} />
           <Pie
             data={data}
             dataKey="value"
             nameKey="name"
-            outerRadius="70%"
-            label={{ fontSize: 11 }}
+            outerRadius="90%"
+            label={false}
+            labelLine={false}
             isAnimationActive={false}
           >
             {data.map((d, i) => (
-              <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+              <Cell
+                key={d.name}
+                fill={PIE_COLORS[i % PIE_COLORS.length]}
+                stroke={PIE_COLORS[i % PIE_COLORS.length]}
+                strokeWidth={1}
+              />
             ))}
           </Pie>
         </PieChart>

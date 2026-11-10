@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DashboardGlass } from "@/components/dashboard/dashboard-glass";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
@@ -62,20 +63,22 @@ export default async function TeacherDashboard({
       isSuperAdminView={isSuperAdmin && !!params.schoolId}
       viewedSchoolName={schoolName ?? undefined}
     >
-      <Suspense fallback={<TeacherDashboardSkeleton />}>
-        <TeacherDashboardBody
-          bannerSrc={bannerSrc}
-          schoolId={targetSchoolId}
-          teacherId={user.id}
-          isSuperAdmin={isSuperAdmin}
-          firstName={isSuperAdmin ? "Admin" : user.firstName}
-          subtitle={
-            isSuperAdmin
-              ? `Super Admin view of ${schoolName || "this school"} — every grade level, not one teacher's care list.`
-              : undefined
-          }
-        />
-      </Suspense>
+      <DashboardGlass>
+        <Suspense fallback={<TeacherDashboardSkeleton />}>
+          <TeacherDashboardBody
+            bannerSrc={bannerSrc}
+            schoolId={targetSchoolId}
+            teacherId={user.id}
+            isSuperAdmin={isSuperAdmin}
+            firstName={isSuperAdmin ? "Admin" : user.firstName}
+            subtitle={
+              isSuperAdmin
+                ? `Super Admin view of ${schoolName || "this school"} — every grade level, not one teacher's care list.`
+                : undefined
+            }
+          />
+        </Suspense>
+      </DashboardGlass>
     </AppShell>
   );
 }
