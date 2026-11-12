@@ -111,10 +111,10 @@ function PanelShell({
           <Icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold tracking-tight text-foreground sm:text-base">
-            {title} <span className="hidden font-normal text-muted-foreground lg:inline">({period})</span>
+          <h2 className="truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
+            {title}
           </h2>
-          <p className="text-xs text-muted-foreground sm:text-sm">
+          <p className="truncate text-xs text-muted-foreground sm:text-sm" title={subtitle}>
             <span className="lg:hidden">{period}</span>
             <span className="hidden lg:inline">{subtitle}</span>
           </p>
