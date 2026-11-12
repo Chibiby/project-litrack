@@ -137,22 +137,38 @@ function expectWellFormedParts(result: ReturnType<typeof teachers>) {
 }
 
 describe("exportListReportTable pdfParts", () => {
-  it("ARAL teachers, Kinder to Grade 12: Overall part then whole-grade parts of at most 14 columns", () => {
+  it("ARAL teachers: PDF shows one total per grade, Excel gets four sheets", () => {
     const result = teachers(ALL_GRADES);
-    expect(result.exportList!.columns.length).toBeGreaterThan(MAX_PART);
-    expectWellFormedParts(result);
-
-    // Each grade's Total / DepEd / Non-DepEd triple sits together in one part.
     const list = result.exportList!;
-    const parts = blockOf(result).pdfParts!;
-    const g3 = list.groups!.find((g) => g.label === "Grade 3")!;
-    expect(g3.count).toBe(3);
-    const holder = parts.slice(1).filter((p) => p.columns.includes(g3.start));
-    expect(holder).toHaveLength(1);
-    expect(holder[0]!.columns).toEqual(expect.arrayContaining([g3.start, g3.start + 1, g3.start + 2]));
-    expect(list.columns[g3.start]).toBe("Grade 3 ARAL teachers");
-    expect(list.columns[g3.start + 1]).toBe("Grade 3 DepEd");
-    expect(list.columns[g3.start + 2]).toBe("Grade 3 Non-DepEd");
+    const blocks = exportListReportTable(result, FRAME).blocks!;
+    const pdf = blocks.filter((b) => !b.formats || b.formats.includes("pdf"));
+    const excel = blocks.filter((b) => !b.formats || b.formats.includes("excel"));
+
+    // Excel: Overall, Total per grade level, DepEd, Non-DepEd.
+    expect(excel.map((b) => b.sheetName)).toEqual(["Overall", "Total per grade level", "DepEd", "Non-DepEd"]);
+    const groups = list.groups!;
+    const firstGrade = Math.min(...groups.map((g) => g.start));
+    expect(excel[0]!.columns.map((c) => c.header)).toEqual(list.columns.slice(0, firstGrade));
+    const g3 = groups.find((g) => g.label === "Grade 3")!;
+    for (const [i, offset] of [[1, 0], [2, 1], [3, 2]] as const) {
+      const sheet = excel[i]!;
+      expect(sheet.columns.map((c) => c.header)).toEqual([
+        ...list.columns.slice(0, 3),
+        ...groups.map((g) => g.label),
+      ]);
+      const col = sheet.columns.findIndex((c) => c.header === "Grade 3");
+      expect(sheet.rows.map((r) => r[col])).toEqual(list.rows.map((r) => r[g3.start + offset]));
+    }
+
+    // PDF: Overall, then the per-grade totals only — no DepEd / Non-DepEd split.
+    expect(pdf).toHaveLength(2);
+    const grades = pdf[1]!;
+    const headers = grades.columns.map((c) => c.header);
+    expect(headers).toEqual([list.columns[0], ...groups.map((g) => g.label)]);
+    expect(headers.some((h) => /DepEd/.test(h))).toBe(false);
+    // Name + 13 grades fits one A4 table; wider lists split into parts.
+    expect(grades.columns.length).toBeLessThanOrEqual(MAX_PART);
+    expect(grades.pdfParts).toBeUndefined();
   });
 
   it("ARAL learners (one count column per grade): same invariants", () => {
@@ -179,7 +195,7 @@ describe("exportListReportTable pdfParts", () => {
   });
 
   it("does not disturb the full column and row list the Excel export uses", () => {
-    const result = teachers(ALL_GRADES);
+    const result = learnersResult(ALL_GRADES);
     const block = blockOf(result);
     expect(block.columns.map((c) => c.header)).toEqual(result.exportList!.columns);
     expect(block.rows).toEqual(result.exportList!.rows);
@@ -204,7 +220,7 @@ describe("renderPdf with pdfParts", () => {
   });
 
   it("draws every part's headers and a part heading, and prints longer than the unsplit table", async () => {
-    const result = teachers(ALL_GRADES);
+    const result = learnersResult(ALL_GRADES);
     const block = blockOf(result);
     const { pdfParts, ...plain } = block;
     expect(pdfParts).toBeDefined();
@@ -243,7 +259,7 @@ describe("renderPdf with pdfParts", () => {
   }, 30_000);
 
   it("the Total row is bold in every part", async () => {
-    const result = teachers(ALL_GRADES);
+    const result = learnersResult(ALL_GRADES);
     const block = blockOf(result);
     expect(block.boldRowIndices).toEqual([block.rows.length - 1]);
     await renderPdf(tableFor(result, block));
@@ -284,7 +300,7 @@ describe("renderExcel ignores pdfParts", () => {
   }
 
   it("same single sheet, header row and rows with or without pdfParts", async () => {
-    const result = teachers(ALL_GRADES);
+    const result = learnersResult(ALL_GRADES);
     const block = blockOf(result);
     const { pdfParts, ...plain } = block;
     expect(pdfParts).toBeDefined();

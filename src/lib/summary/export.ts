@@ -158,6 +158,79 @@ function pdfPartsFor(list: SummaryList): { pdfParts?: { heading?: string; column
 }
 
 /**
+ * ARAL teachers' export blocks. Each grade group in the list is three columns
+ * (ARAL teachers, DepEd, Non-DepEd), after the lead columns and the overall
+ * figures.
+ *
+ * - PDF: the overall figures, then one ARAL-teacher total per grade level.
+ * - Excel: four sheets — Overall, Total per grade level, DepEd, Non-DepEd.
+ */
+function aralTeacherBlocks(list: SummaryList, level: SummaryLevel, boldLast: boolean): ReportBlock[] | null {
+  const groups = list.groups;
+  if (!groups || groups.length === 0) return null;
+  const leadCount = level === "school" ? 3 : 1;
+  const firstGrade = Math.min(...groups.map((g) => g.start));
+  const range = (start: number, count: number) => Array.from({ length: count }, (_, i) => start + i);
+  const width = (header: string, i: number) => (i === 0 ? 36 : header === "District" ? 18 : 11);
+  const bold = boldLast ? { boldRowIndices: [list.rows.length - 1] } : {};
+
+  const pick = (
+    cols: number[],
+    headers: string[],
+    extra: Partial<ReportBlock>
+  ): ReportBlock => ({
+    columns: headers.map((header, i) => ({ header, width: width(header, i) })),
+    rows: list.rows.map((row) => cols.map((c) => row[c] ?? null)),
+    freezeColumns: 1,
+    ...bold,
+    ...extra,
+  });
+
+  const lead = range(0, leadCount);
+  const leadHeaders = lead.map((c) => list.columns[c]!);
+  const perGrade = (offset: number, sheetName: string, heading: string): ReportBlock =>
+    pick(
+      [...lead, ...groups.map((g) => g.start + offset)],
+      [...leadHeaders, ...groups.map((g) => g.label)],
+      { heading, sheetName, formats: ["excel"] }
+    );
+
+  const overallCols = range(0, firstGrade);
+  const overall = pick(overallCols, overallCols.map((c) => list.columns[c]!), {
+    heading: "Overall",
+    sheetName: "Overall",
+    note: list.note,
+  });
+
+  // PDF: the name column and one total per grade, split into readable parts.
+  const pdfGradeCols = [0, ...groups.map((g) => g.start)];
+  const pdfGrades = pick(pdfGradeCols, [list.columns[0]!, ...groups.map((g) => g.label)], {
+    heading: "ARAL teachers per grade level",
+    formats: ["pdf"],
+  });
+  if (pdfGradeCols.length > MAX_PDF_PART_COLUMNS) {
+    const parts: { heading?: string; columns: number[] }[] = [];
+    const per = MAX_PDF_PART_COLUMNS - 1;
+    for (let i = 0; i < groups.length; i += per) {
+      const slice = groups.slice(i, i + per);
+      parts.push({
+        heading: slice.length === 1 ? slice[0]!.label : `${slice[0]!.label} to ${slice[slice.length - 1]!.label}`,
+        columns: [0, ...slice.map((_, j) => 1 + i + j)],
+      });
+    }
+    pdfGrades.pdfParts = parts;
+  }
+
+  return [
+    overall,
+    pdfGrades,
+    perGrade(0, "Total per grade level", "ARAL teachers per grade level"),
+    perGrade(1, "DepEd", "DepEd ARAL teachers per grade level"),
+    perGrade(2, "Non-DepEd", "Non-DepEd ARAL teachers per grade level"),
+  ];
+}
+
+/**
  * ARAL learners' and ARAL teachers' and Advisory's `toReportTable`: the result's `exportList`
  * (one row per school, district or scope, counts before percentages) replaces
  * the Category/Count blocks, at every level.
@@ -166,6 +239,10 @@ export function exportListReportTable(result: FacetResult, frame: ReportFrame): 
   const list = result.exportList;
   const table = summaryReportTable(result, frame);
   if (!list) return table;
+  const boldLast = list.rows.at(-1)?.[0] === "Total" && result.level !== "overall";
+  const teacherBlocks =
+    result.facetId === "aral-teachers" ? aralTeacherBlocks(list, result.level, boldLast) : null;
+  if (teacherBlocks) return { ...table, blocks: teacherBlocks };
   // No heading: the report title already names the facet.
   const block: ReportBlock = {
     columns: list.columns.map((header, i) => ({ header, width: i === 0 ? 36 : header === "District" ? 18 : 11 })),

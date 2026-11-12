@@ -715,11 +715,11 @@ const NOT_IP_LEARNER: Prisma.LearnerWhereInput = {
 };
 
 /**
- * The directory lists the dashboard's "Learners" population: every live
- * (`deletedAt: null`) learner, demo school scoped by `adminPopulationScope`. So
- * the unfiltered directory count equals the dashboard Learners card. A learner
- * with no active enrollment still appears, under their current grade/section
- * pointer.
+ * The directory lists every live
+ * (`deletedAt: null`) learner, demo school scoped by `adminPopulationScope`.
+ * A learner with no active enrollment still appears, under their current
+ * grade/section pointer. Removed (archived) learners appear too, marked; the
+ * summary cards and the dashboard Learners card leave them out.
  */
 function learnersHubWhere(
   f: Pick<LearnersHubParams, "q" | "district" | "schoolId" | "grade" | "section" | "ip" | "aral">,
@@ -915,7 +915,12 @@ export async function getLearnersSummary(
   const [summary, counts, ipDash] = await Promise.all([
     cachedQuery(
       async () => {
-        const base = learnersHubWhere({ q: "", ...f }, demoVisible);
+        // Removed (archived) learners stay in the directory list, marked, but
+        // are not counted: they have no active enrollment, so counting them
+        // made "Learners" exceed "Enrolled this school year".
+        const base: Prisma.LearnerWhereInput = {
+          AND: [learnersHubWhere({ q: "", ...f }, demoVisible), { archivedAt: null }],
+        };
         // The dashboard's enrolled/IP population also requires a live school.
         const enrolled: Prisma.LearnerWhereInput = {
           AND: [base, ACTIVE_ENROLLED_LEARNER, { school: { deletedAt: null } }],

@@ -45,6 +45,7 @@ import {
 } from "@/lib/summary/queries/aral";
 import { queryBosyRows, queryMosyRows, shapeBosy, shapeMosy } from "@/lib/summary/queries/mosy-bosy";
 import {
+  DEFAULT_SUMMARY_LEVEL,
   SUMMARY_FACET_IDS,
   type FacetResult,
   type ScopeSchool,
@@ -482,5 +483,5 @@ export function facetParamsFromSearch(
   const parsed = facet.params.safeParse(flat);
   if (parsed.success) return parsed.data as Record<string, unknown>;
   const level = levelOnlyParamsSchema.safeParse({ level: flat.level });
-  return { level: level.success ? level.data.level : "overall" };
+  return { level: level.success ? level.data.level : DEFAULT_SUMMARY_LEVEL };
 }

@@ -176,6 +176,8 @@ export function StatCard({
             "absolute right-3 top-3 size-4 opacity-0 transition-all duration-200",
             "-translate-x-1 translate-y-1 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100",
             "group-focus-within:translate-x-0 group-focus-within:translate-y-0 group-focus-within:opacity-100",
+            // A touch screen cannot hover to reveal it, so the arrow just shows.
+            "[@media(hover:none)]:translate-x-0 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100",
             LINK[tone]
           )}
         />

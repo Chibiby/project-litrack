@@ -306,8 +306,10 @@ describe("ARAL teachers export list", () => {
 describe("ARAL teachers report table", () => {
   it("replaces the Category/Count blocks with the one-row-per-school block, Total row bold", () => {
     const table = SUMMARY_FACETS["aral-teachers"].toReportTable(shape("school"), FRAME);
-    expect(table.blocks).toHaveLength(1);
+    // Overall + PDF per-grade totals + three Excel per-grade sheets.
+    expect(table.blocks).toHaveLength(5);
     const block = table.blocks![0]!;
+    expect(block.sheetName).toBe("Overall");
     expect(block.columns.map((c) => c.header)).not.toContain("Category");
     expect(block.rows).toHaveLength(4);
     expect(block.boldRowIndices).toEqual([3]);
