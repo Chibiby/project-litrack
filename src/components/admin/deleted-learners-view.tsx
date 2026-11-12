@@ -206,6 +206,11 @@ export function DeletedLearnersView({
                     <TableRow key={row.id}>
                       <TableCell className="max-w-[16rem] font-medium">
                         <CellText>{row.name}</CellText>
+                        {row.removalReason ? (
+                          <span className="block truncate text-xs font-normal text-muted-foreground">
+                            {row.removalReason}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="max-w-[16rem] text-muted-foreground">
                         <CellText>{row.schoolName}</CellText>
@@ -240,6 +245,7 @@ export function DeletedLearnersView({
                     value={<span className="text-sm font-medium">{placement(row)}</span>}
                     meta={<span className="truncate">{schoolLine(row, showDistrict)}</span>}
                     details={[
+                      ...(row.removalReason ? [{ label: "Reason", value: row.removalReason }] : []),
                       { label: "Removed on", value: formatDate(row.removedAt) },
                       { label: "Deleted on", value: formatDate(row.deletedAt) },
                     ]}

@@ -50,7 +50,7 @@ vi.mock("@/lib/cache/revalidate", () => ({
 }));
 vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TEST0001") }));
 
-const { createDivisionSchoolYear, setActiveSchoolYear, setSchoolYearMonths } = await import(
+const { createDivisionSchoolYear, setActiveSchoolYear, setSchoolYearMonths, setDivisionActiveDuration } = await import(
   "@/lib/actions/school-year"
 );
 
@@ -188,5 +188,48 @@ describe("setSchoolYearMonths", () => {
     update.mockResolvedValue({});
     await setSchoolYearMonths(form({ schoolYearId: YEAR_ID, startMonth: "2026-06" }));
     expect(findFirst.mock.calls[0][0].where).not.toHaveProperty("schoolId");
+  });
+});
+
+describe("setDivisionActiveDuration", () => {
+  const durationForm = () => form({ label: "2026-2027", startMonth: "2026-06", endMonth: "2027-04" });
+
+  it("is Division Admin only", async () => {
+    schoolFindMany.mockResolvedValue([]);
+    transaction.mockResolvedValue(undefined);
+    await setDivisionActiveDuration(durationForm());
+    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
+  });
+
+  it("saves the duration, adds the label where missing, and switches every school to it", async () => {
+    schoolFindMany.mockResolvedValue([{ id: "s9" }]);
+    const upsert = vi.fn();
+    const createMany = vi.fn();
+    const updateMany = vi.fn();
+    transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn({ divisionSchoolYear: { upsert }, schoolYear: { createMany, updateMany } })
+    );
+
+    const res = await setDivisionActiveDuration(durationForm());
+
+    expect(res).toMatchObject({ ok: true, created: 1 });
+    expect(upsert.mock.calls[0][0].create).toMatchObject({
+      label: "2026-2027",
+      activeStart: new Date(Date.UTC(2026, 5, 1)),
+      activeEnd: new Date(Date.UTC(2027, 3, 30)),
+    });
+    expect(createMany.mock.calls[0][0].data[0]).toMatchObject({ schoolId: "s9", label: "2026-2027" });
+    // Others off before this label on: the one-active-year index never sees two.
+    expect(updateMany.mock.calls[0][0]).toMatchObject({
+      where: { isActive: true, label: { not: "2026-2027" } },
+      data: { isActive: false },
+    });
+    expect(updateMany.mock.calls[1][0]).toMatchObject({ where: { label: "2026-2027" }, data: { isActive: true } });
+  });
+
+  it("requires an end month", async () => {
+    const res = await setDivisionActiveDuration(form({ label: "2026-2027", startMonth: "2026-06", endMonth: "" }));
+    expect(res).toMatchObject({ ok: false });
+    expect(transaction).not.toHaveBeenCalled();
   });
 });

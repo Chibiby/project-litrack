@@ -7,6 +7,7 @@ import { NavPathProvider } from "@/components/nav/nav-path";
 import { AppHeader } from "@/components/shell/app-header";
 import { ReleaseNotesModal } from "@/components/release-notes-modal";
 import type { ShellNotification } from "@/components/shell/notifications-menu";
+import type { HeaderSchoolYearGate } from "@/components/shell/school-year-badge";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
 import { LightRays } from "@/components/ui/light-rays";
@@ -66,6 +67,8 @@ interface RoleShellProps {
    * `Suspense` boundary so the chrome paints before the chat query resolves.
    */
   notifications?: ShellNotification[] | Promise<ShellNotification[]>;
+  /** School-year gate for the header badge; see `AppHeader.schoolYearGate`. */
+  schoolYearGate?: HeaderSchoolYearGate | null | Promise<HeaderSchoolYearGate | null>;
   /**
    * Whether a model backend is configured, read from server env by the layout.
    *
@@ -106,6 +109,7 @@ export function RoleShell({
   pendingTeacherCount,
   isDeveloperAdmin,
   notifications,
+  schoolYearGate,
   aiEnabled,
   lastSeenReleaseVersion,
   trackTeacherPresence = false,
@@ -160,6 +164,7 @@ export function RoleShell({
               roleLabel={roleLabel}
               grades={grades}
               notifications={notifications}
+              schoolYearGate={schoolYearGate}
               isAralVolunteer={isAralVolunteer}
               isFloating={isFloating}
               isDeveloperAdmin={isDeveloperAdmin}

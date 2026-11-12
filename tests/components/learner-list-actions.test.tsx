@@ -181,7 +181,8 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Yes, remove" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /NLPA/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
   });
@@ -194,7 +195,8 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Yes, remove" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /NLPA/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() =>
       expect(
@@ -213,7 +215,8 @@ describe("LearnerListClient — Actions column", () => {
     renderRoster();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Ana Santos" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Yes, remove" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /NLPA/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
     // The row returns only when the async transition (action -> callAction ->

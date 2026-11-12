@@ -117,7 +117,6 @@ export function CreateDivisionSchoolYearDialog({ suggestedLabel }: { suggestedLa
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState(suggestedLabel);
   const [months, setMonths] = useState<MonthDraft>({ startMonth: "", endMonth: "" });
-  const [setActive, setSetActive] = useState(false);
   const [pending, startTransition] = useTransition();
   const idPrefix = useId();
 
@@ -127,7 +126,6 @@ export function CreateDivisionSchoolYearDialog({ suggestedLabel }: { suggestedLa
       setLabel(suggestedLabel);
       const startYear = suggestedLabel.slice(0, 4);
       setMonths({ startMonth: startYear ? `${startYear}-06` : "", endMonth: "" });
-      setSetActive(false);
     }
   };
 
@@ -137,7 +135,6 @@ export function CreateDivisionSchoolYearDialog({ suggestedLabel }: { suggestedLa
       fd.set("label", label);
       fd.set("startMonth", months.startMonth);
       fd.set("endMonth", months.endMonth);
-      if (setActive) fd.set("setActive", "true");
       const res = await callAction(() => createDivisionSchoolYear(fd));
       if (!res.ok) {
         toastFailure(res);
@@ -197,22 +194,9 @@ export function CreateDivisionSchoolYearDialog({ suggestedLabel }: { suggestedLa
 
           <MonthFields draft={months} onChange={setMonths} disabled={pending} idPrefix={idPrefix} />
 
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={setActive}
-              onChange={(e) => setSetActive(e.target.checked)}
-              className="mt-0.5 rounded border"
-              disabled={pending}
-            />
-            <span>
-              Make it the active year at every school
-              <span className="block text-xs text-muted-foreground">
-                Learners stay enrolled in the year they are in now. Leave this off
-                until learners are ready to move up.
-              </span>
-            </span>
-          </label>
+          <p className="text-xs text-muted-foreground">
+            To open it for enrolling, set its active duration afterwards.
+          </p>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={pending}>

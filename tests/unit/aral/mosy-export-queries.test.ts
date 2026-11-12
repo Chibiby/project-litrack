@@ -247,7 +247,8 @@ describe("mosy row levelOptionsByDecision", () => {
       "TRANSITIONING",
       "INDEPENDENT_GRADE_READY",
     ]);
-    expect(out.rows[0]!.reasonChoices.at(-1)!.reason).toBe("TRANSFERRED_OUT");
+    expect(out.rows[0]!.reasonChoices.at(-2)!.reason).toBe("TRANSFERRED_OUT");
+    expect(out.rows[0]!.reasonChoices.at(-1)!.reason).toBe("NLPA");
   });
 });
 

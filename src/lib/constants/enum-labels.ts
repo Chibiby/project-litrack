@@ -255,6 +255,22 @@ export const ARAL_MOSY_MOVE_OUT_REASON_LABELS = {
   DIAGNOSED_LSEN: "Diagnosed as Learner with Special Educational Needs (LSEN)",
   RECOMMENDED_LSEN_ASSESSMENT: "Recommended for LSEN assessment",
   TRANSFERRED_OUT: "Transferred out",
+  NLPA: "No longer participating in learning activities (NLPA)",
+} as const;
+
+/** End-of-year call on an enrollment. */
+export const ENROLLMENT_OUTCOME_LABELS = {
+  PROMOTED: "Promoted",
+  RETAINED: "Retained",
+} as const;
+
+/** Remove-learner reasons, in the order the dialog offers them. */
+export const LEARNER_REMOVAL_REASON_LABELS = {
+  NLPA: "No longer participating in learning activities (NLPA)",
+  TRANSFERRED_OUT: "Transferred out",
+  DROPPED_OUT: "Dropped out",
+  DUPLICATE: "Duplicate or entered by mistake",
+  OTHER: "Other",
 } as const;
 
 const EARLY_GRADE_TYPES = new Set(["KINDER", "G1", "G2", "G3"]);

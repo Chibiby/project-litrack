@@ -209,7 +209,7 @@ describe("archiveLearner", () => {
   it("names what failed when the database is unreachable", async () => {
     learnerFindFirst.mockRejectedValue(prismaDown());
 
-    const res = await archiveLearner(form({ id: "11111111-1111-4111-8111-111111111111" }));
+    const res = await archiveLearner(form({ id: "11111111-1111-4111-8111-111111111111", removalReason: "NLPA" }));
 
     expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
     expect((res as { error: string }).error).toContain("Couldn't remove the learner");
@@ -221,7 +221,7 @@ describe("archiveLearner", () => {
       schoolId: "school-2",
     });
 
-    const res = await archiveLearner(form({ id: "11111111-1111-4111-8111-111111111111" }));
+    const res = await archiveLearner(form({ id: "11111111-1111-4111-8111-111111111111", removalReason: "NLPA" }));
 
     expect(res).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(JSON.stringify(res)).not.toContain("school-2");

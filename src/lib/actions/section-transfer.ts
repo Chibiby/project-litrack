@@ -29,6 +29,7 @@ import {
   revalidateSectionTransfer,
   revalidateTransferRequests,
 } from "@/lib/cache/revalidate";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 /**
  * Moving learners between sections of one grade
@@ -162,6 +163,8 @@ export const transferLearnersToSection = action(
     input: unknown
   ): Promise<ActionResult<{ moved: number; unchanged: number; sectionName: string }>> => {
     const user = await requireSchoolUser("SCHOOL_HEAD");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(user.schoolId);
     const parsed = parseInput(transferLearnersSchema, input);
     const ids = [...new Set(parsed.learnerIds)];
 
@@ -250,6 +253,8 @@ export const requestSectionTransfers = action(
   "requestSectionTransfers",
   async (input: unknown): Promise<ActionResult<{ requested: number; unchanged: number }>> => {
     const user = await requireSchoolUser("TEACHER");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(user.schoolId);
     if (!user.profileCompleted) {
       throw new AppError("VALIDATION_FAILED", { params: { message: "Complete your profile first" } });
     }
@@ -366,6 +371,8 @@ export const approveSectionTransferRequests = action(
   "approveSectionTransferRequests",
   async (input: unknown): Promise<ActionResult<{ approved: number }>> => {
     const user = await requireSchoolUser("SCHOOL_HEAD");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(user.schoolId);
     const parsed = parseInput(decideTransferRequestsSchema, input);
     const ids = [...new Set(parsed.requestIds)];
 

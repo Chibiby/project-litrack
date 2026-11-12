@@ -1,6 +1,7 @@
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { getDistrictNotifications } from "@/lib/district/notifications";
 import { RoleShell } from "@/components/role-shell";
+import { loadHeaderSchoolYearGate } from "@/lib/school-year/header-gate";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { readImpersonation } from "@/lib/auth/impersonation-session";
 
@@ -36,6 +37,7 @@ export default async function DistrictLayout({
         // Not awaited: streamed through RoleShell/AppHeader so the chrome paints
         // before the open-ticket count resolves.
         notifications={getDistrictNotifications(user, scope)}
+        schoolYearGate={loadHeaderSchoolYearGate(user)}
         // Not while an admin impersonates: acknowledging would stamp the
         // district admin's own row, and they would never see the release.
         lastSeenReleaseVersion={impersonating ? undefined : user.lastSeenReleaseVersion}

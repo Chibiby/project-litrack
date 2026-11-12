@@ -67,6 +67,11 @@ ALTER TABLE "TermSubjectDefault"   ENABLE ROW LEVEL SECURITY;
 -- themselves scope over a whole district. Deny-all, same as SystemSetting above.
 ALTER TABLE "DistrictAdminAssignment" ENABLE ROW LEVEL SECURITY;
 
+-- The Division Admin's active duration per school-year label. It decides when
+-- every school can write, so a writable path to it from PostgREST would let an
+-- outsider open or close the whole division. Deny-all, same as SystemSetting above.
+ALTER TABLE "DivisionSchoolYear"   ENABLE ROW LEVEL SECURITY;
+
 -- Chat. These hold free text one member of staff wrote for another, which is
 -- the most directly readable content in the database — not a code or an id, but
 -- sentences about named children. Deny-all, like everything else.

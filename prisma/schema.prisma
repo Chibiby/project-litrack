@@ -429,6 +429,24 @@ enum EnrollmentStatus {
   ARCHIVED
 }
 
+/// The adviser's end-of-year call on an enrollment, made in the active
+/// duration's last month. Promoted learners appear on the next grade's
+/// enroll masterlist; retained learners on the same grade's.
+enum EnrollmentOutcome {
+  PROMOTED
+  RETAINED
+}
+
+/// Why a learner was removed from a roster.
+enum LearnerRemovalReason {
+  /// No longer participating in learning activities.
+  NLPA
+  TRANSFERRED_OUT
+  DROPPED_OUT
+  DUPLICATE
+  OTHER
+}
+
 enum NotificationType {
   /// A teacher was designated as the ARAL tutor for one or more learners by
   /// somebody else.
@@ -638,13 +656,13 @@ model TermSubjectDefault {
 }
 
 model SchoolYear {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   schoolId  String
   label     String // e.g. "2025-2026"
   startDate DateTime
   endDate   DateTime? // null = School Head has not set the end month yet
-  isActive  Boolean  @default(false)
-  createdAt DateTime @default(now())
+  isActive  Boolean   @default(false)
+  createdAt DateTime  @default(now())
 
   school                  School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   enrollments             Enrollment[]
@@ -655,6 +673,22 @@ model SchoolYear {
 
   @@unique([schoolId, label])
   @@index([schoolId, isActive])
+}
+
+/// The division-wide active duration of one school-year label, set by the
+/// Division Admin. A school's active SchoolYear with this label is "open"
+/// (learners, ARAL, MOSY, BOSY editable) only from the first day of
+/// `activeStart`'s month through the last day of `activeEnd`'s month; outside
+/// it, every school is read-only. The last month unlocks promotion. A
+/// SchoolYear's own startDate/endDate stay the School Head's class months.
+/// No schoolId: one row per label for the whole division.
+model DivisionSchoolYear {
+  label       String   @id // e.g. "2026-2027"
+  activeStart DateTime // first day of the start month, UTC midnight
+  activeEnd   DateTime // last day of the end month, UTC midnight
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 /// A School Head's edit to one term of one school year.
@@ -1178,19 +1212,23 @@ model TeacherSection {
 }
 
 model Enrollment {
-  id           String           @id @default(uuid())
+  id           String             @id @default(uuid())
   learnerId    String
   schoolId     String
   schoolYearId String
   gradeLevelId String
   sectionId    String?
   teacherId    String?
-  status       EnrollmentStatus @default(ACTIVE)
-  enrolledAt   DateTime         @default(now())
+  status       EnrollmentStatus   @default(ACTIVE)
+  /// Promoted / retained, set by the adviser in the active duration's last month.
+  outcome      EnrollmentOutcome?
+  outcomeAt    DateTime?
+  outcomeById  String?
+  enrolledAt   DateTime           @default(now())
   endedAt      DateTime?
   notes        String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
   learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
   school     School     @relation(fields: [schoolId], references: [id])
@@ -1201,6 +1239,7 @@ model Enrollment {
 
   @@index([learnerId, status])
   @@index([schoolId, schoolYearId])
+  @@index([schoolId, outcome])
   @@index([teacherId])
   /// DROPPED 2026-09-27 (`20260927000001_drop_unused_indexes`): no query in
   /// `src/` filters `Enrollment` by `gradeLevelId` (alone or paired with
@@ -1293,10 +1332,14 @@ model Learner {
   isAralLearner  Boolean   @default(false)
   aralEnrolledAt DateTime?
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  archivedAt DateTime? // archive is distinct from soft-delete deletedAt
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  deletedAt     DateTime?
+  archivedAt    DateTime? // archive is distinct from soft-delete deletedAt
+  /// Why the learner was removed; null on learners removed before reasons existed.
+  removalReason LearnerRemovalReason?
+  /// Free text for OTHER (and an optional note on any reason).
+  removalNote   String?
 
   school                  School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   gradeLevel              GradeLevel               @relation(fields: [gradeLevelId], references: [id])
@@ -1461,6 +1504,8 @@ enum AralMosyMoveOutReason {
   /// The learner transferred to another school. Offered to every grade; any of
   /// the grade's reading levels may be recorded with it.
   TRANSFERRED_OUT
+  /// No longer participating in learning activities.
+  NLPA
 }
 
 /// One MOSY (middle of school year) decision per learner per school year.

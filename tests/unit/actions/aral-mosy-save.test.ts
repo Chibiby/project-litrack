@@ -279,6 +279,18 @@ describe("saveMosyDecision — guards", () => {
     );
   });
 
+  it("outside the active school year refuses with SCHOOL_YEAR_CLOSED and writes nothing", async () => {
+    const { assertSchoolYearOpen } = await import("@/lib/school-year/gate");
+    const { AppError } = await import("@/lib/errors/app-error");
+    vi.mocked(assertSchoolYearOpen).mockRejectedValueOnce(new AppError("SCHOOL_YEAR_CLOSED"));
+    const res = await saveMosyDecision(form({ decision: "STAY" }));
+    expect(res).toMatchObject({ ok: false, code: "SCHOOL_YEAR_CLOSED" });
+    expect(lockCall).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(learnerUpdate).not.toHaveBeenCalled();
+    expect(writeAudit).not.toHaveBeenCalled();
+  });
+
   it("a locked MOSY refuses with MOSY_LOCKED before touching the database", async () => {
     mosyLocked = true;
     const res = await saveMosyDecision(form({ decision: "STAY" }));

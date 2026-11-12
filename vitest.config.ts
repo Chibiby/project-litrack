@@ -15,6 +15,8 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, "tests/db/**"],
     // Component tests need a DOM; pure-logic tests stay on the faster node env.
     environmentMatchGlobs: [["tests/components/**", "jsdom"]],
+    // The school-year gate is open by default; see the file for overriding it.
+    setupFiles: ["./tests/setup/school-year-gate.ts"],
   },
   resolve: {
     alias: {

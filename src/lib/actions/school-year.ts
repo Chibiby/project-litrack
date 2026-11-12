@@ -7,6 +7,7 @@ import {
   createDivisionSchoolYearSchema,
   deleteSchoolYearSchema,
   setActiveSchoolYearSchema,
+  setDivisionDurationSchema,
   setSchoolYearMonthsSchema,
 } from "@/lib/validators/school-year.schema";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -119,6 +120,85 @@ export const createDivisionSchoolYear = action(
     return { ok: true, created: schoolIds.length, skipped: totalSchools - schoolIds.length };
   },
   { verb: "create the school year" }
+);
+
+/**
+ * Division Admin: set the active duration of one school-year label for the
+ * whole division, and make that label the active year at every school.
+ *
+ * Inside the duration, schools can enroll and edit; outside it everything is
+ * read-only (`assertSchoolYearOpen`). A school that does not have the label
+ * yet gets it, with the duration's months as its class months, so every
+ * school has a year to enroll against. Learners keep their enrollment in the
+ * year they were in; moving them up is the enroll-from-masterlist flow.
+ */
+export const setDivisionActiveDuration = action(
+  "setDivisionActiveDuration",
+  async (formData: FormData): Promise<CreateResult> => {
+    const user = await requireUser("SUPER_ADMIN");
+    const data = parseInput(setDivisionDurationSchema, {
+      label: formData.get("label"),
+      startMonth: formData.get("startMonth"),
+      endMonth: formData.get("endMonth"),
+    });
+    const activeStart = monthStart(data.startMonth)!;
+    const activeEnd = monthEnd(data.endMonth)!;
+
+    const missing = await prisma.school.findMany({
+      where: { deletedAt: null, schoolYears: { none: { label: data.label } } },
+      select: { id: true },
+    });
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.divisionSchoolYear.upsert({
+          where: { label: data.label },
+          create: { label: data.label, activeStart, activeEnd, updatedById: user.id },
+          update: { activeStart, activeEnd, updatedById: user.id },
+        });
+        if (missing.length > 0) {
+          await tx.schoolYear.createMany({
+            data: missing.map((s) => ({
+              schoolId: s.id,
+              label: data.label,
+              startDate: activeStart,
+              endDate: activeEnd,
+              isActive: false,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        // Switch every live school to this label: other years off first, so the
+        // one-active-year partial unique index never sees two.
+        await tx.schoolYear.updateMany({
+          where: { isActive: true, label: { not: data.label }, school: { deletedAt: null } },
+          data: { isActive: false },
+        });
+        await tx.schoolYear.updateMany({
+          where: { label: data.label, isActive: false, school: { deletedAt: null } },
+          data: { isActive: true },
+        });
+      });
+    } catch (err) {
+      if (isActiveYearConflict(err)) throw activeYearRaced();
+      throw err;
+    }
+
+    await writeAudit({
+      userId: user.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.SCHOOL_YEAR_SET_ACTIVE,
+      resource: "DivisionSchoolYear",
+      resourceId: data.label,
+      metadata: { label: data.label, start: data.startMonth, end: data.endMonth, created: missing.length },
+    });
+
+    revalidatePath(SCHOOL_HEAD_ROUTES.schoolYears);
+    revalidatePath(ADMIN_ROUTES.schoolYears);
+    revalidateAllCachedData();
+    return { ok: true, created: missing.length, skipped: 0 };
+  },
+  { verb: "set the active school year" }
 );
 
 /** Division Admin: make one school's year its active year. */

@@ -29,6 +29,7 @@ import { teacherAdvisoryGradeScope } from "@/lib/teachers/scope";
 import { action } from "@/lib/errors/action";
 import { AppError } from "@/lib/errors/app-error";
 import { classifyDbFailure } from "@/lib/db-errors";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult<T = unknown> =
   | { ok: true; data: T }
@@ -234,6 +235,8 @@ export const commitLearnerImport = action("commitLearnerImport", async (input: {
   }>
 > => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
   const grade = await assertTeacherGradeAccess(user.id, user.schoolId, input.gradeLevelId);

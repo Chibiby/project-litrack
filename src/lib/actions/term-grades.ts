@@ -41,6 +41,7 @@ import {
 } from "@/lib/validators/term-grade.schema";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { loadReportFrame, writeTemplateSheet } from "@/lib/reports/sheet-header";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -125,6 +126,8 @@ export const saveTermGrades = action("saveTermGrades", async (
   input: unknown
 ): Promise<ActionResult<{ saved: number; cleared: number }>> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const parsed = { data: parseInput(termGradesSaveSchema, input) };
 

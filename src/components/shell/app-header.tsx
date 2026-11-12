@@ -16,6 +16,7 @@ import {
   type ShellNotification,
 } from "@/components/shell/notifications-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { SchoolYearBadge, type HeaderSchoolYearGate } from "@/components/shell/school-year-badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getNavGroups, type NavGrade } from "@/lib/nav/nav-config";
@@ -74,6 +75,7 @@ export function AppHeader({
   isFloating,
   isDeveloperAdmin,
   advisoryPlacements,
+  schoolYearGate,
   expanded,
   onToggleSidebar,
 }: {
@@ -112,6 +114,11 @@ export function AppHeader({
    * `NavOptions.advisoryPlacements`.
    */
   advisoryPlacements?: { sectionId: string; gradeLevelId: string }[];
+  /**
+   * The school-year gate (`getGateForUser`), resolved or as a promise the layout
+   * did not await. Closed → a "No active school year" badge; null → nothing.
+   */
+  schoolYearGate?: HeaderSchoolYearGate | null | Promise<HeaderSchoolYearGate | null>;
   expanded: boolean;
   onToggleSidebar: () => void;
 }) {
@@ -232,6 +239,8 @@ export function AppHeader({
         )}
 
         <div className="hidden flex-1 lg:block" />
+        {/* Every role, every width: read-only warning when no school year is open. */}
+        <SchoolYearBadge gate={schoolYearGate} isDivisionAdmin={role === "SUPER_ADMIN"} />
         <div className="hidden lg:contents">
           {Array.isArray(notifications) || notifications === undefined ? (
             <NotificationsMenu notifications={notifications ?? []} />

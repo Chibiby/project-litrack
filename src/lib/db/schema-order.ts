@@ -97,6 +97,9 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // touch it, and it belongs in every snapshot precisely because it is
   // structural rather than because any school produced it.
   { model: "TermSubjectDefault", delegate: "termSubjectDefault", operational: false },
+  // Division Admin's active duration per school-year label. No foreign keys;
+  // structural, like SystemSetting: clearing operational data keeps it.
+  { model: "DivisionSchoolYear", delegate: "divisionSchoolYear", operational: false },
   { model: "SchoolYear", delegate: "schoolYear", operational: false },
   { model: "GradeLevel", delegate: "gradeLevel", operational: false },
   // After GradeLevel (composite FK) and before TermGrade (which points at it).

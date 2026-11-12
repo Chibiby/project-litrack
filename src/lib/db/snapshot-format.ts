@@ -80,6 +80,7 @@ export class SnapshotFormatError extends Error {
  */
 export const KEYSET_KEYS: Readonly<Record<string, readonly string[]>> = {
   SystemSetting: ["key"],
+  DivisionSchoolYear: ["label"],
   DistrictAdminAssignment: ["userId", "district"],
   TeacherSection: ["teacherId", "sectionId"],
   ChatRead: ["channelId", "userId"],

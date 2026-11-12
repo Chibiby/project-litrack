@@ -143,13 +143,35 @@ describe("roster archive confirmation", () => {
     selectBoth();
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     const alert = await screen.findByRole("alertdialog");
+    fireEvent.click(within(alert).getByRole("radio", { name: /NLPA/ }));
     fireEvent.click(within(alert).getByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
     const fd = archiveLearners.mock.calls[0][0] as FormData;
     expect(fd.getAll("learnerIds")).toEqual(["learner-1", "learner-2"]);
+    expect(fd.get("removalReason")).toBe("NLPA");
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("2 learners removed"));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  });
+
+  it("asks for a reason before removing, and for a note when Other is chosen", async () => {
+    renderRoster();
+    selectBoth();
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    const alert = await screen.findByRole("alertdialog");
+    fireEvent.click(within(alert).getByRole("button", { name: "Yes, remove" }));
+    expect((await within(alert).findByRole("alert")).textContent).toBe("Choose a reason.");
+    fireEvent.click(within(alert).getByRole("radio", { name: "Other" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "Yes, remove" }));
+    expect(within(alert).getByRole("alert").textContent).toBe("Say why in the box.");
+    expect(archiveLearners).not.toHaveBeenCalled();
+
+    fireEvent.change(within(alert).getByLabelText("Say why"), { target: { value: "Moved abroad" } });
+    fireEvent.click(within(alert).getByRole("button", { name: "Yes, remove" }));
+    await waitFor(() => expect(archiveLearners).toHaveBeenCalledTimes(1));
+    const fd = archiveLearners.mock.calls[0][0] as FormData;
+    expect(fd.get("removalReason")).toBe("OTHER");
+    expect(fd.get("removalNote")).toBe("Moved abroad");
   });
 
   it("keeps the confirmation open and the selection when the server refuses", async () => {
@@ -158,6 +180,7 @@ describe("roster archive confirmation", () => {
     selectBoth();
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     const alert = await screen.findByRole("alertdialog");
+    fireEvent.click(within(alert).getByRole("radio", { name: /NLPA/ }));
     fireEvent.click(within(alert).getByRole("button", { name: "Yes, remove" }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("Not allowed"));

@@ -13,6 +13,9 @@ import {
 } from "@/components/admin/school-years-table";
 import { CreateDivisionSchoolYearDialog } from "@/components/school-head/school-year-forms";
 import { toMonthKey } from "@/lib/school-year/months";
+import { DivisionDurationPanel, type DurationRow } from "@/components/admin/division-duration";
+import { evaluateWindow } from "@/lib/school-year/window";
+import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -67,9 +70,29 @@ export default async function AdminSchoolYearsPage({ searchParams }: PageProps) 
       prisma.schoolYear.count({ where: { isActive: true, school: { deletedAt: null } } }),
       prisma.school.count({ where: { deletedAt: null } }),
       prisma.school.count({ where: { deletedAt: null, schoolYears: { some: { isActive: true } } } }),
-      prisma.schoolYear.findMany({ distinct: ["label"], select: { label: true } }),
+      prisma.schoolYear.groupBy({
+        by: ["label"],
+        where: { school: { deletedAt: null } },
+        _count: { _all: true },
+      }),
       listDistrictOptions(),
     ]);
+  const windows = await prisma.divisionSchoolYear.findMany();
+  const todayKey = formatLocalDateKey(schoolToday());
+  const durationRows: DurationRow[] = labels
+    .map((l) => {
+      const w = windows.find((x) => x.label === l.label) ?? null;
+      const state = evaluateWindow(w, todayKey);
+      return {
+        label: l.label,
+        startMonth: w ? toMonthKey(w.activeStart) : null,
+        endMonth: w ? toMonthKey(w.activeEnd) : null,
+        state: !w ? "NOT_SET" : state.open ? "OPEN" : state.reason === "NOT_STARTED" ? "NOT_STARTED" : "ENDED",
+        isLastMonth: state.isLastMonth,
+        schools: l._count._all,
+      } satisfies DurationRow;
+    })
+    .sort((a, b) => b.label.localeCompare(a.label));
 
   const items: AdminSchoolYearRow[] = rows.map((y) => ({
     id: y.id,
@@ -117,6 +140,7 @@ export default async function AdminSchoolYearsPage({ searchParams }: PageProps) 
         />
       }
     >
+      <DivisionDurationPanel rows={durationRows} />
       <AdminSchoolYearsTable
         rows={items}
         filters={filters}

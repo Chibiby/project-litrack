@@ -31,6 +31,7 @@ import {
   getAdvisoryPlacements,
   NO_ADVISORY_MESSAGE,
 } from "@/lib/teachers/advisory";
+import { getSchoolYearGate } from "@/lib/school-year/gate";
 import {
   DECLARED_FLOATING_CARD,
   FLOATING_TEACHER_CARD,
@@ -227,12 +228,22 @@ async function LearnersAddControl({
   // The Add menu targets ONE section. A teacher with several advisories picks
   // which one in the form itself, via every placement passed down here; the
   // import link (which cannot express a choice) still targets the first.
-  const placements = await placementsFor(user.id, user.schoolId);
+  const [placements, gate] = await Promise.all([
+    placementsFor(user.id, user.schoolId),
+    getSchoolYearGate(user.schoolId),
+  ]);
   if (placements.length === 0) {
     return <LearnerAddMenuDisabled reason={NO_ADVISORY_MESSAGE} />;
   }
+  // Outside the Division Admin's active duration the school is read-only, so
+  // nothing can be enrolled; the server refuses too (SCHOOL_YEAR_CLOSED).
+  if (!gate.open) {
+    return (
+      <LearnerAddMenuDisabled reason="No active school year. Wait for the Division Admin to set one." />
+    );
+  }
 
-  return <LearnerAddMenu placements={placements} />;
+  return <LearnerAddMenu placements={placements} canPromote={gate.isLastMonth} />;
 }
 
 async function LearnersBody({

@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { RoleShell } from "@/components/role-shell";
+import { loadHeaderSchoolYearGate } from "@/lib/school-year/header-gate";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { AdminShellGate } from "@/components/admin-shell-gate";
 import { geminiConfigured } from "@/lib/assistant/gemini";
@@ -40,6 +41,7 @@ export default async function AdminLayout({
             // Not awaited: streamed through RoleShell/AppHeader as a promise so the
             // sidebar and header paint before the notifications query resolves.
             notifications={getChatNotifications(user)}
+            schoolYearGate={loadHeaderSchoolYearGate(user)}
             lastSeenReleaseVersion={user.lastSeenReleaseVersion}
           >
             {children}

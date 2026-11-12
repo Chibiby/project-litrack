@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getSchoolName } from "@/lib/cache/school";
 import { getSchoolHeadMetricCounts } from "@/lib/dashboard/aggregates";
 import { RoleShell } from "@/components/role-shell";
+import { loadHeaderSchoolYearGate } from "@/lib/school-year/header-gate";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { getProfilePhotoBellNotifications } from "@/lib/notifications";
@@ -86,6 +87,7 @@ export default async function SchoolHeadAppLayout({
         schoolName={schoolName}
         pendingTeacherCount={pendingTeacherCount}
         aiEnabled={geminiConfigured()}
+        schoolYearGate={loadHeaderSchoolYearGate(user)}
         // Not while an admin impersonates this head: `user` IS the head's own
         // account then, and acknowledging would stamp their row — the real head
         // would never be shown the release they have not read.

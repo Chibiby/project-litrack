@@ -11,6 +11,7 @@ import { teacherIsAralTeacherFor } from "@/lib/teachers/scope";
 import { action } from "@/lib/errors/action";
 import { resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 function formToObj(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
@@ -41,6 +42,8 @@ export const saveAralProfile = action(
   "saveAralProfile",
   async (formData: FormData): Promise<{ ok: true }> => {
     const user = await requireSchoolUser("TEACHER");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(user.schoolId);
     const raw = formToObj(formData);
     const parsed = parseInput(aralProfileSchema, raw);
 

@@ -27,6 +27,7 @@ import {
 } from "@/lib/cache/revalidate";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -98,6 +99,8 @@ async function resolveTransferSection(params: {
  */
 export const transferLearner = action("transferLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const rawSection = formData.get("targetSectionId");
   const parsed = transferLearnerSchema.safeParse({
@@ -364,6 +367,9 @@ export const transferLearnerCrossSchool = action(
       isActive: true,
     });
     if (!targetSchool.isActive) throw resourceNotFound("School");
+    // Outside the Division Admin's active duration every school record is read-only. Both schools must be open.
+    await assertSchoolYearOpen(fromSchoolId);
+    await assertSchoolYearOpen(targetSchoolId);
 
     const targetGrade = await prisma.gradeLevel.findFirst({
       where: {

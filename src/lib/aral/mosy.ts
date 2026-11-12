@@ -71,11 +71,12 @@ const ANY_LEVEL_MOVE_OUT_REASONS: ReadonlySet<string> = new Set([
   "DIAGNOSED_LSEN",
   "RECOMMENDED_LSEN_ASSESSMENT",
   "TRANSFERRED_OUT",
+  "NLPA",
 ]);
 
 /**
  * True when a move out with this reason may be saved at any level of the grade:
- * the two LSEN reasons and "Transferred out". Such a learner leaves ARAL for a
+ * the two LSEN reasons, "Transferred out" and NLPA. Such a learner leaves ARAL for a
  * reason other than reading progress, so the level is not tied to the move-out band.
  */
 export function mosyReasonAllowsAnyLevel(reason: string | null | undefined): boolean {
@@ -101,7 +102,7 @@ export function mosyTransferLevelOptions(gradeType: string): MosyLevelOption[] {
  * BOSY level does not filter them), then the two LSEN reasons. Other grades:
  * one per level of the grade's scale strictly above the BOSY Filipino level; no
  * BOSY level, or one outside the scale, offers every level except the lowest.
- * The two LSEN reasons and "Transferred out" are always offered, in that order.
+ * The two LSEN reasons, "Transferred out" and NLPA are always offered, in that order.
  */
 export function mosyReasonChoices(
   gradeType: string,
@@ -142,6 +143,12 @@ export function mosyReasonChoices(
       reason: "TRANSFERRED_OUT",
       improvedToLevel: null,
       label: ARAL_MOSY_MOVE_OUT_REASON_LABELS.TRANSFERRED_OUT,
+    },
+    {
+      key: "NLPA",
+      reason: "NLPA",
+      improvedToLevel: null,
+      label: ARAL_MOSY_MOVE_OUT_REASON_LABELS.NLPA,
     },
   ];
 }

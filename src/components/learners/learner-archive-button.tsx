@@ -2,7 +2,11 @@
 
 import { useOptimistic, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { ConfirmAction } from "@/components/confirm-action";
+import {
+  RemoveLearnerDialog,
+  appendRemoval,
+  type LearnerRemoval,
+} from "@/components/learners/remove-learner-dialog";
 import { ArchiveRestore, UserMinus } from "lucide-react";
 import { archiveLearner, restoreLearner } from "@/lib/actions/learner";
 import {
@@ -24,7 +28,7 @@ type Props = {
   /**
    * When provided (list parent), parent owns mutation + list optimism.
    */
-  onArchiveChange?: () => void | Promise<void>;
+  onArchiveChange?: (removal?: LearnerRemoval) => void | Promise<void>;
   pending?: boolean;
 };
 
@@ -51,18 +55,19 @@ export function LearnerArchiveButton({
       invalidateNavWarm();
     });
 
-  const runStandaloneArchive = () =>
+  const runStandaloneArchive = (removal: LearnerRemoval) =>
     runOptimistic(startTransition, async () => {
       setOptimisticArchived(true);
       const fd = new FormData();
       fd.set("id", learnerId);
+      appendRemoval(fd, removal);
       const res = await archiveLearner(fd);
       await settleActionResult(res, "Learner removed");
       invalidateNavWarm();
     });
 
   if (shownArchived) {
-    const handle = onArchiveChange ?? runStandaloneRestore;
+    const handle = onArchiveChange ? () => onArchiveChange() : runStandaloneRestore;
     return (
       <Button
         size="sm"
@@ -88,12 +93,11 @@ export function LearnerArchiveButton({
     aralCount: isAralLearner ? 1 : 0,
   };
   return (
-    <ConfirmAction
+    <RemoveLearnerDialog
       title={archiveConfirmTitle(target)}
       description={archiveConfirmDescription(target)}
       confirmLabel={archiveConfirmLabel(target)}
       cancelLabel={REMOVE_CANCEL_LABEL}
-      variant="destructive"
       disabled={pending}
       trigger={
         <Button size="sm" variant="outline" loading={pending} loadingText="Removing…">

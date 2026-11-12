@@ -13,6 +13,7 @@ import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { action } from "@/lib/errors/action";
 import { resourceNotFound } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -41,6 +42,8 @@ export const updateLearnerAsAdmin = action(
       include: { gradeLevel: { select: { type: true } } },
     });
     if (!learner) throw resourceNotFound("Learner");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(learner.schoolId);
 
     const refused = await applyLearnerProfileUpdate(learner, parsed);
     if (refused) return { ok: false, error: refused };

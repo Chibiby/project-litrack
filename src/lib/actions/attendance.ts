@@ -31,6 +31,7 @@ import {
   teacherGradeScope,
   teacherIsAralTeacherFor,
 } from "@/lib/teachers/scope";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -42,6 +43,8 @@ function normalizeDate(d: Date): Date {
 
 export const markAttendance = action("markAttendance", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const parsed = {
     data: parseInput(attendanceMarkSchema, {
@@ -128,6 +131,8 @@ export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async
   }>
 > => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const parsed = { data: parseInput(attendanceWeekSchema, input) };
 
@@ -449,6 +454,8 @@ export const setAttendanceDayHoliday = action("setAttendanceDayHoliday", async (
   input: unknown
 ): Promise<ActionResult<{ isHoliday: boolean }>> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const parsed = {
     data: parseInput(

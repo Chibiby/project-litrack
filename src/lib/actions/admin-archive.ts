@@ -25,6 +25,7 @@ import {
   revalidateSchoolTeachers,
   revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 /**
  * The four `/admin/archive` actions — restore or permanently delete one
@@ -93,13 +94,15 @@ export const restoreRemovedLearner = action(
     });
     if (!learner) throw resourceNotFound("Learner");
     if (learner.school.deletedAt) throw resourceNotFound("Learner");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(learner.schoolId);
 
     const outcome = await prisma.$transaction(async (tx) => {
       // `archivedAt` too: left set, the learner would reappear in the teacher's
       // Removed list with an expired clock and the nightly job would delete it again.
       await tx.learner.update({
         where: { id: learner.id },
-        data: { deletedAt: null, archivedAt: null },
+        data: { deletedAt: null, archivedAt: null, removalReason: null, removalNote: null },
       });
       return reactivateEnrollment(tx, learner);
     });

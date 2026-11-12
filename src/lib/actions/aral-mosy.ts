@@ -15,6 +15,7 @@ import { resolveMosyAccess } from "@/lib/aral/mosy-access";
 import { isMosySubmissionLocked } from "@/lib/settings/system-settings";
 import { teacherOwnsMosyRow } from "@/lib/teachers/scope";
 import { ARAL_MOSY_HREF, ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 function formToObj(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
@@ -60,6 +61,8 @@ export const saveMosyDecision = action(
     formData: FormData
   ): Promise<{ ok: true; data: { transition: MosyTransition } }> => {
     const user = await requireSchoolUser("TEACHER");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(user.schoolId);
 
     // The Super Admin view is read-only: no whole-school write path exists.
     if (user.role === "SUPER_ADMIN") throw resourceNotFound("Learner");

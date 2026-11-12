@@ -73,7 +73,11 @@ import {
 } from "@/components/learners/assign-aral-teacher-dialog";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { runOptimistic, settleActionResult } from "@/lib/ui/optimistic";
-import { ConfirmAction } from "@/components/confirm-action";
+import {
+  RemoveLearnerDialog,
+  appendRemoval,
+  type LearnerRemoval,
+} from "@/components/learners/remove-learner-dialog";
 import {
   archiveConfirmDescription,
   archiveConfirmLabel,
@@ -412,11 +416,12 @@ function LearnerListPanel({
    * stays open for a retry with the selection intact. The rows come back as the
    * transition ends without new props.
    */
-  const archive = (ids: string[]) =>
+  const archive = (ids: string[], removal: LearnerRemoval) =>
     runOptimistic(startTransition, async () => {
       markLeaving(ids);
       const fd = new FormData();
       for (const id of ids) fd.append("learnerIds", id);
+      appendRemoval(fd, removal);
       const res = await callAction(() => archiveLearners(fd));
       await settleActionResult(
         res,
@@ -936,7 +941,7 @@ function LearnerListPanel({
       ) : null}
 
       {archiveTarget ? (
-        <ConfirmAction
+        <RemoveLearnerDialog
           open
           onOpenChange={(next) => {
             if (!next) setArchiveTarget(null);
@@ -945,8 +950,7 @@ function LearnerListPanel({
           description={archiveConfirmDescription(archiveTarget)}
           confirmLabel={archiveConfirmLabel(archiveTarget)}
           cancelLabel={REMOVE_CANCEL_LABEL}
-          variant="destructive"
-          onConfirm={() => archive(archiveTarget.ids)}
+          onConfirm={(removal) => archive(archiveTarget.ids, removal)}
         />
       ) : null}
     </div>

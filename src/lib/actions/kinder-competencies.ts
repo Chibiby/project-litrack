@@ -33,6 +33,7 @@ import {
 } from "@/lib/validators/kinder-competency.schema";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { loadReportFrame, writeTemplateSheet } from "@/lib/reports/sheet-header";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 /**
  * Server actions for the Kindergarten End-of-Term competency checklist — see
@@ -102,6 +103,8 @@ export const saveKinderCompetencies = action(
   "saveKinderCompetencies",
   async (input: unknown): Promise<SaveResult> => {
     const user = await requireSchoolUser("TEACHER");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(user.schoolId);
 
     // A Super Admin passes every role check by impersonation. `requireSchoolUser`
     // already redirects a schoolId-less Super Admin away before this line, but

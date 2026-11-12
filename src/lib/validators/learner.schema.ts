@@ -214,6 +214,36 @@ export const deleteLearnersSchema = z.object({
   learnerIds: z.array(nonEmpty()).min(1, "Select at least one learner"),
 });
 
+export const LEARNER_REMOVAL_REASONS = [
+  "NLPA",
+  "TRANSFERRED_OUT",
+  "DROPPED_OUT",
+  "DUPLICATE",
+  "OTHER",
+] as const;
+
+/**
+ * Why a learner is removed. Required on every remove; "Other" needs the note.
+ * The note is free text from the teacher, so it stays out of audit metadata.
+ */
+export const learnerRemovalSchema = z
+  .object({
+    removalReason: z.enum(LEARNER_REMOVAL_REASONS, {
+      errorMap: () => ({ message: "Choose a reason for removing" }),
+    }),
+    removalNote: z
+      .union([z.string(), z.null(), z.undefined()])
+      .transform((v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null))
+      .refine((v) => v === null || v.length <= 300, "Keep the note under 300 characters"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.removalReason === "OTHER" && !data.removalNote) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Say why the learner is removed", path: ["removalNote"] });
+    }
+  });
+
+export type LearnerRemovalInput = z.infer<typeof learnerRemovalSchema>;
+
 export type DeleteLearnersInput = z.infer<typeof deleteLearnersSchema>;
 
 /** Bulk enroll existing grade learners into ARAL. */

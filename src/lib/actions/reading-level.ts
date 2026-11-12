@@ -34,6 +34,7 @@ import {
   legacyReadingValueMessageFor,
 } from "@/lib/reading/policy";
 import { formatListingNameFromRecord } from "@/lib/names";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -55,6 +56,8 @@ type RawReadingLevelRow = {
 
 export const recordReadingLevel = action("recordReadingLevel", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const parsed = {
     data: parseInput(readingLevelSchema, {
@@ -177,6 +180,8 @@ export const bulkRecordMonthlyReadingLevel = action("bulkRecordMonthlyReadingLev
   input: unknown
 ): Promise<ActionResult<{ upserted: number; cleared: number }>> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const parsed = { data: parseInput(readingLevelMonthlyBulkSchema, input) };
 

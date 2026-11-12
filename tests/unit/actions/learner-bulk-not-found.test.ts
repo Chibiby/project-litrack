@@ -41,6 +41,7 @@ const { archiveLearners } = await import("@/lib/actions/learner");
 function form(ids: string[]) {
   const fd = new FormData();
   for (const id of ids) fd.append("learnerIds", id);
+  fd.set("removalReason", "NLPA");
   return fd;
 }
 

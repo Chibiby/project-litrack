@@ -345,7 +345,7 @@ describe("restoreRemovedLearner", () => {
 
     expect(stub.learner.update).toHaveBeenCalledWith({
       where: { id: LEARNER_ID },
-      data: { deletedAt: null, archivedAt: null },
+      data: { deletedAt: null, archivedAt: null, removalReason: null, removalNote: null },
     });
     expect(res).toEqual({ ok: true, enrollmentOutcome: "revived" });
     expect(writeAudit).toHaveBeenCalledTimes(1);

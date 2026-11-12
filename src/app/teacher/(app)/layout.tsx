@@ -6,6 +6,7 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { ARAL_VOLUNTEER_LABEL } from "@/lib/validators/profile.schema";
 import { RoleShell } from "@/components/role-shell";
+import { loadHeaderSchoolYearGate } from "@/lib/school-year/header-gate";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
 import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alerts";
@@ -124,6 +125,7 @@ export default async function TeacherAppLayout({
         isFloating={isFloating}
         advisoryPlacements={advisoryPlacements}
         aiEnabled={geminiConfigured()}
+        schoolYearGate={loadHeaderSchoolYearGate(user)}
         trackTeacherPresence={!impersonating}
         // Not while an admin impersonates this teacher: `user` IS the teacher's
         // own account then, and acknowledging would stamp their row — the real

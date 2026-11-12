@@ -15,6 +15,9 @@ export const adminDashboard = "admin-dashboard";
 
 export const schoolsList = "schools-list";
 
+/** The Division Admin's active durations (DivisionSchoolYear) and every school's open/closed gate. */
+export const divisionSchoolYear = "division-school-year";
+
 /**
  * The Super Admin Management summary cards (Teachers, School Heads, District
  * Admins). Global, like `schoolsList`: those cards are cross-tenant counts.

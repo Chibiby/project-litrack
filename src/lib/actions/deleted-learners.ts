@@ -15,6 +15,7 @@ import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 import { deletedOrExpiredFilter } from "@/lib/learners/deleted-learners";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 /**
  * Restore a learner who was soft-deleted 30 days after teacher removal.
@@ -63,13 +64,15 @@ export const restoreDeletedLearner = action(
       },
     });
     if (!learner) throw resourceNotFound("Learner");
+    // Outside the Division Admin's active duration every school record is read-only.
+    await assertSchoolYearOpen(learner.schoolId);
 
     const outcome = await prisma.$transaction(async (tx) => {
       // Both fields: with `archivedAt` left set the learner would reappear in the
       // teacher's Removed list with an expired clock and be deleted again tonight.
       await tx.learner.update({
         where: { id: learner.id },
-        data: { deletedAt: null, archivedAt: null },
+        data: { deletedAt: null, archivedAt: null, removalReason: null, removalNote: null },
       });
       return reactivateEnrollment(tx, learner);
     });

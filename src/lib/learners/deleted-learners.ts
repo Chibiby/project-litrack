@@ -5,6 +5,7 @@ import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { formatListingNameFromRecord } from "@/lib/names";
 import { schoolWhereForScope, type AdminScope } from "@/lib/auth/admin-scope";
 import { removalExpiresAt, removalExpiryCutoff } from "@/lib/learners/removal";
+import { LEARNER_REMOVAL_REASON_LABELS } from "@/lib/constants/enum-labels";
 
 /**
  * The read model behind `/admin/deleted-learners` and `/district/deleted-learners`:
@@ -26,6 +27,16 @@ export const DELETED_LEARNERS_PAGE_SIZE = 50;
 export const DELETED_LEARNER_SORTS = ["recent", "alphabetical", "school"] as const;
 export type DeletedLearnerSort = (typeof DELETED_LEARNER_SORTS)[number];
 
+/** Short form for lists: "NLPA", "Dropped out", "Other — <note>". */
+function removalReasonText(
+  reason: keyof typeof LEARNER_REMOVAL_REASON_LABELS | null,
+  note: string | null
+): string | null {
+  if (!reason) return null;
+  const label = reason === "NLPA" ? "NLPA" : LEARNER_REMOVAL_REASON_LABELS[reason];
+  return note ? `${label} — ${note}` : label;
+}
+
 export type DeletedLearnerRow = {
   id: string;
   /** Surname-first display form. */
@@ -39,6 +50,8 @@ export type DeletedLearnerRow = {
   removedAt: string | null;
   /** When the learner was soft-deleted (ISO). */
   deletedAt: string;
+  /** "NLPA", "Other — moved abroad"…; null on rows removed before reasons existed. */
+  removalReason: string | null;
 };
 
 export type DeletedLearnersPage = {
@@ -117,6 +130,8 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
         lastName: true,
         archivedAt: true,
         deletedAt: true,
+        removalReason: true,
+        removalNote: true,
         gradeLevel: { select: { type: true } },
         section: { select: { name: true } },
         school: { select: { id: true, name: true, district: true } },
@@ -143,6 +158,7 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
       schoolName: l.school.name,
       district: l.school.district,
       removedAt: l.archivedAt ? l.archivedAt.toISOString() : null,
+      removalReason: removalReasonText(l.removalReason, l.removalNote),
       // Not yet soft-deleted (expired, awaiting the nightly job): show when it expires.
       deletedAt: (l.deletedAt ?? removalExpiresAt(l.archivedAt as Date)).toISOString(),
     })),

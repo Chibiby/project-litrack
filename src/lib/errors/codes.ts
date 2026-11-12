@@ -275,6 +275,14 @@ export const ERRORS = {
     message: "MOSY submissions are locked right now. Your Super Admin can open them.",
   },
 
+  // ── School year ──────────────────────────────────────────────────────────
+  /** Outside the Division Admin's active duration, every school is read-only. */
+  SCHOOL_YEAR_CLOSED: {
+    status: 403,
+    severity: "user",
+    message: "There is no active school year yet. Wait for the Division Admin to set one.",
+  },
+
   // ── Requests ─────────────────────────────────────────────────────────────
   VALIDATION_FAILED: {
     status: 422,

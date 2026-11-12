@@ -76,6 +76,18 @@ export const setSchoolYearMonthsSchema = z
   })
   .superRefine(refineMonths);
 
+/**
+ * The Division Admin's active duration for one label. Both months are
+ * required: the end month is when promotion unlocks and the year closes.
+ */
+export const setDivisionDurationSchema = z
+  .object({
+    label: labelSchema,
+    startMonth: startMonthSchema,
+    endMonth: nonEmpty("End month required"),
+  })
+  .superRefine((data, ctx) => refineMonths({ startMonth: data.startMonth, endMonth: data.endMonth }, ctx));
+
 export const setActiveSchoolYearSchema = z.object({
   schoolYearId: nonEmpty("School year required"),
 });
@@ -86,5 +98,6 @@ export const deleteSchoolYearSchema = z.object({
 
 export type CreateDivisionSchoolYearInput = z.infer<typeof createDivisionSchoolYearSchema>;
 export type SetSchoolYearMonthsInput = z.infer<typeof setSchoolYearMonthsSchema>;
+export type SetDivisionDurationInput = z.infer<typeof setDivisionDurationSchema>;
 export type SetActiveSchoolYearInput = z.infer<typeof setActiveSchoolYearSchema>;
 export type DeleteSchoolYearInput = z.infer<typeof deleteSchoolYearSchema>;

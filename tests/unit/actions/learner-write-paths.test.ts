@@ -145,7 +145,7 @@ function form(entries: Record<string, string | string[]>) {
   return fd;
 }
 
-const ids = (...list: string[]) => form({ learnerIds: list });
+const ids = (...list: string[]) => form({ learnerIds: list, removalReason: "NLPA" });
 
 /** A valid Section A payload for a Grade 4 learner (English + Filipino both collected). */
 const sectionA = {
@@ -324,6 +324,24 @@ describe("createLearner — enrollment write", () => {
     expect(m.txEnrollmentCreate).not.toHaveBeenCalled();
   });
 
+  it("refuses with SCHOOL_YEAR_CLOSED and writes nothing outside the active duration", async () => {
+    const { assertSchoolYearOpen } = await import("@/lib/school-year/gate");
+    const { AppError } = await import("@/lib/errors/app-error");
+    vi.mocked(assertSchoolYearOpen).mockRejectedValueOnce(new AppError("SCHOOL_YEAR_CLOSED"));
+    m.schoolYearFindFirst.mockResolvedValue({ id: YEAR_ID });
+
+    const res = await createLearner(form({ ...sectionA, gradeLevelId: GRADE_ID }));
+
+    expect(res).toMatchObject({
+      ok: false,
+      code: "SCHOOL_YEAR_CLOSED",
+      error: "There is no active school year yet. Wait for the Division Admin to set one.",
+    });
+    expect(m.txLearnerCreate).not.toHaveBeenCalled();
+    expect(m.txEnrollmentCreate).not.toHaveBeenCalled();
+    expect(m.writeAudit).not.toHaveBeenCalled();
+  });
+
   it("refuses a posted grade that is not the advised section's grade, writing nothing", async () => {
     m.schoolYearFindFirst.mockResolvedValue({ id: YEAR_ID });
 
@@ -367,6 +385,7 @@ describe("archiveLearners — ends the enrollment", () => {
     });
     const archivedAt = (learnerWrite.data as { archivedAt: Date }).archivedAt;
     expect(archivedAt).toBeInstanceOf(Date);
+    expect(learnerWrite.data).toMatchObject({ removalReason: "NLPA", removalNote: null });
 
     // Binds to `tx.enrollment.updateMany({... data: { status: "ARCHIVED", endedAt: now }})`.
     expect(m.txEnrollmentUpdateMany).toHaveBeenCalledTimes(1);
@@ -377,6 +396,24 @@ describe("archiveLearners — ends the enrollment", () => {
       status: "ACTIVE",
     });
     expect(enrollmentWrite.data).toEqual({ status: "ARCHIVED", endedAt: archivedAt });
+  });
+
+  it("stores the reason and the note", async () => {
+    await archiveLearners(form({ learnerIds: [LEARNER_A], removalReason: "OTHER", removalNote: "  Moved abroad " }));
+    expect(firstArg(m.txLearnerUpdateMany).data).toMatchObject({
+      removalReason: "OTHER",
+      removalNote: "Moved abroad",
+    });
+  });
+
+  it.each([
+    ["no reason", { learnerIds: [LEARNER_A] }],
+    ["Other with no note", { learnerIds: [LEARNER_A], removalReason: "OTHER", removalNote: "  " }],
+    ["a note over 300 characters", { learnerIds: [LEARNER_A], removalReason: "NLPA", removalNote: "x".repeat(301) }],
+  ])("refuses %s and writes nothing", async (_label, fields) => {
+    const res = await archiveLearners(form(fields as Record<string, string | string[]>));
+    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(m.txLearnerUpdateMany).not.toHaveBeenCalled();
   });
 
   it("audits one LEARNER_ARCHIVE row per learner", async () => {
@@ -434,10 +471,10 @@ describe("restoreLearner — reactivates the enrollment", () => {
     const res = await restoreLearner(form({ id: LEARNER_A }));
 
     expect(res).toEqual({ ok: true });
-    // Binds to `data: { archivedAt: null }`.
+    // Binds to `data: { archivedAt: null, removalReason: null, removalNote: null }`.
     expect(m.txLearnerUpdate).toHaveBeenCalledWith({
       where: { id: LEARNER_A },
-      data: { archivedAt: null },
+      data: { archivedAt: null, removalReason: null, removalNote: null },
     });
   });
 
@@ -565,7 +602,7 @@ describe("restoreLearner — reactivates the enrollment", () => {
     expect(res).toEqual({ ok: true });
     expect(m.txLearnerUpdate).toHaveBeenCalledWith({
       where: { id: LEARNER_A },
-      data: { archivedAt: null },
+      data: { archivedAt: null, removalReason: null, removalNote: null },
     });
   });
 
@@ -638,7 +675,7 @@ describe("restoreLearner — reactivates the enrollment", () => {
       expect(res).toEqual({ ok: true });
       expect(m.txLearnerUpdate).toHaveBeenCalledWith({
         where: { id: LEARNER_A },
-        data: { archivedAt: null },
+        data: { archivedAt: null, removalReason: null, removalNote: null },
       });
     });
 

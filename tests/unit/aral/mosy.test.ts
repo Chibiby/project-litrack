@@ -179,6 +179,7 @@ describe("mosyReasonChoices", () => {
     "Diagnosed as Learner with Special Educational Needs (LSEN)",
     "Recommended for LSEN assessment",
     "Transferred out",
+    "No longer participating in learning activities (NLPA)",
   ];
 
   it.each(["G1", "G2", "G3"])(
@@ -219,35 +220,42 @@ describe("mosyReasonChoices", () => {
   );
 
   it.each(["G1", "G5", "G11", "KINDER", "FLOATING"])(
-    "%s ends with Transferred out, after the two LSEN reasons",
+    "%s ends with NLPA, after Transferred out and the two LSEN reasons",
     (g) => {
       const c = mosyReasonChoices(g, null);
       expect(c.at(-1)).toEqual({
+        key: "NLPA",
+        reason: "NLPA",
+        improvedToLevel: null,
+        label: "No longer participating in learning activities (NLPA)",
+      });
+      expect(c.at(-2)).toEqual({
         key: "TRANSFERRED_OUT",
         reason: "TRANSFERRED_OUT",
         improvedToLevel: null,
         label: "Transferred out",
       });
-      expect(c.slice(-3, -1).map((x) => x.reason)).toEqual([
+      expect(c.slice(-4, -2).map((x) => x.reason)).toEqual([
         "DIAGNOSED_LSEN",
         "RECOMMENDED_LSEN_ASSESSMENT",
       ]);
     }
   );
 
-  it("an off-band grade (SHS) with BOSY at the top offers no improvement, only LSEN and Transferred out", () => {
+  it("an off-band grade (SHS) with BOSY at the top offers no improvement, only LSEN, Transferred out and NLPA", () => {
     const c = mosyReasonChoices("G11", "INDEPENDENT_GRADE_READY");
     expect(c.map((x) => x.reason)).toEqual([
       "DIAGNOSED_LSEN",
       "RECOMMENDED_LSEN_ASSESSMENT",
       "TRANSFERRED_OUT",
+      "NLPA",
     ]);
     expect(c.every((x) => x.improvedToLevel === null)).toBe(true);
   });
 
   it("an off-band grade (floating) with no BOSY level offers every level but the lowest", () => {
-    // 2 improved levels + 2 LSEN reasons + Transferred out
-    expect(labels("FLOATING", null)).toHaveLength(5 + 1);
+    // 3 improved levels + 2 LSEN reasons + Transferred out + NLPA
+    expect(labels("FLOATING", null)).toHaveLength(3 + 2 + 2);
     expect(
       mosyReasonChoices("FLOATING", "FRUSTRATION_HIGH_EMERGENT")
         .filter((x) => x.improvedToLevel)
@@ -297,14 +305,15 @@ describe("mosyReasonChoices", () => {
   });
 
   it.each(Object.values(GradeLevelType))(
-    "%s always offers both LSEN reasons and Transferred out, last, with a unique key per choice",
+    "%s always offers both LSEN reasons, Transferred out and NLPA, last, with a unique key per choice",
     (g) => {
       for (const prev of [null, "NON_DECODER_LOW_EMERGENT", "INDEPENDENT_GRADE_READY", "CVC_BLENDING"]) {
         const c = mosyReasonChoices(g, prev);
-        expect(c.slice(-3).map((x) => x.reason)).toEqual([
+        expect(c.slice(-4).map((x) => x.reason)).toEqual([
           "DIAGNOSED_LSEN",
           "RECOMMENDED_LSEN_ASSESSMENT",
           "TRANSFERRED_OUT",
+          "NLPA",
         ]);
         expect(new Set(c.map((x) => x.key)).size).toBe(c.length);
         // Never the lowest level, never a legacy grouped reason.
@@ -680,6 +689,30 @@ describe("resolveMosySave — deferred decision", () => {
     expectFail(
       resolve({ learner: untagged(), existing: movedOutRow(), submitted: { decision: null } }),
       "DECISION_REQUIRED"
+    );
+  });
+});
+
+describe("resolveMosySave — NLPA", () => {
+  it.each([
+    ["G3", "NON_DECODER_LOW_EMERGENT"],
+    ["G5", "FRUSTRATION_HIGH_EMERGENT"],
+    ["KINDER", "LETTER_LEVEL"],
+    ["G11", "FRUSTRATION_HIGH_EMERGENT"],
+  ] as const)("%s: MOVE_OUT + NLPA saves at any level and moves the learner out", (gradeType, mosyLevel) => {
+    const res = expectOk(
+      resolve({
+        learner: tagged({ gradeType }),
+        submitted: { mosyLevel, decision: "MOVE_OUT", reason: "NLPA", improvedToLevel: "DEVELOPING" },
+      })
+    );
+    expect(res.transition).toBe("MOVED_OUT");
+    expect(res.row).toMatchObject({ mosyLevel, decision: "MOVE_OUT", reason: "NLPA", improvedToLevel: null });
+  });
+
+  it("labels NLPA", () => {
+    expect(mosyReasonLabel("NLPA", null, "G6")).toBe(
+      "No longer participating in learning activities (NLPA)"
     );
   });
 });

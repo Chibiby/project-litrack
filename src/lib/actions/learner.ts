@@ -10,6 +10,7 @@ import {
   learnerUpdateSchema,
   learnerIdSchema,
   deleteLearnersSchema,
+  learnerRemovalSchema,
   enrollLearnersToAralSchema,
   enrollRosterLearnersToAralSchema,
 } from "@/lib/validators/learner.schema";
@@ -46,6 +47,7 @@ import { action } from "@/lib/errors/action";
 import { AppError, resourceNotFound } from "@/lib/errors/app-error";
 import { isRemovalExpired } from "@/lib/learners/removal";
 import { parseInput } from "@/lib/errors/validation";
+import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult<T = unknown> =
   | { ok: true; data?: T }
@@ -82,6 +84,8 @@ export const createLearner = action("createLearner", async (
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
   const raw = formToObj(formData);
@@ -250,6 +254,8 @@ export const createLearner = action("createLearner", async (
 
 export const updateLearner = action("updateLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   const raw = formToObj(formData);
   const parsed = { data: parseInput(learnerUpdateSchema, raw) };
 
@@ -295,9 +301,15 @@ export const updateLearner = action("updateLearner", async (formData: FormData):
 
 export const archiveLearner = action("archiveLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   const parsed = {
     data: parseInput(learnerIdSchema, { id: formData.get("id") ?? formData.get("learnerId") }),
   };
+  const removal = parseInput(learnerRemovalSchema, {
+    removalReason: formData.get("removalReason") ?? undefined,
+    removalNote: formData.get("removalNote"),
+  });
 
   const learner = await prisma.learner.findFirst({
     where: { id: parsed.data.id, deletedAt: null },
@@ -311,7 +323,11 @@ export const archiveLearner = action("archiveLearner", async (formData: FormData
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
       where: { id: learner.id },
-      data: { archivedAt: new Date() },
+      data: {
+        archivedAt: new Date(),
+        removalReason: removal.removalReason,
+        removalNote: removal.removalNote,
+      },
     });
 
     const active = await tx.enrollment.findFirst({
@@ -350,6 +366,8 @@ export const archiveLearner = action("archiveLearner", async (formData: FormData
 
 export const restoreLearner = action("restoreLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser(["TEACHER", "SCHOOL_HEAD"]);
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   const parsed = { data: parseInput(learnerIdSchema, { id: formData.get("id") ?? formData.get("learnerId") }) };
 
   // Only a removed (archivedAt) learner that is not yet soft-deleted. Soft-deleted
@@ -372,7 +390,8 @@ export const restoreLearner = action("restoreLearner", async (formData: FormData
   await prisma.$transaction(async (tx) => {
     await tx.learner.update({
       where: { id: learner.id },
-      data: { archivedAt: null },
+      // The reason belonged to the removal being undone.
+      data: { archivedAt: null, removalReason: null, removalNote: null },
     });
 
     await reactivateEnrollment(tx, learner);
@@ -406,11 +425,17 @@ export const archiveLearners = action("archiveLearners", async (
   formData: FormData
 ): Promise<ActionResult<{ archived: number }>> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   const parsed = {
     data: parseInput(deleteLearnersSchema, {
       learnerIds: formData.getAll("learnerIds").map(String),
     }),
   };
+  const removal = parseInput(learnerRemovalSchema, {
+    removalReason: formData.get("removalReason") ?? undefined,
+    removalNote: formData.get("removalNote"),
+  });
 
   const ids = Array.from(new Set(parsed.data.learnerIds));
   const learners = await prisma.learner.findMany({
@@ -437,7 +462,11 @@ export const archiveLearners = action("archiveLearners", async (
   await prisma.$transaction(async (tx) => {
     const { count } = await tx.learner.updateMany({
       where: { id: { in: ids }, schoolId: user.schoolId, deletedAt: null, archivedAt: null },
-      data: { archivedAt: now },
+      data: {
+        archivedAt: now,
+        removalReason: removal.removalReason,
+        removalNote: removal.removalNote,
+      },
     });
     // Rolls the whole batch back if a row changed since the read above.
     if (count !== ids.length) throw resourceNotFound("Learner");
@@ -478,6 +507,8 @@ export const archiveLearners = action("archiveLearners", async (
 
 export const toggleAralLearner = action("toggleAralLearner", async (formData: FormData): Promise<ActionResult> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   const learnerId = String(formData.get("learnerId") ?? "");
   if (!learnerId) return { ok: false, error: "Missing id" };
 
@@ -556,6 +587,8 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
   input: unknown
 ): Promise<ActionResult<{ enrolled: number; redesignated: number }>> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
   const parsed = { data: parseInput(enrollLearnersToAralSchema, input) };
@@ -710,6 +743,8 @@ export const enrollRosterLearnersToAral = action("enrollRosterLearnersToAral", a
   input: unknown
 ): Promise<ActionResult<{ enrolled: number; redesignated: number }>> => {
   const user = await requireSchoolUser("TEACHER");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
   if (!user.profileCompleted) return { ok: false, error: "Complete your profile first" };
 
   const parsed = { data: parseInput(enrollRosterLearnersToAralSchema, input) };
@@ -889,6 +924,8 @@ export const setLearnerAralTeacher = action("setLearnerAralTeacher", async (
   formData: FormData
 ): Promise<ActionResult> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
+  // Outside the Division Admin's active duration every school record is read-only.
+  await assertSchoolYearOpen(user.schoolId);
 
   const parsed = {
     data: parseInput(setLearnerAralTeacherSchema, {

@@ -187,7 +187,7 @@ describe("restore", () => {
     expect(res).toEqual({ ok: true, enrollmentOutcome: "revived" });
     expect(learnerUpdate).toHaveBeenCalledWith({
       where: { id: LEARNER_ID },
-      data: { deletedAt: null, archivedAt: null },
+      data: { deletedAt: null, archivedAt: null, removalReason: null, removalNote: null },
     });
     expect(reactivateEnrollment).toHaveBeenCalledTimes(1);
     expect(writeAudit).toHaveBeenCalledTimes(1);
@@ -240,7 +240,7 @@ describe("restore", () => {
       ]);
       expect(learnerUpdate).toHaveBeenCalledWith({
         where: { id: LEARNER_ID },
-        data: { deletedAt: null, archivedAt: null },
+        data: { deletedAt: null, archivedAt: null, removalReason: null, removalNote: null },
       });
     });
 

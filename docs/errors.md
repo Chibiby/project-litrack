@@ -391,6 +391,7 @@ if this table and the code ever disagree, trust the code.
 | `TRANSFER_STALE` | 409 | user | {learners} can no longer move as requested: {reason}. Decline the request instead. |
 | `TRANSFER_REQUESTS_CHANGED` | 409 | user | Some of these were already changed or decided. Refresh to see the current list. |
 | `MOSY_LOCKED` | 403 | user | MOSY submissions are locked right now. Your Super Admin can open them. |
+| `SCHOOL_YEAR_CLOSED` | 403 | user | There is no active school year yet. Wait for the Division Admin to set one. |
 | `VALIDATION_FAILED` | 422 | user | {message} — the first field problem, e.g. "Email is required" |
 | `NOT_FOUND` | 404 | user *(security when the row belongs to another school)* | {resource} not found. It may have been deleted or moved. |
 | `RATE_LIMITED` | 429 | security | Too many requests. Try again in {wait}. |
