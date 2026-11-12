@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.58.0",
+    date: "2026-11-13",
+    title: "Frosted icon tiles and a simpler way back",
+    announce: true,
+    fixes: [
+      { text: "Icons in cards, panels and dialogs now sit in the same frosted glass tile as the dashboard figures.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "On a phone, the sun icon beside Dark mode in your account menu now lines up with the other icons.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "Each Division Summary page has a Back to summaries button instead of the long row of tabs, and the summary cards are frosted glass.", roles: ["SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.57.0",
     date: "2026-11-13",
     title: "IP Learners gets its own page",
