@@ -14,6 +14,7 @@ import {
   purgeRemovedTeacher,
 } from "@/lib/actions/admin-archive";
 import type {
+  AdminPurgeCounts,
   ArchivedLearnerRow,
   ArchivedTeacherRow,
 } from "@/lib/admin/archive";
@@ -50,17 +51,6 @@ export function LearnerRowActions({
   labelled?: boolean;
 }) {
   const router = useRouter();
-  const { purgeCounts } = learner;
-
-  const purgeDescription =
-    `Delete ${learner.fullName} permanently? This deletes the learner and all ` +
-    `${joinParts([
-      pluralize(purgeCounts.attendance, "attendance record", "attendance records"),
-      pluralize(purgeCounts.readingLevelRecord, "reading assessment", "reading assessments"),
-      pluralize(purgeCounts.termGrade, "term grade", "term grades"),
-      pluralize(purgeCounts.aralProfile, "ARAL profile", "ARAL profiles"),
-      pluralize(purgeCounts.enrollment, "enrolment", "enrolments"),
-    ])}. The audit log keeps a record that this happened. This cannot be undone.`;
 
   const restore = async () => {
     const fd = new FormData();
@@ -75,18 +65,6 @@ export function LearnerRowActions({
         ? `${learner.fullName} restored. No active school year, so no enrolment was created.`
         : `${learner.fullName} restored.`
     );
-    router.refresh();
-  };
-
-  const purge = async () => {
-    const fd = new FormData();
-    fd.set("id", learner.id);
-    const res = await callAction(() => purgeRemovedLearner(fd));
-    if (!res.ok) {
-      toastFailure(res);
-      throw new ToastedError(res.error);
-    }
-    toast.success(`${learner.fullName} permanently deleted.`);
     router.refresh();
   };
 
@@ -113,6 +91,58 @@ export function LearnerRowActions({
         }
         onConfirm={restore}
       />
+      <LearnerPurgeButton
+        id={learner.id}
+        fullName={learner.fullName}
+        purgeCounts={learner.purgeCounts}
+        labelled={labelled}
+      />
+    </div>
+  );
+}
+
+/** Developer Admin: delete a soft-deleted learner and every record of theirs. */
+export function LearnerPurgeButton({
+  id,
+  fullName,
+  purgeCounts,
+  labelled = false,
+  onPurged,
+}: {
+  id: string;
+  fullName: string;
+  purgeCounts: AdminPurgeCounts;
+  labelled?: boolean;
+  /** Called only after the server has confirmed the delete. */
+  onPurged?: (id: string) => void;
+}) {
+  const router = useRouter();
+  const learner = { id, fullName };
+
+  const purgeDescription =
+    `Delete ${learner.fullName} permanently? This deletes the learner and all ` +
+    `${joinParts([
+      pluralize(purgeCounts.attendance, "attendance record", "attendance records"),
+      pluralize(purgeCounts.readingLevelRecord, "reading assessment", "reading assessments"),
+      pluralize(purgeCounts.termGrade, "term grade", "term grades"),
+      pluralize(purgeCounts.aralProfile, "ARAL profile", "ARAL profiles"),
+      pluralize(purgeCounts.enrollment, "enrolment", "enrolments"),
+    ])}. The audit log keeps a record that this happened. This cannot be undone.`;
+
+  const purge = async () => {
+    const fd = new FormData();
+    fd.set("id", learner.id);
+    const res = await callAction(() => purgeRemovedLearner(fd));
+    if (!res.ok) {
+      toastFailure(res);
+      throw new ToastedError(res.error);
+    }
+    toast.success(`${learner.fullName} permanently deleted.`);
+    onPurged?.(learner.id);
+    router.refresh();
+  };
+
+  return (
       <ConfirmAction
         title={`Delete ${learner.fullName} permanently?`}
         description={purgeDescription}
@@ -132,7 +162,6 @@ export function LearnerRowActions({
         }
         onConfirm={purge}
       />
-    </div>
   );
 }
 

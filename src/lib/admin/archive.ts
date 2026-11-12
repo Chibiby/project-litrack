@@ -6,7 +6,7 @@ import { originalTeacherEmail } from "@/lib/teachers/removed-email";
 import type { LearnerPurgeCounts } from "@/lib/archive/purge";
 
 /** The counts the admin dialog shows; the audit row also records the two newer tables. */
-type AdminPurgeCounts = Omit<LearnerPurgeCounts, "aralMosyDecision" | "kinderCompetencyRecord">;
+export type AdminPurgeCounts = Omit<LearnerPurgeCounts, "aralMosyDecision" | "kinderCompetencyRecord">;
 import { assertOrderByCoversOptions } from "@/lib/sort/registry";
 import {
   ARCHIVE_LEARNER_SORTS,
@@ -159,22 +159,58 @@ function normalizePage(page: number | undefined): number {
   return Number.isFinite(page) && (page as number) > 0 ? Math.floor(page as number) : 1;
 }
 
-/** Two independently paginated lists, both `deletedAt DESC`, 50 per page. */
-export async function getArchive(params: ArchiveParams): Promise<Archive> {
+/**
+ * Per-learner counts for the permanent-delete dialog. One `groupBy` per
+ * relation over the page's ids, not a count query per row: 5 queries total.
+ */
+export async function learnerPurgeCounts(learnerIds: string[]): Promise<Map<string, AdminPurgeCounts>> {
+  if (learnerIds.length === 0) return new Map();
+  const where = { learnerId: { in: learnerIds } };
+  const [enrollment, attendance, readingLevel, termGrade, aralProfile] = await Promise.all([
+    prisma.enrollment.groupBy({ by: ["learnerId"], where, _count: { _all: true } }),
+    prisma.attendance.groupBy({ by: ["learnerId"], where, _count: { _all: true } }),
+    prisma.readingLevelRecord.groupBy({ by: ["learnerId"], where, _count: { _all: true } }),
+    prisma.termGrade.groupBy({ by: ["learnerId"], where, _count: { _all: true } }),
+    prisma.aralProfile.groupBy({ by: ["learnerId"], where, _count: { _all: true } }),
+  ]);
+  const toMap = (rows: { learnerId: string; _count: { _all: number } }[]) =>
+    new Map(rows.map((r) => [r.learnerId, r._count._all]));
+  const e = toMap(enrollment);
+  const a = toMap(attendance);
+  const r = toMap(readingLevel);
+  const t = toMap(termGrade);
+  const p = toMap(aralProfile);
+  return new Map(
+    learnerIds.map((id) => [
+      id,
+      {
+        enrollment: e.get(id) ?? 0,
+        attendance: a.get(id) ?? 0,
+        readingLevelRecord: r.get(id) ?? 0,
+        termGrade: t.get(id) ?? 0,
+        aralProfile: p.get(id) ?? 0,
+      } satisfies AdminPurgeCounts,
+    ])
+  );
+}
+
+/** Soft-deleted teachers, `deletedAt DESC` by default, 50 per page. */
+export async function getArchivedTeachers(
+  params: Pick<ArchiveParams, "school" | "q" | "teacherPage" | "teachersSort">
+): Promise<ArchivePage<ArchivedTeacherRow>> {
   const teacherPage = normalizePage(params.teacherPage);
-  const learnerPage = normalizePage(params.learnerPage);
   const teachersSort = ARCHIVE_TEACHER_SORTS.parse(params.teachersSort);
-  const learnersSort = ARCHIVE_LEARNER_SORTS.parse(params.learnersSort);
+  const where: Prisma.UserWhereInput = {
+    role: "TEACHER",
+    deletedAt: { not: null },
+    ...(params.school ? { schoolId: params.school } : {}),
+    ...(params.q ? { fullName: { contains: params.q, mode: "insensitive" as const } } : {}),
+  };
 
-  const schoolWhere = params.school ? { schoolId: params.school } : {};
-  const nameWhere = params.q ? { fullName: { contains: params.q, mode: "insensitive" as const } } : {};
-
-  const [teacherTotal, teacherRows, learnerTotal, learnerRows] = await Promise.all([
-    prisma.user.count({
-      where: { role: "TEACHER", deletedAt: { not: null }, ...schoolWhere, ...nameWhere },
-    }),
+  const [total, rows] = await Promise.all([
+    prisma.user.count({ where }),
     prisma.user.findMany({
-      where: { role: "TEACHER", deletedAt: { not: null }, ...schoolWhere, ...nameWhere },
+      where,
       select: {
         id: true,
         fullName: true,
@@ -189,11 +225,41 @@ export async function getArchive(params: ArchiveParams): Promise<Archive> {
       skip: (teacherPage - 1) * ARCHIVE_PAGE_SIZE,
       take: ARCHIVE_PAGE_SIZE,
     }),
-    prisma.learner.count({
-      where: { deletedAt: { not: null }, ...schoolWhere, ...nameWhere },
-    }),
+  ]);
+
+  return {
+    rows: rows.map((t) => ({
+      id: t.id,
+      fullName: t.fullName,
+      listingName: formatListingNameFromRecord(t),
+      schoolId: t.school?.id ?? null,
+      schoolName: t.school?.name ?? null,
+      schoolDeleted: t.school?.deletedAt != null,
+      deletedAt: (t.deletedAt as Date).toISOString(),
+      originalEmail: originalTeacherEmail(t.email),
+    })),
+    page: teacherPage,
+    pages: Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE)),
+    total,
+  };
+}
+
+/** Soft-deleted learners across every school, with purge counts. */
+async function getArchivedLearners(
+  params: Pick<ArchiveParams, "school" | "q" | "learnerPage" | "learnersSort">
+): Promise<ArchivePage<ArchivedLearnerRow>> {
+  const learnerPage = normalizePage(params.learnerPage);
+  const learnersSort = ARCHIVE_LEARNER_SORTS.parse(params.learnersSort);
+  const where: Prisma.LearnerWhereInput = {
+    deletedAt: { not: null },
+    ...(params.school ? { schoolId: params.school } : {}),
+    ...(params.q ? { fullName: { contains: params.q, mode: "insensitive" as const } } : {}),
+  };
+
+  const [total, rows] = await Promise.all([
+    prisma.learner.count({ where }),
     prisma.learner.findMany({
-      where: { deletedAt: { not: null }, ...schoolWhere, ...nameWhere },
+      where,
       select: {
         id: true,
         fullName: true,
@@ -211,93 +277,33 @@ export async function getArchive(params: ArchiveParams): Promise<Archive> {
       take: ARCHIVE_PAGE_SIZE,
     }),
   ]);
-
-  const teachers = teacherRows.map((t) => ({
-    id: t.id,
-    fullName: t.fullName,
-    listingName: formatListingNameFromRecord(t),
-    schoolId: t.school?.id ?? null,
-    schoolName: t.school?.name ?? null,
-    schoolDeleted: t.school?.deletedAt != null,
-    deletedAt: (t.deletedAt as Date).toISOString(),
-    originalEmail: originalTeacherEmail(t.email),
-  }));
-
-  // Purge counts for the destructive learner dialog only — the teacher
-  // dialog doesn't render them (see `archive-row-actions.tsx`), so nothing
-  // is computed for teachers here. One `groupBy` per relation over this
-  // page's ids, not a count query per row: 5 queries total instead of
-  // `ARCHIVE_PAGE_SIZE * 5`.
-  const learnerIds = learnerRows.map((l) => l.id);
-  const [enrollmentCounts, attendanceCounts, readingLevelCounts, termGradeCounts, aralProfileCounts] =
-    await Promise.all([
-      prisma.enrollment.groupBy({
-        by: ["learnerId"],
-        where: { learnerId: { in: learnerIds } },
-        _count: { _all: true },
-      }),
-      prisma.attendance.groupBy({
-        by: ["learnerId"],
-        where: { learnerId: { in: learnerIds } },
-        _count: { _all: true },
-      }),
-      prisma.readingLevelRecord.groupBy({
-        by: ["learnerId"],
-        where: { learnerId: { in: learnerIds } },
-        _count: { _all: true },
-      }),
-      prisma.termGrade.groupBy({
-        by: ["learnerId"],
-        where: { learnerId: { in: learnerIds } },
-        _count: { _all: true },
-      }),
-      prisma.aralProfile.groupBy({
-        by: ["learnerId"],
-        where: { learnerId: { in: learnerIds } },
-        _count: { _all: true },
-      }),
-    ]);
-
-  const toCountMap = (rows: { learnerId: string; _count: { _all: number } }[]) =>
-    new Map(rows.map((r) => [r.learnerId, r._count._all]));
-  const enrollmentByLearner = toCountMap(enrollmentCounts);
-  const attendanceByLearner = toCountMap(attendanceCounts);
-  const readingLevelByLearner = toCountMap(readingLevelCounts);
-  const termGradeByLearner = toCountMap(termGradeCounts);
-  const aralProfileByLearner = toCountMap(aralProfileCounts);
-
-  const learners = learnerRows.map((l) => ({
-    id: l.id,
-    fullName: l.fullName,
-    listingName: formatListingNameFromRecord(l),
-    schoolId: l.school.id,
-    schoolName: l.school.name,
-    schoolDeleted: l.school.deletedAt != null,
-    gradeLevel: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
-    section: l.section?.name ?? null,
-    isAralLearner: l.isAralLearner,
-    deletedAt: (l.deletedAt as Date).toISOString(),
-    purgeCounts: {
-      enrollment: enrollmentByLearner.get(l.id) ?? 0,
-      attendance: attendanceByLearner.get(l.id) ?? 0,
-      readingLevelRecord: readingLevelByLearner.get(l.id) ?? 0,
-      termGrade: termGradeByLearner.get(l.id) ?? 0,
-      aralProfile: aralProfileByLearner.get(l.id) ?? 0,
-    } satisfies AdminPurgeCounts,
-  }));
+  const counts = await learnerPurgeCounts(rows.map((l) => l.id));
 
   return {
-    teachers: {
-      rows: teachers,
-      page: teacherPage,
-      pages: Math.max(1, Math.ceil(teacherTotal / ARCHIVE_PAGE_SIZE)),
-      total: teacherTotal,
-    },
-    learners: {
-      rows: learners,
-      page: learnerPage,
-      pages: Math.max(1, Math.ceil(learnerTotal / ARCHIVE_PAGE_SIZE)),
-      total: learnerTotal,
-    },
+    rows: rows.map((l) => ({
+      id: l.id,
+      fullName: l.fullName,
+      listingName: formatListingNameFromRecord(l),
+      schoolId: l.school.id,
+      schoolName: l.school.name,
+      schoolDeleted: l.school.deletedAt != null,
+      gradeLevel: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
+      section: l.section?.name ?? null,
+      isAralLearner: l.isAralLearner,
+      deletedAt: (l.deletedAt as Date).toISOString(),
+      purgeCounts: counts.get(l.id)!,
+    })),
+    page: learnerPage,
+    pages: Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE)),
+    total,
   };
+}
+
+/** Two independently paginated lists, both `deletedAt DESC` by default, 50 per page. */
+export async function getArchive(params: ArchiveParams): Promise<Archive> {
+  const [teachers, learners] = await Promise.all([
+    getArchivedTeachers(params),
+    getArchivedLearners(params),
+  ]);
+  return { teachers, learners };
 }

@@ -38,11 +38,16 @@ describe("ADMIN_ROUTES", () => {
     expect(ADMIN_ROUTES.audit).toBe("/admin/audit");
     expect(ADMIN_ROUTES.errors).toBe("/admin/errors");
     expect(ADMIN_ROUTES.testLab).toBe("/admin/test-lab");
-    expect(ADMIN_ROUTES.archive).toBe("/admin/archive");
     expect(ADMIN_ROUTES.database).toBe("/admin/database");
     expect(ADMIN_ROUTES.profile).toBe("/admin/profile");
     expect(ADMIN_ROUTES.settings).toBe("/admin/settings");
     expect(ADMIN_ROUTES.chat).toBe("/admin/chat");
+  });
+
+  it("puts Deleted Records under Monitoring", () => {
+    expect(ADMIN_ROUTES.deletedRecords).toBe("/admin/monitoring/deleted-records");
+    expect(LEGACY_ADMIN_REDIRECTS["/admin/archive"]).toBe(ADMIN_ROUTES.deletedRecords);
+    expect(LEGACY_ADMIN_REDIRECTS["/admin/deleted-learners"]).toBe(ADMIN_ROUTES.deletedRecords);
   });
 
   it("maps every pre-restructure path to a live route and never to itself", () => {
@@ -56,6 +61,8 @@ describe("ADMIN_ROUTES", () => {
     expect(Object.keys(LEGACY_ADMIN_REDIRECTS).sort()).toEqual(
       [
         "/admin/accounts",
+        "/admin/archive",
+        "/admin/deleted-learners",
         "/admin/ip-learners",
         "/admin/school-accounts",
         "/admin/school-years",

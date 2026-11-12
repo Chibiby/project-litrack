@@ -1,54 +1,19 @@
-import { UserX } from "lucide-react";
-import { requireAdminScope } from "@/lib/auth/district-scope";
-import { getDeletedLearners } from "@/lib/learners/deleted-learners";
-import { ADMIN_ROUTES } from "@/lib/routes/admin";
-import { AdminPage } from "@/components/admin/admin-page";
-import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
-import { DeletedLearnersView } from "@/components/admin/deleted-learners-view";
+import { redirect } from "next/navigation";
+import { ADMIN_ROUTES, withSearchParams, type PageSearchParams } from "@/lib/routes/admin";
 
+/**
+ * Moved to Monitoring → Deleted Records, which holds deleted teachers and
+ * deleted learners together. Survives as a redirect for bookmarks; plain
+ * `redirect()` (307), never `permanentRedirect()`. The destination guards
+ * itself.
+ */
 export const dynamic = "force-dynamic";
 
-interface PageProps {
-  searchParams: Promise<{ school?: string; q?: string; page?: string; sort?: string }>;
-}
-
-function toPage(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? "1", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-}
-
-export default async function AdminDeletedLearnersPage({ searchParams }: PageProps) {
-  const { user, scope } = await requireAdminScope();
-  const { school, q, page, sort } = await searchParams;
-
-  const data = await getDeletedLearners({
-    scope,
-    schoolId: school || undefined,
-    q: q?.trim() || undefined,
-    page: toPage(page),
-    sort,
-  });
-
-  return (
-    <AdminPage
-      title="Deleted learners"
-      role={user.role}
-      userName={user.fullName || user.email}
-      hero={
-        <SchoolHeadHero
-          eyebrow="Records"
-          eyebrowIcon={UserX}
-          title="Deleted learners"
-          subtitle="Learners a teacher removed more than 30 days ago. Restore one to return them to their school."
-        />
-      }
-    >
-      <DeletedLearnersView
-        data={data}
-        filters={{ school: school ?? "", q: q ?? "" }}
-        showDistrict
-        basePath={ADMIN_ROUTES.deletedLearners}
-      />
-    </AdminPage>
-  );
+export default async function LegacyDeletedRecordsPage({
+  searchParams,
+}: {
+  searchParams: Promise<PageSearchParams>;
+}) {
+  // The old archive's learner pager and sort do not carry over.
+  redirect(withSearchParams(ADMIN_ROUTES.deletedRecords, await searchParams, ["learners", "learnersSort"]));
 }

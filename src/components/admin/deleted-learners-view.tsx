@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, UserX } from "lucide-react";
+import { ChevronLeft, ChevronRight, GraduationCap, UserX } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,7 @@ import {
 import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { DeletedLearnerRestoreButton } from "@/components/admin/deleted-learners-restore-button";
+import { LearnerPurgeButton } from "@/components/admin/archive-row-actions";
 import type { DeletedLearnerRow, DeletedLearnersPage } from "@/lib/learners/deleted-learners";
 
 const ANY_SCHOOL = "any";
@@ -54,12 +56,21 @@ export function DeletedLearnersView({
   filters,
   showDistrict,
   basePath,
+  showFilters = true,
+  showHeading = false,
+  canPurge = false,
 }: {
   data: DeletedLearnersPage;
   filters: { school: string; q: string };
   /** Division-wide admins also see each school's district. */
   showDistrict: boolean;
   basePath: string;
+  /** False when the page draws one shared filter bar above several lists. */
+  showFilters?: boolean;
+  /** A "Deleted learners" title with the count, for a page with more than one list. */
+  showHeading?: boolean;
+  /** Developer Admin: also offer "Delete permanently" on soft-deleted rows. */
+  canPurge?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -96,17 +107,29 @@ export function DeletedLearnersView({
     setRestoredIds((prev) => new Set(prev).add(id));
   };
 
-  const restoreButton = (row: DeletedLearnerRow) => (
-    <DeletedLearnerRestoreButton
-      id={row.id}
-      name={row.name}
-      schoolName={row.schoolName}
-      onRestored={markRestored}
-    />
+  const actions = (row: DeletedLearnerRow, labelled: boolean) => (
+    <div className={labelled ? "flex flex-wrap gap-2" : "flex justify-end gap-2"}>
+      <DeletedLearnerRestoreButton
+        id={row.id}
+        name={row.name}
+        schoolName={row.schoolName}
+        onRestored={markRestored}
+      />
+      {canPurge && row.purgeCounts ? (
+        <LearnerPurgeButton
+          id={row.id}
+          fullName={row.fullName}
+          purgeCounts={row.purgeCounts}
+          labelled={labelled}
+          onPurged={markRestored}
+        />
+      ) : null}
+    </div>
   );
 
   return (
     <div className="space-y-6">
+      {showFilters ? (
       <Surface as="section" className="rounded-lg p-3 sm:p-4">
         <form
           className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
@@ -161,6 +184,7 @@ export function DeletedLearnersView({
           ) : null}
         </form>
       </Surface>
+      ) : null}
 
       <Surface
         as="section"
@@ -168,6 +192,13 @@ export function DeletedLearnersView({
         aria-busy={pending || undefined}
         className="min-w-0 space-y-3 rounded-lg p-4 sm:p-5"
       >
+        {showHeading ? (
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <GraduationCap className="h-5 w-5" aria-hidden />
+            Deleted learners
+            <Badge variant="secondary">{data.total.toLocaleString()}</Badge>
+          </h2>
+        ) : null}
         {rows.length === 0 ? (
           filtered ? (
             <EmptyState
@@ -228,7 +259,7 @@ export function DeletedLearnersView({
                         {formatDate(row.deletedAt)}
                       </TableCell>
                       <TableCell>
-                        <RowActions>{restoreButton(row)}</RowActions>
+                        <RowActions>{actions(row, false)}</RowActions>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -249,7 +280,7 @@ export function DeletedLearnersView({
                       { label: "Removed on", value: formatDate(row.removedAt) },
                       { label: "Deleted on", value: formatDate(row.deletedAt) },
                     ]}
-                    detailActions={restoreButton(row)}
+                    detailActions={actions(row, true)}
                   />
                 ))}
               </StackedList>

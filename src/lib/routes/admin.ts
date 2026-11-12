@@ -38,14 +38,13 @@ export const ADMIN_ROUTES = {
   divisionSummary: "/admin/monitoring/division-summary",
   divisionSummaryFacet: (facet: string) => `/admin/monitoring/division-summary/${facet}`,
   support: "/admin/monitoring/support",
+  /** Deleted teachers (Developer Admin) and deleted learners (every admin), one page. */
+  deletedRecords: "/admin/monitoring/deleted-records",
 
   // Developer Controls (Developer Admin only) — unchanged paths.
   audit: "/admin/audit",
   errors: "/admin/errors",
   testLab: "/admin/test-lab",
-  archive: "/admin/archive",
-  /** Soft-deleted (30 days after removal) learners; Developer and Division admins restore. */
-  deletedLearners: "/admin/deleted-learners",
   database: "/admin/database",
   adminAccounts: "/admin/admin-accounts",
 
@@ -72,6 +71,8 @@ export const LEGACY_ADMIN_REDIRECTS: Readonly<Record<string, string>> = {
   "/admin/transfers": ADMIN_ROUTES.learnerTransfers,
   "/admin/summary": ADMIN_ROUTES.divisionSummary,
   "/admin/support": ADMIN_ROUTES.support,
+  "/admin/archive": ADMIN_ROUTES.deletedRecords,
+  "/admin/deleted-learners": ADMIN_ROUTES.deletedRecords,
 };
 
 /** Search params as a page receives them (`await props.searchParams`). */

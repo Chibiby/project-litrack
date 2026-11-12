@@ -515,7 +515,6 @@ describe("getNavGroups — admin", () => {
     expect(groups[0].items[0].href).toBe("/admin");
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
-      "Deleted learners",
       "Teachers",
       "ARAL Teachers",
       "School Heads",
@@ -528,13 +527,13 @@ describe("getNavGroups — admin", () => {
       "Report Submissions",
       "Learner Transfers",
     ]);
-    expect(groups[3].items.map((i) => i.label)).toEqual(["Division Summary", "Support Inbox"]);
+    expect(groups[3].items.map((i) => i.label)).toEqual(["Division Summary", "Support Inbox", "Deleted Records"]);
     // Developer Controls keeps its five original rows; assert those without
     // pinning the order of any row added in front of them.
     expect(groups[4].items.map((i) => i.label)).toEqual(
-      expect.arrayContaining(["Audit Log", "Error Log", "Page Test Lab", "Archived Records", "Database Console"])
+      expect.arrayContaining(["Audit Log", "Error Log", "Page Test Lab", "Database Console"])
     );
-    expect(groups[4].items.find((i) => i.id === "admin-archive")).toMatchObject({ href: "/admin/archive", heavy: true });
+    expect(groups[4].items.map((i) => i.label)).not.toContain("Archived Records");
     expect(groups[4].items.find((i) => i.id === "admin-test-lab")).toMatchObject({ href: "/admin/test-lab" });
   });
 
@@ -548,13 +547,13 @@ describe("getNavGroups — admin", () => {
       "admin-school-heads": "/admin/management/school-heads",
       "admin-schools": "/admin/management/schools",
       "admin-district-admins": "/admin/management/district-admins",
-      "admin-deleted-learners": "/admin/deleted-learners",
       "admin-school-years": "/admin/school-setup/school-years",
       "admin-term-subjects": "/admin/school-setup/term-subjects",
       "admin-submissions": "/admin/school-setup/report-submissions",
       "admin-transfers": "/admin/school-setup/learner-transfers",
       "admin-summary": "/admin/monitoring/division-summary",
       "admin-support": "/admin/monitoring/support",
+      "admin-deleted-records": "/admin/monitoring/deleted-records",
     });
     expect(items.find((i) => i.id === "admin-teachers")).toMatchObject({ heavy: true });
     expect(items.find((i) => i.id === "admin-school-heads")).toMatchObject({ heavy: true });
@@ -719,12 +718,11 @@ describe("getNavGroups — district admin", () => {
     ]);
   });
 
-  it("lists Deleted learners for both Super Admin tiers and the district admin", () => {
+  it("lists Deleted Records under Monitoring for both Super Admin tiers, Deleted learners for the district admin", () => {
     for (const options of [{}, { isDeveloperAdmin: true }]) {
-      const row = flattenNavGroups(getNavGroups("SUPER_ADMIN", [], options)).find(
-        (i) => i.id === "admin-deleted-learners"
-      );
-      expect(row).toMatchObject({ label: "Deleted learners", href: "/admin/deleted-learners" });
+      const monitoring = getNavGroups("SUPER_ADMIN", [], options).find((g) => g.label === "Monitoring");
+      const row = monitoring?.items.find((i) => i.id === "admin-deleted-records");
+      expect(row).toMatchObject({ label: "Deleted Records", href: "/admin/monitoring/deleted-records", heavy: true });
     }
     const district = flattenNavGroups(getNavGroups("DISTRICT_ADMIN")).find(
       (i) => i.id === "district-deleted-learners"

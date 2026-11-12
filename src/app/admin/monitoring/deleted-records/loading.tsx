@@ -2,8 +2,8 @@ import { TableSectionSkeleton } from "@/components/loading";
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 
-/** Content-slot skeleton: the banded hero, then the filters and both archive tables. RoleShell stays mounted. */
-export default function AdminArchiveLoading() {
+/** Content-slot skeleton: the banded hero, then the filters and the deleted teachers and learners tables. RoleShell stays mounted. */
+export default function AdminDeletedRecordsLoading() {
   return (
     <RouteLoadingOverlay>
       <SchoolHeadPageSkeleton hero>

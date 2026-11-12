@@ -128,7 +128,7 @@ export const restoreRemovedLearner = action(
       teacherShell: learner.isAralLearner,
     });
     revalidateSchoolsList();
-    revalidatePath("/admin/archive");
+    revalidatePath(ADMIN_ROUTES.deletedRecords);
     revalidatePath(ADMIN_ROUTES.school(learner.schoolId));
 
     return { ok: true, enrollmentOutcome: outcome.outcome };
@@ -182,7 +182,7 @@ export const purgeRemovedLearner = action(
       teacherShell: learner.isAralLearner,
     });
     revalidateSchoolsList();
-    revalidatePath("/admin/archive");
+    revalidatePath(ADMIN_ROUTES.deletedRecords);
     revalidatePath(ADMIN_ROUTES.school(learner.schoolId));
 
     return { ok: true };
@@ -266,7 +266,7 @@ export const restoreRemovedTeacher = action(
     }
     revalidateSchoolsList();
     revalidateTeacherCaches(teacher.id);
-    revalidatePath("/admin/archive");
+    revalidatePath(ADMIN_ROUTES.deletedRecords);
     if (teacher.schoolId) revalidatePath(ADMIN_ROUTES.school(teacher.schoolId));
 
     return { ok: true, needsCredentials: true, emailRestored };
@@ -399,7 +399,7 @@ export const purgeRemovedTeacher = action(
     }
     revalidateSchoolsList();
     revalidateTeacherCaches(teacher.id);
-    revalidatePath("/admin/archive");
+    revalidatePath(ADMIN_ROUTES.deletedRecords);
 
     return { ok: true, authDeleted };
   },

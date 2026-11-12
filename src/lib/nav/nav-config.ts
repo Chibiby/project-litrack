@@ -196,7 +196,6 @@ export function getNavGroups(
           label: "Management",
           items: [
             { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
-            { id: "admin-deleted-learners", label: "Deleted learners", href: ADMIN_ROUTES.deletedLearners, icon: UserX, heavy: true },
             { id: "admin-teachers", label: "Teachers", href: ADMIN_ROUTES.teachers, icon: Users, heavy: true },
             { id: "admin-aral-teachers", label: "ARAL Teachers", href: ADMIN_ROUTES.aralTeachers, icon: HandHelping },
             { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },
@@ -218,6 +217,7 @@ export function getNavGroups(
           items: [
             { id: "admin-summary", label: "Division Summary", href: ADMIN_ROUTES.divisionSummary, icon: BarChart3 },
             { id: "admin-support", label: "Support Inbox", href: ADMIN_ROUTES.support, icon: LifeBuoy },
+            { id: "admin-deleted-records", label: "Deleted Records", href: ADMIN_ROUTES.deletedRecords, icon: Archive, heavy: true },
           ],
         },
         // Developer Admin only. Dropped, not rendered inert: a Division Admin
@@ -231,7 +231,6 @@ export function getNavGroups(
                   { id: "admin-audit", label: "Audit Log", href: ADMIN_ROUTES.audit, icon: ScrollText },
                   { id: "admin-errors", label: "Error Log", href: ADMIN_ROUTES.errors, icon: TriangleAlert },
                   { id: "admin-test-lab", label: "Page Test Lab", href: ADMIN_ROUTES.testLab, icon: FlaskConical },
-                  { id: "admin-archive", label: "Archived Records", href: ADMIN_ROUTES.archive, icon: Archive, heavy: true as const },
                   { id: "admin-database", label: "Database Console", href: ADMIN_ROUTES.database, icon: Database },
                 ],
               },

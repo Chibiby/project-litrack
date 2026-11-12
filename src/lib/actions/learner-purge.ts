@@ -14,6 +14,7 @@ import { AUDIT_ACTIONS, writeAudit } from "@/lib/audit";
 import { purgeLearnerRecord } from "@/lib/archive/purge";
 import { normalizePersonName } from "@/lib/learners/normalize";
 import { teacherCanAccessLearner, teacherLearnerScope } from "@/lib/teachers/scope";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
 
 type ActionResult = { ok: true };
@@ -123,7 +124,7 @@ export const purgeArchivedLearner = action(
     revalidatePath(`/teacher/grade/${learner.gradeLevelId}`);
     revalidatePath("/teacher/learners");
     revalidatePath("/teacher/aral");
-    revalidatePath("/admin/archive");
+    revalidatePath(ADMIN_ROUTES.deletedRecords);
     revalidateLearnerScoped({
       schoolId: learner.schoolId,
       teacherId: learner.teacherId,

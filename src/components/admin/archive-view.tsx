@@ -30,6 +30,7 @@ import {
 import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { LearnerRowActions, TeacherRowActions } from "@/components/admin/archive-row-actions";
+import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SortSelect } from "@/components/ui/sort-select";
 import {
   ListNavigationProvider,
@@ -240,7 +241,7 @@ export function ArchiveView({
       next.delete("teachers");
       next.delete("learners");
     }
-    startTransition(() => router.push(`/admin/archive?${next.toString()}`));
+    startTransition(() => router.push(`${ADMIN_ROUTES.deletedRecords}?${next.toString()}`));
   };
 
   const [pushedQ, setPushedQ] = useState(filters.q);
@@ -357,7 +358,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
   const teacherHref = (page: number) => {
     const next = new URLSearchParams(searchParams.toString());
     next.set("teachers", String(page));
-    return `/admin/archive?${next.toString()}`;
+    return `${ADMIN_ROUTES.deletedRecords}?${next.toString()}`;
   };
 
   // Re-sorting drops the teachers page — page 3 of "recently deleted" is
@@ -368,7 +369,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
     const next = new URLSearchParams(searchParams.toString());
     next.set("teachersSort", value);
     next.delete("teachers");
-    navigate(`/admin/archive?${next.toString()}`);
+    navigate(`${ADMIN_ROUTES.deletedRecords}?${next.toString()}`);
   };
 
   return (
@@ -376,8 +377,8 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Users className="h-5 w-5" aria-hidden />
-            Removed teachers
-            <Badge variant="secondary">{data.total}</Badge>
+            Deleted teachers
+            <Badge variant="secondary">{data.total.toLocaleString()}</Badge>
           </h2>
           <SortSelect
             id="archive-teachers-sort"
@@ -390,13 +391,13 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
         </div>
 
         <ListBusyRegion
-          label="removed teachers"
+          label="deleted teachers"
           skeleton={<TableSectionSkeleton rows={8} columns={5} showToolbar={false} />}
         >
           {data.rows.length === 0 ? (
             <EmptyState
-              title="No removed teachers"
-              description="Teacher accounts that have been removed will appear here."
+              title="No deleted teachers"
+              description="Teacher accounts that have been deleted will appear here."
               icon={ArchiveIcon}
             />
           ) : (
@@ -444,7 +445,7 @@ function ArchiveTeachersPanelBody({ data }: { data: ArchivePage<ArchivedTeacherR
                 </Table>
               }
               stacked={
-                <StackedList aria-label="Removed teachers">
+                <StackedList aria-label="Deleted teachers">
                   {data.rows.map((teacher) => (
                     <StackedRow
                       key={teacher.id}
@@ -508,14 +509,14 @@ function ArchiveLearnersPanelBody({ data }: { data: ArchivePage<ArchivedLearnerR
   const learnerHref = (page: number) => {
     const next = new URLSearchParams(searchParams.toString());
     next.set("learners", String(page));
-    return `/admin/archive?${next.toString()}`;
+    return `${ADMIN_ROUTES.deletedRecords}?${next.toString()}`;
   };
 
   const applyLearnersSort = (value: string) => {
     const next = new URLSearchParams(searchParams.toString());
     next.set("learnersSort", value);
     next.delete("learners");
-    navigate(`/admin/archive?${next.toString()}`);
+    navigate(`${ADMIN_ROUTES.deletedRecords}?${next.toString()}`);
   };
 
   return (

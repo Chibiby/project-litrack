@@ -182,7 +182,7 @@ describe("purgeArchivedLearner", () => {
     });
     expect(JSON.stringify(audit)).not.toContain("Cruz");
     expect(revalidatePath).toHaveBeenCalledWith("/teacher/learners");
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/archive");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/monitoring/deleted-records");
   });
 
   it("only looks up removed, not-yet-deleted learners in the caller's school", async () => {

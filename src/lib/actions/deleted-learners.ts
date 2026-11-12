@@ -98,9 +98,8 @@ export const restoreDeletedLearner = action(
       adminDashboard: true,
       teacherShell: learner.isAralLearner,
     });
-    revalidatePath(ADMIN_ROUTES.deletedLearners);
+    revalidatePath(ADMIN_ROUTES.deletedRecords);
     revalidatePath(DISTRICT_ROUTES.deletedLearners);
-    revalidatePath(ADMIN_ROUTES.archive);
 
     return { ok: true, enrollmentOutcome: outcome.outcome };
   },

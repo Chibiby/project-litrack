@@ -6,9 +6,11 @@ import { formatListingNameFromRecord } from "@/lib/names";
 import { schoolWhereForScope, type AdminScope } from "@/lib/auth/admin-scope";
 import { removalExpiresAt, removalExpiryCutoff } from "@/lib/learners/removal";
 import { LEARNER_REMOVAL_REASON_LABELS } from "@/lib/constants/enum-labels";
+import { learnerPurgeCounts, type AdminPurgeCounts } from "@/lib/admin/archive";
 
 /**
- * The read model behind `/admin/deleted-learners` and `/district/deleted-learners`:
+ * The read model behind the learners half of `/admin/monitoring/deleted-records`
+ * and `/district/deleted-learners`:
  * learners whose 30-day removal window ran out (`deletedAt` set), inside the
  * caller's `AdminScope`.
  *
@@ -41,6 +43,12 @@ export type DeletedLearnerRow = {
   id: string;
   /** Surname-first display form. */
   name: string;
+  /** Stored full name, for dialogs. */
+  fullName: string;
+  /** False while the removal has expired but the nightly job has not soft-deleted it yet. */
+  softDeleted: boolean;
+  /** Only when asked for (Developer Admin): counts for the permanent-delete dialog. */
+  purgeCounts?: AdminPurgeCounts;
   gradeLabel: string;
   sectionName: string | null;
   schoolId: string;
@@ -69,6 +77,8 @@ export type DeletedLearnersParams = {
   q?: string;
   page?: number;
   sort?: string;
+  /** Developer Admin only: load the permanent-delete counts for each row. */
+  withPurgeCounts?: boolean;
 };
 
 function normalizePage(page: number | undefined): number {
@@ -125,6 +135,7 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
       where,
       select: {
         id: true,
+        fullName: true,
         firstName: true,
         middleName: true,
         lastName: true,
@@ -148,10 +159,17 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
     }),
   ]);
 
+  const counts = params.withPurgeCounts
+    ? await learnerPurgeCounts(rows.filter((l) => l.deletedAt).map((l) => l.id))
+    : null;
+
   return {
     rows: rows.map((l) => ({
       id: l.id,
       name: formatListingNameFromRecord(l),
+      fullName: l.fullName,
+      softDeleted: l.deletedAt != null,
+      ...(counts?.has(l.id) ? { purgeCounts: counts.get(l.id)! } : {}),
       gradeLabel: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       sectionName: l.section?.name ?? null,
       schoolId: l.school.id,

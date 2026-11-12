@@ -207,9 +207,8 @@ describe("restore", () => {
     expect(revalidateLearnerScoped).toHaveBeenCalledWith(
       expect.objectContaining({ schoolId: SCHOOL_ID, adminDashboard: true, teacherShell: true })
     );
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/deleted-learners");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/monitoring/deleted-records");
     expect(revalidatePath).toHaveBeenCalledWith("/district/deleted-learners");
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/archive");
   });
 
   it("only reaches soft-deleted learners in live schools", async () => {
