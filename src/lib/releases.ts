@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.54.0",
+    date: "2026-11-12",
+    title: "MOSY and BOSY in the Division Summary",
+    announce: true,
+    fixes: [
+      { text: "Division Summary has a new MOSY tab: how many ARAL learners stay or moved out, and why they moved out (NLPA included), per grade level.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "Division Summary has a new BOSY tab: ARAL learners by their beginning of school year reading level, per grade level.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "Both tabs export to PDF and Excel with one row per school, counts first.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      "The MOSY decisions and BOSY reading levels you record now show in the division office's summary, counted the same way as the MOSY Report and BOSY Report pages.",
+    ],
+  },
+  {
     version: "2.53.0",
     date: "2026-11-12",
     title: "Smoother on phones, matching learner totals, clearer ARAL teacher exports",
