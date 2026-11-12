@@ -1,6 +1,7 @@
 import { UserX } from "lucide-react";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { getDeletedLearners } from "@/lib/learners/deleted-learners";
+import { parseRecordsPage, parseRecordsPageSize } from "@/lib/admin/records-pagination";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { AppShell } from "@/components/app-shell";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
@@ -11,17 +12,13 @@ import { describeScope, hasNoDistricts } from "@/components/district/scope-label
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ school?: string; q?: string; page?: string; sort?: string }>;
-}
-
-function toPage(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? "1", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  searchParams: Promise<{ school?: string; q?: string; page?: string; perPage?: string; sort?: string }>;
 }
 
 export default async function DistrictDeletedLearnersPage({ searchParams }: PageProps) {
   const { user, scope } = await requireAdminScope();
-  const { school, q, page, sort } = await searchParams;
+  const { school, q, page, perPage, sort } = await searchParams;
+  const pageSize = parseRecordsPageSize(perPage);
 
   const data = hasNoDistricts(scope)
     ? null
@@ -29,7 +26,8 @@ export default async function DistrictDeletedLearnersPage({ searchParams }: Page
         scope,
         schoolId: school || undefined,
         q: q?.trim() || undefined,
-        page: toPage(page),
+        page: parseRecordsPage(page),
+        pageSize,
         sort,
       });
 
@@ -57,6 +55,7 @@ export default async function DistrictDeletedLearnersPage({ searchParams }: Page
           filters={{ school: school ?? "", q: q ?? "" }}
           showDistrict={scope.kind !== "districts" || scope.districts.length > 1}
           basePath={DISTRICT_ROUTES.deletedLearners}
+          pageSize={pageSize}
         />
       ) : (
         <NoDistrictsState />

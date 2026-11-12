@@ -62,7 +62,7 @@ describe("deletedLearnersWhere", () => {
     const where = deletedLearnersWhere({ scope: districtScope, schoolId: "s-9", q: "ana" });
     expect(where.schoolId).toBe("s-9");
     expect(where.school).toBeDefined();
-    expect(where.fullName).toEqual({ contains: "ana", mode: "insensitive" });
+    expect(where.AND).toEqual([{ fullName: { contains: "ana", mode: "insensitive" } }]);
   });
 });
 

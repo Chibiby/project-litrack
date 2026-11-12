@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { nameWordsWhere } from "@/lib/admin/records-pagination";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { originalTeacherEmail } from "@/lib/teachers/removed-email";
 import type { LearnerPurgeCounts } from "@/lib/archive/purge";
@@ -194,18 +195,33 @@ export async function learnerPurgeCounts(learnerIds: string[]): Promise<Map<stri
   );
 }
 
-/** Soft-deleted teachers, `deletedAt DESC` by default, 50 per page. */
-export async function getArchivedTeachers(
-  params: Pick<ArchiveParams, "school" | "q" | "teacherPage" | "teachersSort">
-): Promise<ArchivePage<ArchivedTeacherRow>> {
-  const teacherPage = normalizePage(params.teacherPage);
-  const teachersSort = ARCHIVE_TEACHER_SORTS.parse(params.teachersSort);
-  const where: Prisma.UserWhereInput = {
+type ArchivedTeacherParams = Pick<ArchiveParams, "school" | "q" | "teacherPage" | "teachersSort"> & {
+  /** Rows per page; defaults to `ARCHIVE_PAGE_SIZE`. */
+  pageSize?: number;
+};
+
+function archivedTeacherWhere(params: Pick<ArchiveParams, "school" | "q">): Prisma.UserWhereInput {
+  return {
     role: "TEACHER",
     deletedAt: { not: null },
     ...(params.school ? { schoolId: params.school } : {}),
-    ...(params.q ? { fullName: { contains: params.q, mode: "insensitive" as const } } : {}),
+    ...nameWordsWhere(params.q),
   };
+}
+
+/** How many soft-deleted teachers match, for a tab badge that is not open. */
+export function countArchivedTeachers(params: Pick<ArchiveParams, "school" | "q">): Promise<number> {
+  return prisma.user.count({ where: archivedTeacherWhere(params) });
+}
+
+/** Soft-deleted teachers, `deletedAt DESC` by default. */
+export async function getArchivedTeachers(
+  params: ArchivedTeacherParams
+): Promise<ArchivePage<ArchivedTeacherRow>> {
+  const teacherPage = normalizePage(params.teacherPage);
+  const teachersSort = ARCHIVE_TEACHER_SORTS.parse(params.teachersSort);
+  const pageSize = params.pageSize ?? ARCHIVE_PAGE_SIZE;
+  const where = archivedTeacherWhere(params);
 
   const [total, rows] = await Promise.all([
     prisma.user.count({ where }),
@@ -222,8 +238,8 @@ export async function getArchivedTeachers(
         school: { select: { id: true, name: true, deletedAt: true } },
       },
       orderBy: archiveTeacherOrderBy(teachersSort),
-      skip: (teacherPage - 1) * ARCHIVE_PAGE_SIZE,
-      take: ARCHIVE_PAGE_SIZE,
+      skip: (teacherPage - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
 
@@ -239,7 +255,7 @@ export async function getArchivedTeachers(
       originalEmail: originalTeacherEmail(t.email),
     })),
     page: teacherPage,
-    pages: Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE)),
+    pages: Math.max(1, Math.ceil(total / pageSize)),
     total,
   };
 }
@@ -253,7 +269,7 @@ async function getArchivedLearners(
   const where: Prisma.LearnerWhereInput = {
     deletedAt: { not: null },
     ...(params.school ? { schoolId: params.school } : {}),
-    ...(params.q ? { fullName: { contains: params.q, mode: "insensitive" as const } } : {}),
+    ...nameWordsWhere(params.q),
   };
 
   const [total, rows] = await Promise.all([

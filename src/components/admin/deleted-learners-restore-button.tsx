@@ -14,12 +14,15 @@ export function DeletedLearnerRestoreButton({
   name,
   schoolName,
   onRestored,
+  labelled = true,
 }: {
   id: string;
   name: string;
   schoolName: string;
   /** Called only after the server has confirmed the restore. */
   onRestored: (id: string) => void;
+  /** False in a table row: the icon alone, with the name in its label. */
+  labelled?: boolean;
 }) {
   const router = useRouter();
 
@@ -46,7 +49,7 @@ export function DeletedLearnerRestoreButton({
       trigger={
         <Button type="button" variant="outline" size="sm" className="lg:h-9" aria-label={`Restore ${name}`}>
           <RotateCcw className="h-4 w-4" aria-hidden />
-          Restore
+          {labelled ? "Restore" : null}
         </Button>
       }
       onConfirm={restore}

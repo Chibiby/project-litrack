@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { nameWordsWhere } from "@/lib/admin/records-pagination";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { formatListingNameFromRecord } from "@/lib/names";
 import { schoolWhereForScope, type AdminScope } from "@/lib/auth/admin-scope";
@@ -43,8 +44,6 @@ export type DeletedLearnerRow = {
   id: string;
   /** Surname-first display form. */
   name: string;
-  /** Stored full name, for dialogs. */
-  fullName: string;
   /** False while the removal has expired but the nightly job has not soft-deleted it yet. */
   softDeleted: boolean;
   /** Only when asked for (Developer Admin): counts for the permanent-delete dialog. */
@@ -79,7 +78,27 @@ export type DeletedLearnersParams = {
   sort?: string;
   /** Developer Admin only: load the permanent-delete counts for each row. */
   withPurgeCounts?: boolean;
+  /** Rows per page; defaults to `DELETED_LEARNERS_PAGE_SIZE`. */
+  pageSize?: number;
 };
+
+/** How many deleted learners match, for a tab badge that is not open. */
+export function countDeletedLearners(
+  params: Pick<DeletedLearnersParams, "scope" | "schoolId" | "q">
+): Promise<number> {
+  return prisma.learner.count({ where: deletedLearnersWhere(params) });
+}
+
+/** In-scope live schools, for the School filter. */
+export function deletedRecordSchools(
+  scope: AdminScope
+): Promise<{ id: string; name: string; district: string | null }[]> {
+  return prisma.school.findMany({
+    where: schoolWhereForScope(scope),
+    select: { id: true, name: true, district: true },
+    orderBy: { name: "asc" },
+  });
+}
 
 function normalizePage(page: number | undefined): number {
   return Number.isFinite(page) && (page as number) > 0 ? Math.floor(page as number) : 1;
@@ -120,7 +139,7 @@ export function deletedLearnersWhere(
     OR: deletedOrExpiredFilter(),
     school: { AND: [schoolWhereForScope(params.scope), { deletedAt: null }] },
     ...(params.schoolId ? { schoolId: params.schoolId } : {}),
-    ...(params.q ? { fullName: { contains: params.q, mode: "insensitive" as const } } : {}),
+    ...nameWordsWhere(params.q),
   };
 }
 
@@ -128,6 +147,7 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
   const page = normalizePage(params.page);
   const sort = parseSort(params.sort);
   const where = deletedLearnersWhere(params);
+  const pageSize = params.pageSize ?? DELETED_LEARNERS_PAGE_SIZE;
 
   const [total, rows, schools] = await Promise.all([
     prisma.learner.count({ where }),
@@ -135,7 +155,6 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
       where,
       select: {
         id: true,
-        fullName: true,
         firstName: true,
         middleName: true,
         lastName: true,
@@ -149,14 +168,10 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
       },
       // `id` tiebreaker: skip/take pages repeat or skip rows on ties otherwise.
       orderBy: [...ORDER_BY[sort], { id: "asc" }],
-      skip: (page - 1) * DELETED_LEARNERS_PAGE_SIZE,
-      take: DELETED_LEARNERS_PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
-    prisma.school.findMany({
-      where: schoolWhereForScope(params.scope),
-      select: { id: true, name: true, district: true },
-      orderBy: { name: "asc" },
-    }),
+    deletedRecordSchools(params.scope),
   ]);
 
   const counts = params.withPurgeCounts
@@ -167,7 +182,6 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
     rows: rows.map((l) => ({
       id: l.id,
       name: formatListingNameFromRecord(l),
-      fullName: l.fullName,
       softDeleted: l.deletedAt != null,
       ...(counts?.has(l.id) ? { purgeCounts: counts.get(l.id)! } : {}),
       gradeLabel: GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
@@ -181,7 +195,7 @@ export async function getDeletedLearners(params: DeletedLearnersParams): Promise
       deletedAt: (l.deletedAt ?? removalExpiresAt(l.archivedAt as Date)).toISOString(),
     })),
     page,
-    pages: Math.max(1, Math.ceil(total / DELETED_LEARNERS_PAGE_SIZE)),
+    pages: Math.max(1, Math.ceil(total / pageSize)),
     total,
     schools,
   };

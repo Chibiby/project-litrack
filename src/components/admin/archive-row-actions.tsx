@@ -8,14 +8,12 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { callAction } from "@/lib/ui/call-action";
 import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import {
-  restoreRemovedLearner,
   purgeRemovedLearner,
   restoreRemovedTeacher,
   purgeRemovedTeacher,
 } from "@/lib/actions/admin-archive";
 import type {
   AdminPurgeCounts,
-  ArchivedLearnerRow,
   ArchivedTeacherRow,
 } from "@/lib/admin/archive";
 
@@ -39,68 +37,10 @@ function joinParts(parts: string[]): string {
 }
 
 /**
- * `labelled` is for a phone row's expanded panel: the buttons gain their
- * words and start at the left edge, since there is room there and a bare icon
- * reads less clearly away from the table's column header.
+ * `labelled` is for a phone row's expanded panel: the button gains its words,
+ * since there is room there and a bare icon reads less clearly away from the
+ * table's column header.
  */
-export function LearnerRowActions({
-  learner,
-  labelled = false,
-}: {
-  learner: ArchivedLearnerRow;
-  labelled?: boolean;
-}) {
-  const router = useRouter();
-
-  const restore = async () => {
-    const fd = new FormData();
-    fd.set("id", learner.id);
-    const res = await callAction(() => restoreRemovedLearner(fd));
-    if (!res.ok) {
-      toastFailure(res);
-      throw new ToastedError(res.error);
-    }
-    toast.success(
-      res.enrollmentOutcome === "no-active-year"
-        ? `${learner.fullName} restored. No active school year, so no enrolment was created.`
-        : `${learner.fullName} restored.`
-    );
-    router.refresh();
-  };
-
-  return (
-    <div className={labelled ? "flex flex-wrap gap-2" : "flex justify-end gap-2"}>
-      <ConfirmAction
-        title="Restore this learner?"
-        description={`Restore ${learner.fullName}? This clears the removal and returns the learner to ${learner.schoolName}'s active roster.`}
-        confirmLabel="Restore"
-        variant="default"
-        disabled={learner.schoolDeleted}
-        trigger={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="lg:h-9"
-            disabled={learner.schoolDeleted}
-            aria-label={`Restore ${learner.fullName}`}
-          >
-            <RotateCcw className="h-4 w-4" aria-hidden />
-            {labelled ? <span>Restore</span> : null}
-          </Button>
-        }
-        onConfirm={restore}
-      />
-      <LearnerPurgeButton
-        id={learner.id}
-        fullName={learner.fullName}
-        purgeCounts={learner.purgeCounts}
-        labelled={labelled}
-      />
-    </div>
-  );
-}
-
 /** Developer Admin: delete a soft-deleted learner and every record of theirs. */
 export function LearnerPurgeButton({
   id,
