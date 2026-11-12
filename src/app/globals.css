@@ -421,8 +421,10 @@
  * the hovered card stands out. No blur: the cards stay sharp. Parent-agnostic,
  * so it works in StatCardRow and in every page's own card grid alike.
  */
-:where(*):has(> [data-stat-card]:hover) > [data-stat-card]:not(:hover) {
-  opacity: 0.9;
+@media (hover: hover) and (pointer: fine) {
+  :where(*):has(> [data-stat-card]:hover) > [data-stat-card]:not(:hover) {
+    opacity: 0.9;
+  }
 }
 
 /*
@@ -469,4 +471,37 @@
 ::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
+}
+
+/*
+ * Phones and tablets (a touch screen with no hover).
+ *
+ * 1. No grey flash on tap, and no wait for a double-tap zoom: the page reacts
+ *    the moment a finger lifts.
+ * 2. A tap answers with the press ripple (components/press-feedback.tsx) on
+ *    every clickable, where the desktop also has a hover colour.
+ * 3. The background rays hold still. Every glass card blurs what is behind it,
+ *    so a moving background makes the phone re-blur every card on every frame.
+ * 4. Glass blurs at about half the desktop radius. The cost of a backdrop blur
+ *    grows with its radius, and on a soft background the two look alike.
+ */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+:where(a, button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], label, summary, input, select, textarea) {
+  touch-action: manipulation;
+}
+@media (hover: none) {
+  .light-ray {
+    animation: none;
+    opacity: calc(var(--ray-intensity) * 0.7);
+    transform: translateX(-50%) rotate(var(--ray-rotate-from));
+  }
+  .backdrop-blur-xl,
+  .dashboard-glass .shadow-card {
+    --tw-backdrop-blur: blur(12px);
+  }
+  .backdrop-blur-lg {
+    --tw-backdrop-blur: blur(10px);
+  }
 }

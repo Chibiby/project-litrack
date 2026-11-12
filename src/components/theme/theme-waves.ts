@@ -2,8 +2,8 @@ import { flushSync } from "react-dom";
 
 /**
  * The light/dark switch animation: the new theme grows out of the toggle as
- * one circle over the live page. It starts slowly, speeds up as it spreads,
- * and eases out as it reaches the far corner.
+ * one circle over the live page. It starts very slowly and keeps speeding up
+ * until it reaches the far corner.
  *
  * The swap runs inside a View Transition, so the browser keeps a picture of
  * the old page while the new page is revealed through a growing clip-path.
@@ -17,8 +17,8 @@ type ViewTransitionDocument = Document & {
 };
 
 const REVEAL_MS = 780;
-/** Slow start, long acceleration, short soft landing. */
-const EASE = "cubic-bezier(0.75, 0, 0.25, 1)";
+/** Very slow start, then speeds up all the way to the far corner: no slow-down at the end. */
+const EASE = "cubic-bezier(0.8, 0, 0.75, 0.5)";
 
 export function playThemeWaves(origin: WaveOrigin | undefined, swap: () => void): void {
   const doc = document as ViewTransitionDocument;

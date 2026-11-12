@@ -1,6 +1,10 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // `hover:` and `group-hover:` apply only on a device that can hover
+  // (a mouse or trackpad). On a phone or tablet a tap would otherwise leave
+  // the hover style stuck on until the next tap elsewhere.
+  future: { hoverOnlyWhenSupported: true },
   darkMode: ["class"],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
