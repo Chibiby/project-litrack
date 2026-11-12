@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import {
   ArrowRight,
   BookOpen,
-  CalendarCheck,
   ChevronRight,
   Users,
   type LucideIcon,
@@ -15,7 +14,9 @@ import type { TeacherOverview } from "@/lib/dashboard/teacher-overview";
 /**
  * The two v2 overview panels (mockup images 3 and 4): tinted icon tile and
  * period heading, a donut with the headline rate, a legend with count and
- * share, an encouragement tile, and a pill into the entry screen.
+ * share, and a pill into the entry screen. From lg up the donut sits above a
+ * grid of state tiles, so the panel fills the height the calendar rail gives
+ * the row instead of floating in empty space.
  *
  * Every share is printed as a count and a percentage beside a labelled dot,
  * so no state is conveyed by colour alone. The period chip is a static label,
@@ -49,7 +50,7 @@ function Donut({
   const c = 2 * Math.PI * r;
   let offset = 0;
   return (
-    <div className="relative mx-auto size-32 shrink-0 sm:size-36">
+    <div className="relative mx-auto size-32 shrink-0 sm:size-36 lg:size-40 2xl:size-44">
       <svg viewBox="0 0 100 100" className="size-full -rotate-90" aria-hidden>
         <circle cx="50" cy="50" r={r} fill="none" strokeWidth="11" className={track} />
         {total > 0
@@ -74,7 +75,7 @@ function Donut({
           : null}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-2xl font-extrabold tabular-nums text-foreground sm:text-3xl">
+        <span className="text-2xl font-extrabold tabular-nums text-foreground sm:text-3xl lg:text-4xl">
           {rate}%
         </span>
         <span className="text-xs text-muted-foreground">{caption}</span>
@@ -143,15 +144,21 @@ function PanelShell({
 function Legend({ segments, total }: { segments: Segment[]; total: number }) {
   return (
     <>
-      {/* Desktop: one row per state with count and share. */}
-      <ul className="hidden min-w-0 flex-1 space-y-3 lg:block">
+      {/* Desktop: one tile per state, count large and share beside it. */}
+      <ul className="hidden w-full gap-2 lg:grid lg:grid-cols-[repeat(auto-fit,minmax(6.25rem,1fr))]">
         {segments.map((s) => (
-          <li key={s.label} className="flex items-center gap-2.5 text-sm">
-            <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", s.dot)} />
-            <span className="flex-1 text-foreground">{s.label}</span>
-            <span className="tabular-nums text-muted-foreground">
-              {s.value} ({percentOf(s.value, total)}%)
-            </span>
+          <li
+            key={s.label}
+            className="rounded-lg border border-border/60 bg-background/50 px-3 py-2.5 dark:bg-white/[0.03]"
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", s.dot)} />
+              {s.label}
+            </div>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-xl font-bold tabular-nums text-foreground">{s.value}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">{percentOf(s.value, total)}%</span>
+            </div>
           </li>
         ))}
       </ul>
@@ -171,32 +178,6 @@ function Legend({ segments, total }: { segments: Segment[]; total: number }) {
   );
 }
 
-function TipTile({
-  icon: Icon,
-  title,
-  body,
-  className,
-  iconClassName,
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  className: string;
-  iconClassName: string;
-}) {
-  // xl (1280–1535): the panel is only half the rail-shrunk main column, and
-  // there is no room for the donut, the legend and this tile side by side —
-  // it waits for 2xl, where the row has width to spare again.
-  return (
-    <div className={cn("hidden w-44 shrink-0 rounded-lg p-4 2xl:block", className)}>
-      <div className="flex items-start gap-2.5">
-        <Icon aria-hidden className={cn("size-6 shrink-0", iconClassName)} />
-        <p className="text-sm font-semibold leading-snug">{title}</p>
-      </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{body}</p>
-    </div>
-  );
-}
 
 export function AttendanceOverviewPanel({
   data,
@@ -225,11 +206,7 @@ export function AttendanceOverviewPanel({
       iconTile="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
       action={{ label: "View weekly attendance", href }}
     >
-      {/* lg (1024) has the whole row to itself, so donut/legend/tile sit in
-          one line. xl (1280–1535) narrows the panel back down — stack the
-          donut over the legend and hold the tip tile back until 2xl, where
-          the row is wide again. */}
-      <div className="lg:flex lg:items-center lg:gap-6 xl:flex-col xl:items-stretch xl:gap-0 xl:space-y-4 2xl:flex-row 2xl:items-center 2xl:gap-6 2xl:space-y-0">
+      <div className="lg:flex lg:flex-col lg:items-center lg:gap-6">
         <Donut
           segments={segments}
           total={total}
@@ -238,13 +215,6 @@ export function AttendanceOverviewPanel({
           track="stroke-slate-100 dark:stroke-slate-800"
         />
         <Legend segments={segments} total={total} />
-        <TipTile
-          icon={CalendarCheck}
-          title="Let's keep them coming!"
-          body="Take attendance daily to track learners' progress and engagement."
-          className="bg-violet-50 text-violet-900 dark:bg-violet-950/40 dark:text-violet-100"
-          iconClassName="text-violet-600 dark:text-violet-300"
-        />
       </div>
       {data.aralLearners === 0 ? (
         <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground lg:text-left">
@@ -278,7 +248,7 @@ export function ReadingOverviewPanel({
       iconTile="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
       action={{ label: "Go to Monthly Reading Level", href }}
     >
-      <div className="lg:flex lg:items-center lg:gap-6 xl:flex-col xl:items-stretch xl:gap-0 xl:space-y-4 2xl:flex-row 2xl:items-center 2xl:gap-6 2xl:space-y-0">
+      <div className="lg:flex lg:flex-col lg:items-center lg:gap-6">
         <Donut
           segments={segments}
           total={total}
@@ -287,13 +257,6 @@ export function ReadingOverviewPanel({
           track="stroke-amber-100 dark:stroke-amber-950/60"
         />
         <Legend segments={segments} total={total} />
-        <TipTile
-          icon={BookOpen}
-          title="Keep reading!"
-          body="Help learners build a brighter future through reading."
-          className="bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
-          iconClassName="text-amber-500"
-        />
       </div>
       {total === 0 ? (
         <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground lg:text-left">

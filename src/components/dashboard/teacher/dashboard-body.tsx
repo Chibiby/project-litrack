@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import {
   BarChart3,
   GraduationCap,
-  Heart,
   Star,
   UserRound,
   Users,
@@ -304,10 +303,6 @@ function GradeChartCard({
               </p>
             </div>
           </div>
-          <p className="mt-4 px-1 text-sm leading-relaxed text-muted-foreground">
-            Each learner is a unique story waiting to be written.{" "}
-            <Heart aria-hidden className="inline size-3.5 fill-rose-400 text-rose-400" />
-          </p>
         </div>
       </div>
     </Surface>
