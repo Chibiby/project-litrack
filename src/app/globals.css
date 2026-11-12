@@ -462,13 +462,11 @@
   }
 }
 
-/* Theme switch ripples (src/components/theme/theme-waves.ts). Keyframes in
-   the script drive the reveal and the rings; switch off the browser defaults
-   (cross-fade of the page, fade-in of the rings layer). */
+/* Theme switch (src/components/theme/theme-waves.ts): the script grows the
+   new page as a circle; switch off the browser default cross-fade so the old
+   page stays put underneath. */
 ::view-transition-old(root),
-::view-transition-new(root),
-::view-transition-group(theme-ripples),
-::view-transition-new(theme-ripples) {
+::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
 }

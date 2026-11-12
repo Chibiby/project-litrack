@@ -40,7 +40,7 @@ export function ThemeIcon({
         "h-5 w-5",
         viewBoxOrigin,
         ease,
-        dark ? "-rotate-[30deg]" : "rotate-0",
+        dark ? "rotate-0" : "rotate-90",
         className
       )}
     >
@@ -60,7 +60,9 @@ export function ThemeIcon({
         r="9"
         fill="currentColor"
         mask={`url(#${maskId})`}
-        className={cn(viewBoxOrigin, ease, dark ? "scale-100" : "scale-[0.5]")}
+        // The bite takes the top-right, so the crescent's weight sits low-left;
+        // nudging it up-right puts the moon in the middle of the button.
+        className={cn(viewBoxOrigin, ease, dark ? "translate-x-[1.75px] -translate-y-[1.75px] scale-100" : "scale-[0.5]")}
       />
       <g
         stroke="currentColor"

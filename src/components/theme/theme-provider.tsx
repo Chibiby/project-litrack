@@ -16,7 +16,7 @@ type ThemeContextValue = {
   setTheme: (theme: Theme) => void;
   /**
    * Flip light/dark. With `origin` (viewport px, usually the clicked button's
-   * centre) three stacked ripples carry the new theme out over the live page.
+   * centre) the new theme grows from there as a circle over the live page.
    */
   toggleTheme: (origin?: ThemeOrigin) => void;
   /** False until the stored preference has been read; use to defer transitions. */
@@ -128,7 +128,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = useCallback(
     (origin?: ThemeOrigin) => {
       const next: Theme = theme === "dark" ? "light" : "dark";
-      playThemeWaves(origin, next === "dark", () => {
+      playThemeWaves(origin, () => {
         setOverride(next);
         applyTheme(next);
       });
