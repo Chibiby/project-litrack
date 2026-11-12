@@ -115,11 +115,13 @@ function PanelShell({
             {title}
           </h2>
           <p className="truncate text-xs text-muted-foreground sm:text-sm" title={subtitle}>
-            <span className="lg:hidden">{period}</span>
-            <span className="hidden lg:inline">{subtitle}</span>
+            {/* Narrow panels (phone up to xl) show the period here instead of
+                the chip, so the title never has to share its line. */}
+            <span className="2xl:hidden">{period}</span>
+            <span className="hidden 2xl:inline">{subtitle}</span>
           </p>
         </div>
-        <span className="hidden shrink-0 rounded-md border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground lg:inline-block">
+        <span className="hidden shrink-0 rounded-md border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground 2xl:inline-block">
           {period}
         </span>
         <ChevronRight aria-hidden className="size-4 shrink-0 text-violet-600 lg:hidden" />
