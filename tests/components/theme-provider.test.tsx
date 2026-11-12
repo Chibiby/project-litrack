@@ -6,7 +6,7 @@ import { THEME_STORAGE_KEY } from "@/lib/theme";
 function Probe() {
   const { theme, toggleTheme } = useTheme();
   return (
-    <button type="button" onClick={toggleTheme} data-testid="probe">
+    <button type="button" onClick={() => toggleTheme()} data-testid="probe">
       {theme}
     </button>
   );

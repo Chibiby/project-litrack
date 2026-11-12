@@ -461,3 +461,14 @@
     transform: translateX(-50%) rotate(var(--ray-rotate-from));
   }
 }
+
+/* Theme switch ripples (src/components/theme/theme-waves.ts). Keyframes in
+   the script drive the reveal and the rings; switch off the browser defaults
+   (cross-fade of the page, fade-in of the rings layer). */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(theme-ripples),
+::view-transition-new(theme-ripples) {
+  animation: none;
+  mix-blend-mode: normal;
+}

@@ -27,6 +27,8 @@ import {
   type AppRole,
 } from "@/lib/auth/roles";
 import { UserAvatar } from "@/components/user-avatar";
+import { useOptionalTheme } from "@/components/theme/theme-provider";
+import { ThemeIcon, originOf } from "@/components/theme/theme-toggle";
 import { cn } from "@/lib/utils";
 
 interface UserAccountMenuProps {
@@ -60,6 +62,8 @@ export function UserAccountMenu({
   variant = "default",
 }: UserAccountMenuProps) {
   const [open, setOpen] = useState(false);
+  const themeCtx = useOptionalTheme();
+  const isDark = themeCtx?.theme === "dark";
   const Chevron = open ? ChevronUp : ChevronDown;
 
   const trigger = variant === "avatar" ? (
@@ -160,6 +164,22 @@ export function UserAccountMenu({
             has none), so Sign out lives here for that variant. */}
         {variant === "avatar" ? (
           <>
+            {/* Phones have no header theme button, so the switch lives here.
+                The menu stays open so the circle visibly grows from this row. */}
+            {themeCtx ? (
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  themeCtx.toggleTheme(originOf(e.currentTarget as Element));
+                }}
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                className="cursor-pointer"
+              >
+                <ThemeIcon dark={isDark} animate={themeCtx.hydrated} className="h-4 w-4" />
+                Dark mode
+                <span className="ml-auto text-xs text-muted-foreground">{isDark ? "On" : "Off"}</span>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             {/* Called directly rather than via a submit button: the menu closes
                 on select and would unmount a form before it submitted. */}

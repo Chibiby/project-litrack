@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
+import { playThemeWaves } from "@/components/theme/theme-waves";
 import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
@@ -13,10 +14,16 @@ import {
 type ThemeContextValue = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
+  /**
+   * Flip light/dark. With `origin` (viewport px, usually the clicked button's
+   * centre) three stacked ripples carry the new theme out over the live page.
+   */
+  toggleTheme: (origin?: ThemeOrigin) => void;
   /** False until the stored preference has been read; use to defer transitions. */
   hydrated: boolean;
 };
+
+export type ThemeOrigin = { x: number; y: number };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
@@ -118,17 +125,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(next);
   }, []);
 
-  const toggleTheme = useCallback(() => {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setOverride(next);
-    applyTheme(next);
-  }, [theme]);
+  const toggleTheme = useCallback(
+    (origin?: ThemeOrigin) => {
+      const next: Theme = theme === "dark" ? "light" : "dark";
+      playThemeWaves(origin, next === "dark", () => {
+        setOverride(next);
+        applyTheme(next);
+      });
+    },
+    [theme]
+  );
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, hydrated }}>
       {children}
     </ThemeContext.Provider>
   );
+}
+
+/** Like useTheme, but null outside a ThemeProvider (for optional theme UI). */
+export function useOptionalTheme(): ThemeContextValue | null {
+  return useContext(ThemeContext);
 }
 
 export function useTheme(): ThemeContextValue {
