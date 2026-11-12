@@ -43,6 +43,7 @@ import {
   shapeAralTeachers,
   shapeAdvisory,
 } from "@/lib/summary/queries/aral";
+import { queryBosyRows, queryMosyRows, shapeBosy, shapeMosy } from "@/lib/summary/queries/mosy-bosy";
 import {
   SUMMARY_FACET_IDS,
   type FacetResult,
@@ -271,7 +272,11 @@ function defineFacet<S extends z.ZodTypeAny, R extends ResolvedParams, T extends
     toReportTable:
       def.id === "compliance"
         ? complianceReportTable
-        : def.id === "aral" || def.id === "aral-teachers" || def.id === "advisory"
+        : def.id === "aral" ||
+            def.id === "aral-teachers" ||
+            def.id === "advisory" ||
+            def.id === "bosy" ||
+            def.id === "mosy"
           ? exportListReportTable
           : summaryReportTable,
   };
@@ -408,6 +413,26 @@ export const SUMMARY_FACETS: Record<SummaryFacetId, SummaryFacet> = {
     query: () => queryAralLearnerRows(),
     shape: (raw, { schools, params, computedAt }) =>
       shapeAral({ raw, schools, level: params.level, computedAt }),
+  }),
+
+  bosy: defineFacet({
+    id: "bosy",
+    params: levelOnlyParamsSchema,
+    resolve: (p) => ({ level: p.level }),
+    queryInput: () => ({}),
+    query: () => queryBosyRows(),
+    shape: (raw, { schools, params, computedAt }) =>
+      shapeBosy({ raw, schools, level: params.level, computedAt }),
+  }),
+
+  mosy: defineFacet({
+    id: "mosy",
+    params: levelOnlyParamsSchema,
+    resolve: (p) => ({ level: p.level }),
+    queryInput: () => ({}),
+    query: () => queryMosyRows(),
+    shape: (raw, { schools, params, computedAt }) =>
+      shapeMosy({ raw, schools, level: params.level, computedAt }),
   }),
 
   "aral-teachers": defineFacet({

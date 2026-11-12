@@ -4,7 +4,9 @@ import {
   BookOpenCheck,
   CalendarDays,
   ChevronRight,
+  ClipboardCheck,
   ClipboardList,
+  Flag,
   GraduationCap,
   ShieldAlert,
   UserCheck,
@@ -26,6 +28,8 @@ export const SUMMARY_FACET_ICON: Record<SummaryFacetId, LucideIcon> = {
   compliance: ShieldAlert,
   profiling: UserRound,
   aral: GraduationCap,
+  bosy: Flag,
+  mosy: ClipboardCheck,
   "aral-teachers": UserCheck,
   advisory: UsersRound,
 };
@@ -44,6 +48,8 @@ export const SUMMARY_FACET_TILE: Record<SummaryFacetId, string> = {
   compliance: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
   profiling: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
   aral: ARAL_TILE,
+  bosy: ARAL_TILE,
+  mosy: ARAL_TILE,
   "aral-teachers": ARAL_TILE,
   advisory: PRIMARY_TILE,
 };

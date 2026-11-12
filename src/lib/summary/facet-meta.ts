@@ -62,6 +62,18 @@ export const SUMMARY_FACET_META: Record<SummaryFacetId, SummaryFacetMeta> = {
     description: "ARAL learners per grade level.",
     paramKinds: [],
   },
+  bosy: {
+    id: "bosy",
+    label: "BOSY",
+    description: "ARAL learners' beginning of school year reading level, per grade level.",
+    paramKinds: [],
+  },
+  mosy: {
+    id: "mosy",
+    label: "MOSY",
+    description: "Stay in ARAL, and moved out by reason (NLPA included), per grade level.",
+    paramKinds: [],
+  },
   "aral-teachers": {
     id: "aral-teachers",
     label: "ARAL teachers",

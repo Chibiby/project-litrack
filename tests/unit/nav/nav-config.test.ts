@@ -768,6 +768,8 @@ describe("getNavGroups — district admin", () => {
       "Non-compliance",
       "Teacher and School Head profiling",
       "ARAL learners",
+      "BOSY",
+      "MOSY",
       "ARAL teachers",
       "Advisory",
     ]);

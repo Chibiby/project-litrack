@@ -392,7 +392,7 @@ const EXPORT_LEVEL_COLUMN: Record<SummaryLevel, string> = {
   school: "School",
 };
 
-type Cell = string | number | null;
+export type Cell = string | number | null;
 
 /**
  * Shared export skeleton: one row per group built by `figures`, lead columns
@@ -401,7 +401,7 @@ type Cell = string | number | null;
  * list when there is more than one row. `figures(totals)` is called with the
  * summed raw numbers for the Total row so percentages are recomputed.
  */
-function buildExportRows(args: {
+export function buildExportRows(args: {
   schools: readonly ScopeSchool[];
   level: SummaryLevel;
   groups: readonly { key: string; label: string; schoolId?: string }[];
@@ -428,7 +428,7 @@ function buildExportRows(args: {
   return rows;
 }
 
-function leadColumns(level: SummaryLevel): string[] {
+export function leadColumns(level: SummaryLevel): string[] {
   return [EXPORT_LEVEL_COLUMN[level], ...(level === "school" ? ["School ID", "District"] : [])];
 }
 

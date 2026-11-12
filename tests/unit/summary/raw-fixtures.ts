@@ -1,6 +1,7 @@
 import type { RawCountRow } from "@/lib/summary/queries/population";
 import type { RawAttendanceRow } from "@/lib/summary/queries/attendance";
 import type { RawAdvisoryRow, RawAralRow } from "@/lib/summary/queries/aral";
+import type { RawBosyRow, RawMosyRow } from "@/lib/summary/queries/mosy-bosy";
 import type { RawComplianceRow } from "@/lib/summary/queries/compliance";
 import type { RawTermRow } from "@/lib/summary/queries/end-of-term";
 import type { RawProfilingRow } from "@/lib/summary/queries/profiling";
@@ -263,6 +264,26 @@ function advisoryRows(id: string): RawAdvisoryRow[] {
   ];
 }
 
+/** BOSY: two Low Emergent in G3, one Grade Ready in the school's own grade. */
+function bosyRows(id: string): RawBosyRow[] {
+  const { gt } = p(id);
+  return [
+    { school_id: id, gt: "G3", filipino: "NON_DECODER_LOW_EMERGENT", count: 2 },
+    { school_id: id, gt, filipino: "INDEPENDENT_GRADE_READY", count: 1 },
+  ];
+}
+
+/** MOSY: in G3 one not updated, one stay, one NLPA move out; in the school's own grade one transferred out. */
+function mosyRows(id: string): RawMosyRow[] {
+  const { gt } = p(id);
+  return [
+    { school_id: id, gt: "G3", is_aral: true, has_row: false, decision: null, reason: null, count: 1 },
+    { school_id: id, gt: "G3", is_aral: true, has_row: true, decision: "STAY", reason: null, count: 1 },
+    { school_id: id, gt: "G3", is_aral: false, has_row: true, decision: "MOVE_OUT", reason: "NLPA", count: 1 },
+    { school_id: id, gt, is_aral: false, has_row: true, decision: "MOVE_OUT", reason: "TRANSFERRED_OUT", count: 1 },
+  ];
+}
+
 // ------------------------------------------------------------- whole queries
 
 type AnyRaw = { school_id: string | null; [column: string]: unknown };
@@ -289,6 +310,10 @@ function rowsFor(facet: SummaryFacetId, ids: readonly string[]): AnyRaw[] {
       return ids.flatMap(aralTeacherRows);
     case "advisory":
       return ids.flatMap(advisoryRows);
+    case "bosy":
+      return ids.flatMap(bosyRows);
+    case "mosy":
+      return ids.flatMap(mosyRows);
   }
 }
 
@@ -327,6 +352,10 @@ function orphanRows(facet: SummaryFacetId): AnyRaw[] {
         { school_id: nul, field: "adviser", bucket: "DEFAULT", count: 9 },
         { school_id: nul, field: "adviserGrade", bucket: "G9", count: 9 },
       ] as RawAdvisoryRow[];
+    case "bosy":
+      return [{ school_id: nul, gt: "G9", filipino: "LETTER_LEVEL", count: 9 }] as RawBosyRow[];
+    case "mosy":
+      return [{ school_id: nul, gt: "G9", is_aral: false, has_row: true, decision: "MOVE_OUT", reason: "NLPA", count: 9 }] as RawMosyRow[];
   }
 }
 

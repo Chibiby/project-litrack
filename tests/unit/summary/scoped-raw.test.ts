@@ -98,6 +98,7 @@ const { shapeReadingLevels } = await import("@/lib/summary/queries/reading-level
 const { shapeCompliance } = await import("@/lib/summary/queries/compliance");
 const { shapeProfiling } = await import("@/lib/summary/queries/profiling");
 const { shapeAral, shapeAralTeachers, shapeAdvisory } = await import("@/lib/summary/queries/aral");
+const { shapeBosy, shapeMosy } = await import("@/lib/summary/queries/mosy-bosy");
 
 type SummaryScope = import("@/lib/auth/admin-scope").SummaryScope;
 type SummaryFacetId = import("@/lib/summary/types").SummaryFacetId;
@@ -123,6 +124,8 @@ const PARAMS: Record<SummaryFacetId, Record<string, string>> = {
   aral: {},
   "aral-teachers": {},
   advisory: {},
+  bosy: {},
+  mosy: {},
 };
 
 /** Scopes and the schools each must cover, written out by hand (name order). */
@@ -225,6 +228,10 @@ function referenceResult(
       return shapeAralTeachers({ raw, schools, level, computedAt });
     case "advisory":
       return shapeAdvisory({ raw, schools, level, computedAt });
+    case "bosy":
+      return shapeBosy({ raw, schools, level, computedAt });
+    case "mosy":
+      return shapeMosy({ raw, schools, level, computedAt });
   }
 }
 

@@ -128,9 +128,9 @@ beforeEach(() => {
 });
 
 describe("warmDivisionRaw", () => {
-  it("loads each of the 10 facets' raw entry exactly once, in order, one at a time, and shapes no scope", async () => {
+  it("loads each facet's raw entry exactly once, in order, one at a time, and shapes no scope", async () => {
     const report = await warmDivisionRaw();
-    expect(report).toHaveLength(10);
+    expect(report).toHaveLength(SUMMARY_FACET_IDS.length);
     expect(report.every((r) => r.ok)).toBe(true);
     expect(callOrder).toEqual(RAW_ORDER);
     for (const id of SUMMARY_FACET_IDS) expect(loads.get(id)!).toHaveBeenCalledTimes(1);
@@ -141,7 +141,7 @@ describe("warmDivisionRaw", () => {
   it("one facet throwing does not stop the others", async () => {
     loads.get("attendance")!.mockRejectedValueOnce(new Error("boom"));
     const report = await warmDivisionRaw();
-    expect(report).toHaveLength(10);
+    expect(report).toHaveLength(SUMMARY_FACET_IDS.length);
     expect(report.filter((r) => !r.ok).map((r) => r.facetId)).toEqual(["attendance"]);
     expect(report.find((r) => !r.ok)?.error).toBe("boom");
     expect(loads.get("aral")!).toHaveBeenCalledTimes(1);
@@ -150,13 +150,13 @@ describe("warmDivisionRaw", () => {
 });
 
 describe("warmOnce (the cached warm)", () => {
-  it("miss: runs exactly 10 raw loads, in order, and stores the outcome tagged divisionSummary for a day", async () => {
+  it("miss: runs one raw load per facet, in order, and stores the outcome tagged divisionSummary for a day", async () => {
     const out = await warmOnce();
     expect(callOrder).toEqual(RAW_ORDER);
-    expect(totalLoads()).toBe(10);
+    expect(totalLoads()).toBe(SUMMARY_FACET_IDS.length);
     expect(state.maxInFlight).toBe(1);
     expect(out.failures).toEqual([]);
-    expect(out.results).toHaveLength(10);
+    expect(out.results).toHaveLength(SUMMARY_FACET_IDS.length);
     expect(out.results[0]).toEqual({ facetId: SUMMARY_FACET_IDS[0], ok: true, ms: expect.any(Number) });
 
     const key = warmKey();
@@ -173,7 +173,7 @@ describe("warmOnce (the cached warm)", () => {
     for (let tick = 0; tick < 5; tick++) {
       expect(await warmOnce()).toEqual(first);
     }
-    expect(totalLoads()).toBe(10);
+    expect(totalLoads()).toBe(SUMMARY_FACET_IDS.length);
     expect(pending.size).toBe(0);
   });
 
@@ -189,7 +189,7 @@ describe("warmOnce (the cached warm)", () => {
     await settle();
 
     expect(callOrder).toEqual(RAW_ORDER);
-    expect(totalLoads()).toBe(20);
+    expect(totalLoads()).toBe(2 * SUMMARY_FACET_IDS.length);
     const refreshed = store.get(key)!;
     expect(refreshed.stale).toBe(false);
     expect((refreshed.value as WarmOutcome).at).toBeGreaterThanOrEqual(first.at);
@@ -197,7 +197,7 @@ describe("warmOnce (the cached warm)", () => {
     // Fresh again: the next tick is a plain hit.
     await warmOnce();
     await settle();
-    expect(totalLoads()).toBe(20);
+    expect(totalLoads()).toBe(2 * SUMMARY_FACET_IDS.length);
   });
 
   it("a deploy or a divisionSummary bust (entry gone) runs the warm again, once", async () => {
@@ -205,7 +205,7 @@ describe("warmOnce (the cached warm)", () => {
     store.delete(warmKey());
     await warmOnce();
     await warmOnce();
-    expect(totalLoads()).toBe(20);
+    expect(totalLoads()).toBe(2 * SUMMARY_FACET_IDS.length);
   });
 
   describe("Manila day change", () => {
@@ -226,7 +226,7 @@ describe("warmOnce (the cached warm)", () => {
       await warmOnce();
       vi.setSystemTime(new Date("2026-10-04T23:55:00+08:00"));
       await warmOnce();
-      expect(totalLoads()).toBe(10);
+      expect(totalLoads()).toBe(SUMMARY_FACET_IDS.length);
     });
 
     it("next Manila day: exactly one warm, then hits", async () => {
@@ -236,7 +236,7 @@ describe("warmOnce (the cached warm)", () => {
       vi.setSystemTime(new Date("2026-10-05T00:00:00+08:00"));
       await warmOnce();
       await warmOnce();
-      expect(totalLoads()).toBe(20);
+      expect(totalLoads()).toBe(2 * SUMMARY_FACET_IDS.length);
     });
   });
 
@@ -244,11 +244,11 @@ describe("warmOnce (the cached warm)", () => {
     loads.get("aral")!.mockRejectedValueOnce(new Error("x"));
     const out = await warmOnce();
     expect(out.failures).toEqual([{ facetId: "aral", error: "x" }]);
-    expect(out.results.filter((r) => r.ok)).toHaveLength(9);
+    expect(out.results.filter((r) => r.ok)).toHaveLength(SUMMARY_FACET_IDS.length - 1);
     expect(loads.get("compliance")!).toHaveBeenCalledTimes(1); // the rest still ran
 
     expect(await warmOnce()).toEqual(out);
-    expect(totalLoads()).toBe(10);
+    expect(totalLoads()).toBe(SUMMARY_FACET_IDS.length);
   });
 });
 
@@ -268,11 +268,11 @@ describe("GET /api/cron/summary-warm", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as WarmOutcome;
     expect(body.failures).toEqual([{ facetId: "aral", error: "x" }]);
-    expect(body.results).toHaveLength(10);
+    expect(body.results).toHaveLength(SUMMARY_FACET_IDS.length);
 
     // The stored failing outcome is served (still 502) without re-warming.
     expect((await GET(req(secret))).status).toBe(502);
-    expect(totalLoads()).toBe(10);
+    expect(totalLoads()).toBe(SUMMARY_FACET_IDS.length);
   });
 
   it("miss: warms and answers 200; later ticks answer the stored outcome with no loads", async () => {
@@ -280,12 +280,12 @@ describe("GET /api/cron/summary-warm", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as WarmOutcome;
     expect(body.failures).toEqual([]);
-    expect(body.results).toHaveLength(10);
+    expect(body.results).toHaveLength(SUMMARY_FACET_IDS.length);
 
     const again = await GET(req(secret));
     expect(again.status).toBe(200);
     expect(await again.json()).toEqual(body);
-    expect(totalLoads()).toBe(10);
+    expect(totalLoads()).toBe(SUMMARY_FACET_IDS.length);
   });
 });
 

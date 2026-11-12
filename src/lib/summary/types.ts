@@ -15,6 +15,8 @@ export const SUMMARY_FACET_IDS = [
   "compliance",
   "profiling",
   "aral",
+  "bosy",
+  "mosy",
   "aral-teachers",
   "advisory",
 ] as const;

@@ -4,6 +4,7 @@ import { notFoundLinksFor } from "@/lib/nav/not-found-links";
 import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { getNavGroups, flattenNavGroups } from "@/lib/nav/nav-config";
 import { USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
+import { DISTRICT_SUMMARY_FACETS } from "@/lib/routes/district";
 
 /**
  * Every `UserRole` value, run through every role-keyed map/switch this suite
@@ -85,7 +86,7 @@ describe("role-exhaustiveness", () => {
   it("getNavGroups covers every DISTRICT_ADMIN summary facet", () => {
     const items = flattenNavGroups(getNavGroups("DISTRICT_ADMIN"));
     const summaryItems = items.filter((i) => i.href.startsWith("/district/summary/"));
-    expect(summaryItems.length).toBe(10);
+    expect(summaryItems.length).toBe(DISTRICT_SUMMARY_FACETS.length);
   });
 
   it("USER_ROLE_LABELS has a distinct, non-empty label for every role", () => {
