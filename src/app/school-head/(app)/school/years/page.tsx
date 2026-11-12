@@ -14,10 +14,10 @@ import { Callout } from "@/components/ui/callout";
 import { Surface, SurfaceBody, SurfaceHeader } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import {
-  CreateSchoolYearDialog,
   SchoolYearsList,
   type SchoolYearListItem,
 } from "@/components/school-head/school-year-forms";
+import { toMonthKey } from "@/lib/school-year/months";
 
 export const dynamic = "force-dynamic";
 
@@ -58,8 +58,8 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
   const items: SchoolYearListItem[] = years.map((y) => ({
     id: y.id,
     label: y.label,
-    startDate: y.startDate.toISOString().slice(0, 10),
-    endDate: y.endDate.toISOString().slice(0, 10),
+    startMonth: toMonthKey(y.startDate),
+    endMonth: y.endDate ? toMonthKey(y.endDate) : null,
     isActive: y.isActive,
     enrollmentCount: y._count.enrollments,
     termGradeCount: y._count.termGrades,
@@ -78,12 +78,7 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
           eyebrow="School"
           eyebrowIcon={School}
           title="School years"
-          subtitle="One year is active at a time. Learners are enrolled against the active year."
-          topRight={
-            view.isSuperAdminView ? null : (
-              <CreateSchoolYearDialog existingYears={items} />
-            )
-          }
+          subtitle="The Division Admin creates school years and picks the active one. You set when each year starts and ends at your school."
           stats={
             <>
               <StatCard
@@ -120,8 +115,8 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
       callout={
         active ? null : (
           <Callout title="No active school year">
-            New learners will be created without an enrollment record until you mark
-            a year active.
+            New learners will be created without an enrollment record until the
+            Division Admin makes a year active.
           </Callout>
         )
       }
@@ -134,62 +129,19 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
           {items.length === 0 ? (
             <EmptyState
               title="No school years yet"
-              description="Add a school year and mark one active to start enrolling learners."
+              description="The Division Admin adds school years for every school."
               icon={CalendarRange}
             />
           ) : (
-            <SchoolYearsList readOnly={view.isSuperAdminView} years={items} />
+            <SchoolYearsList
+              years={items}
+              canSetMonths
+              canManage={view.isSuperAdminView}
+            />
           )}
         </SurfaceBody>
       </Surface>
 
-      {view.isSuperAdminView ? null : (
-        <details className="group rounded-xl border border-border/80 bg-card text-card-foreground shadow-card [&_summary::-webkit-details-marker]:hidden">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-base font-semibold">
-            Correcting a school year
-            <span
-              aria-hidden
-              className="text-sm font-normal text-muted-foreground transition-transform group-open:rotate-180"
-            >
-              ▾
-            </span>
-          </summary>
-          <div className="space-y-3 border-t border-border/60 px-5 py-4 text-sm text-muted-foreground">
-            <p>
-              Mistakes here are fixable. <strong className="text-foreground">Edit</strong>{" "}
-              on any row opens the label and the date range for correction — use it
-              when a year was typed as the wrong span, or the division moved the
-              opening date after you had already set it up.
-            </p>
-            <ol className="ml-4 list-decimal space-y-1.5">
-              <li>Press Edit on the year you need to fix.</li>
-              <li>
-                Correct the label (YYYY-YYYY, consecutive years) or either date, then
-                Save changes.
-              </li>
-              <li>
-                The list and every report pick up the new details immediately. Nobody
-                is unenrolled and no grades move — enrolments are attached to the
-                year itself, not to its dates.
-              </li>
-            </ol>
-            <p>
-              Two things editing deliberately cannot do.{" "}
-              <strong className="text-foreground">It never changes which year is active</strong>{" "}
-              — that stays a separate Set active decision, so a typo fix cannot
-              quietly redirect where new learners are enrolled. And a year with
-              enrolments or grades behind it{" "}
-              <strong className="text-foreground">cannot be deleted</strong>, only
-              corrected; the delete button appears only on a year that still has no
-              records, which is the duplicate you meant to undo.
-            </p>
-            <p>
-              Every correction is written to the audit log with its before and after
-              values, so a range that changed mid-year can always be traced.
-            </p>
-          </div>
-        </details>
-      )}
     </SchoolHeadPage>
   );
 }

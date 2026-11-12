@@ -41,6 +41,7 @@ import type { TermPeriodValue } from "@/lib/terms/windows";
 import type { ReportFilters } from "@/lib/reports/kinds";
 import type { ReportTable } from "@/lib/reports/render";
 import { loadReportFrame, type GradeSectionLine } from "@/lib/reports/sheet-header";
+import { effectiveYearEnd } from "@/lib/school-year/months";
 
 /**
  * The data half of the Reports Hub: one builder per report kind, each returning
@@ -153,7 +154,7 @@ function periodFromRange(label: string): string {
  */
 async function activeSchoolYear(
   schoolId: string
-): Promise<{ id: string; startDate: Date; endDate: Date; label: string } | null> {
+): Promise<{ id: string; startDate: Date; endDate: Date | null; label: string } | null> {
   return prisma.schoolYear.findFirst({
     where: { schoolId, isActive: true },
     select: { id: true, startDate: true, endDate: true, label: true },
@@ -1049,7 +1050,7 @@ export async function buildMosyTable(
     gradeSection,
     summary: [
       schoolYear
-        ? `School Year: ${schoolYear.label} (${formatLocalDateKey(schoolYear.startDate)} to ${formatLocalDateKey(schoolYear.endDate)})`
+        ? `School Year: ${schoolYear.label} (${formatLocalDateKey(schoolYear.startDate)} to ${formatLocalDateKey(effectiveYearEnd(schoolYear.startDate, schoolYear.endDate))})`
         : "School Year: none resolved",
       `${mosyLearners.length} learner(s), ${assessed} assessed in window`,
       ...(windowNote ? [windowNote] : []),

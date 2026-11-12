@@ -322,6 +322,7 @@ async function LearnersDirectoryBody({ params }: { params: LearnersHubParams }) 
         rows={rows}
         filters={filters}
         basePath={ADMIN_ROUTES.learners}
+        rowHrefBase={ADMIN_ROUTES.learners}
         list={{
           page: params.page,
           pageSize: params.pageSize,

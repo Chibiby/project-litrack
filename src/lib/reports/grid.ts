@@ -8,6 +8,7 @@
  */
 
 import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
+import { effectiveYearEnd } from "@/lib/school-year/months";
 
 export type DateRange = {
   /** Inclusive local `YYYY-MM-DD`. */
@@ -19,7 +20,7 @@ export type DateRange = {
 };
 
 /** The one field of `SchoolYear` this module needs, kept narrow for tests. */
-export type SchoolYearWindow = { startDate: Date; endDate: Date } | null;
+export type SchoolYearWindow = { startDate: Date; endDate: Date | null } | null;
 
 /**
  * Resolves the report's date range from the hub's filters, per the rule
@@ -67,7 +68,7 @@ export function resolveDateRange(
 
   if (schoolYear) {
     const startKey = formatLocalDateKey(schoolYear.startDate);
-    const yearEndKey = formatLocalDateKey(schoolYear.endDate);
+    const yearEndKey = formatLocalDateKey(effectiveYearEnd(schoolYear.startDate, schoolYear.endDate));
     const endKey = yearEndKey < todayKey ? yearEndKey : todayKey;
     return {
       startKey,

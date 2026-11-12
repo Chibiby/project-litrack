@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { cachedQuery } from "@/lib/cache/unstable";
 import { schoolDashboard } from "@/lib/cache/tags";
 import { formatLocalDateKey } from "@/lib/date-keys";
+import { effectiveYearEnd } from "@/lib/school-year/months";
 
 export type ActiveSchoolYear = {
   id: string;
@@ -82,7 +83,7 @@ export async function getActiveSchoolYear(
         id: schoolYear.id,
         label: schoolYear.label,
         startDateKey: formatLocalDateKey(schoolYear.startDate),
-        endDateKey: formatLocalDateKey(schoolYear.endDate),
+        endDateKey: formatLocalDateKey(effectiveYearEnd(schoolYear.startDate, schoolYear.endDate)),
         overrides: schoolYear.termWindowOverrides,
       };
     },

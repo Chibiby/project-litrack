@@ -1,6 +1,8 @@
 "use client";
 
-import { GraduationCap } from "lucide-react";
+import { ChevronRight, GraduationCap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -65,7 +67,24 @@ type LearnersDirectoryProps = {
   rowPanelActions?: (row: LearnerHubRow) => React.ReactNode;
   /** Status shown under the learner's name, e.g. a waiting transfer request. */
   rowBadge?: (row: LearnerHubRow) => React.ReactNode;
+  /**
+   * Opens each learner's profile at `${rowHrefBase}/${id}`: the whole row is
+   * clickable, the name is the keyboard-reachable link, and a trailing chevron
+   * shows the row leads somewhere. A string, not a function, so a server page
+   * can pass it across the client boundary.
+   */
+  rowHrefBase?: string;
 };
+
+/**
+ * Whole-row click for a linked row. Clicks that land on a control inside the
+ * row (the name link itself, a checkbox, a row action) are left to that control.
+ */
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  return target instanceof Element
+    ? Boolean(target.closest("a, button, input, label, [role='checkbox'], [role='menuitem']"))
+    : false;
+}
 
 export type LearnersDirectorySelection = {
   selectedIds: ReadonlySet<string>;
@@ -145,9 +164,13 @@ function LearnersDirectoryInner({
   bulkActions,
   rowActions,
   rowPanelActions,
+  rowHrefBase,
   rowBadge,
 }: LearnersDirectoryProps) {
   const active = describeActiveFilters(filters, list.q);
+  const router = useRouter();
+  const hrefFor = (row: LearnerHubRow) =>
+    rowHrefBase ? `${rowHrefBase}/${encodeURIComponent(row.id)}` : undefined;
 
   return (
     <div className="space-y-4">
@@ -232,7 +255,7 @@ function LearnersDirectoryInner({
                       <TableHead>Section</TableHead>
                       {hideSchool ? null : <TableHead>School</TableHead>}
                       <TableHead className="pr-4">Programs</TableHead>
-                      {rowActions ? (
+                      {rowActions || rowHrefBase ? (
                         <TableHead className="pr-4">
                           <span className="sr-only">Actions</span>
                         </TableHead>
@@ -244,6 +267,15 @@ function LearnersDirectoryInner({
                       <TableRow
                         key={row.id}
                         data-state={selection?.selectedIds.has(row.id) ? "selected" : undefined}
+                        className={hrefFor(row) ? "cursor-pointer" : undefined}
+                        onClick={
+                          hrefFor(row)
+                            ? (e) => {
+                                if (isInteractiveTarget(e.target)) return;
+                                router.push(hrefFor(row)!);
+                              }
+                            : undefined
+                        }
                       >
                         {selection ? (
                           <TableCell className="w-10 pl-4">
@@ -251,7 +283,16 @@ function LearnersDirectoryInner({
                           </TableCell>
                         ) : null}
                         <TableCell className="max-w-[18rem] pl-4 font-medium">
-                          <CellText>{row.listingName}</CellText>
+                          {hrefFor(row) ? (
+                            <PrefetchLink
+                              href={hrefFor(row)!}
+                              className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <CellText>{row.listingName}</CellText>
+                            </PrefetchLink>
+                          ) : (
+                            <CellText>{row.listingName}</CellText>
+                          )}
                           {rowBadge ? rowBadge(row) : null}
                         </TableCell>
                         <TableCell>{GENDER_LABELS[row.gender]}</TableCell>
@@ -267,9 +308,17 @@ function LearnersDirectoryInner({
                         <TableCell className="pr-4">
                           <ProgramBadges row={row} />
                         </TableCell>
-                        {rowActions ? (
+                        {rowActions || rowHrefBase ? (
                           <TableCell className="pr-4">
-                            <RowActions>{rowActions(row)}</RowActions>
+                            <RowActions>
+                              {rowActions ? rowActions(row) : null}
+                              {rowHrefBase ? (
+                                <ChevronRight
+                                  aria-hidden
+                                  className="size-4 text-muted-foreground"
+                                />
+                              ) : null}
+                            </RowActions>
                           </TableCell>
                         ) : null}
                       </TableRow>
@@ -288,6 +337,7 @@ function LearnersDirectoryInner({
                         ) : undefined
                       }
                       title={row.listingName}
+                      href={hrefFor(row)}
                       // Grade and section sit under the name, not beside it: a
                       // long section name beside the name cut the name to a
                       // few letters on a phone.
@@ -307,7 +357,19 @@ function LearnersDirectoryInner({
                         { label: "Sex", value: GENDER_LABELS[row.gender] },
                         ...(hideSchool ? [] : [{ label: "School", value: row.school.name }]),
                       ]}
-                      actions={!rowPanelActions && rowActions ? rowActions(row) : undefined}
+                      actions={
+                        !rowPanelActions && rowActions ? (
+                          rowActions(row)
+                        ) : hrefFor(row) ? (
+                          <PrefetchLink
+                            href={hrefFor(row)!}
+                            aria-label={`Open ${row.listingName}'s profile`}
+                            className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <ChevronRight aria-hidden className="size-4" />
+                          </PrefetchLink>
+                        ) : undefined
+                      }
                       detailActions={rowPanelActions ? rowPanelActions(row) : undefined}
                     />
                   ))}

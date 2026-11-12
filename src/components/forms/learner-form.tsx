@@ -49,6 +49,7 @@ import {
 } from "@/lib/reading/policy";
 import { LEARNER_AGE_RANGE } from "@/lib/validators/common";
 import { createLearner, updateLearner } from "@/lib/actions/learner";
+import { updateLearnerAsAdmin } from "@/lib/actions/admin-learner";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { stableSerialize } from "@/hooks/unsaved-changes-context";
 import { callAction } from "@/lib/ui/call-action";
@@ -143,6 +144,12 @@ type LearnerFormProps = {
   onCancel?: () => void;
   /** Fires when the form's values start or stop differing from how it opened. */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Edit mode only: save through `updateLearnerAsAdmin` (Super Admin profile
+   * page, division-wide guard) instead of the teacher's `updateLearner`.
+   * Both take the same form fields.
+   */
+  adminSave?: boolean;
 };
 
 const FRUSTRATION = "FRUSTRATION_HIGH_EMERGENT";
@@ -244,6 +251,7 @@ export function LearnerForm({
   onSaved,
   onCancel,
   onDirtyChange,
+  adminSave = false,
 }: LearnerFormProps) {
   const [pending, startTransition] = useTransition();
   const [duplicatePending, setDuplicatePending] = useState(false);
@@ -491,7 +499,7 @@ export function LearnerForm({
 
     startTransition(async () => {
       if (isEdit) {
-        const res = await callAction(() => updateLearner(fd));
+        const res = await callAction(() => (adminSave ? updateLearnerAsAdmin(fd) : updateLearner(fd)));
         if (res.ok) {
           toast.success("Learner updated");
           onSaved?.();

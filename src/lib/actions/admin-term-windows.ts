@@ -12,6 +12,7 @@ import { revalidateSchoolDashboard } from "@/lib/cache/revalidate";
 import { adminTermWindowsSchema } from "@/lib/validators/term-window.schema";
 import { formatLocalDateKey } from "@/lib/date-keys";
 import { getTermWindows, TERM_PERIODS, validateTermWindows } from "@/lib/terms/windows";
+import { effectiveYearEnd } from "@/lib/school-year/months";
 
 export const updateAdminTermWindows = action(
   "updateAdminTermWindows",
@@ -42,7 +43,7 @@ export const updateAdminTermWindows = action(
         const value = submitted.get(term)!;
         return { ...value, label: derived.find((w) => w.term === term)!.label, rangeLabel: "", isOverridden: false };
       });
-      const validation = validateTermWindows(effective, formatLocalDateKey(year.startDate), formatLocalDateKey(year.endDate));
+      const validation = validateTermWindows(effective, formatLocalDateKey(year.startDate), formatLocalDateKey(effectiveYearEnd(year.startDate, year.endDate)));
       if (validation) throw new AppError("VALIDATION_FAILED", { params: { message: `${validation} (${year.id})` } });
       return { year, derived, before: getTermWindows(year.startDate, year.termWindowOverrides) };
     });

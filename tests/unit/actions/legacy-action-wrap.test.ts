@@ -112,7 +112,6 @@ vi.mock("@/lib/teachers/advisory", async (importOriginal) => ({
 const { createSection, updateSection, deleteSection } = await import(
   "@/lib/actions/section"
 );
-const { createSchoolYear } = await import("@/lib/actions/school-year");
 const { createLearner, archiveLearner } = await import("@/lib/actions/learner");
 
 function form(fields: Record<string, string>): FormData {
@@ -203,36 +202,6 @@ describe("deleteSection", () => {
     expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE" });
     expect((res as { error: string }).error).toContain("Couldn't remove the section");
     expect(writeAudit).not.toHaveBeenCalled();
-  });
-});
-
-describe("createSchoolYear", () => {
-  const fields = {
-    label: "2026-2027",
-    startDate: "2026-06-08",
-    endDate: "2027-03-31",
-  };
-
-  it("names what failed when the database is unreachable", async () => {
-    transaction.mockRejectedValue(prismaDown());
-
-    const res = await createSchoolYear(form(fields));
-
-    expect(res).toMatchObject({ ok: false, code: "DB_UNAVAILABLE", ref: "E-TEST0001" });
-    expect((res as { error: string }).error).toContain("Couldn't create the school year");
-    expect(writeAudit).not.toHaveBeenCalled();
-  });
-
-  it("still says the label is taken on a unique violation", async () => {
-    transaction.mockRejectedValue(uniqueViolation());
-
-    const res = await createSchoolYear(form(fields));
-
-    expect(res).toMatchObject({
-      ok: false,
-      error: "A school year with this label already exists",
-    });
-    expect(reportError).not.toHaveBeenCalled();
   });
 });
 

@@ -642,7 +642,7 @@ model SchoolYear {
   schoolId  String
   label     String // e.g. "2025-2026"
   startDate DateTime
-  endDate   DateTime
+  endDate   DateTime? // null = School Head has not set the end month yet
   isActive  Boolean  @default(false)
   createdAt DateTime @default(now())
 

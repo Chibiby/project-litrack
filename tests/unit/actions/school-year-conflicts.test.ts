@@ -1,42 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * A P2002 on SchoolYear is two different conditions: the (schoolId, label)
- * unique, and the one-active-year partial unique index. Only the first is a
- * label clash; the second means two activations raced.
+ * School-year actions after the 2026-11-12 split: the Division Admin creates a
+ * year for every school and activates it; a School Head only sets months, and
+ * only on their own school's years. A P2002 from the one-active-year partial
+ * unique index means two activations raced.
  */
 
 const ACTIVE_MSG = "Another school year was just made active. Refresh and try again.";
 
-function p2002(target: unknown, message = "Unique constraint failed") {
-  return Object.assign(new Error(message), {
+function p2002(target: unknown) {
+  return Object.assign(new Error("Unique constraint failed"), {
     name: "PrismaClientKnownRequestError",
     code: "P2002",
-    meta: target === undefined ? undefined : { target },
+    meta: { target },
   });
-}
-
-/** The shape engineType "client" + @prisma/adapter-pg produces: no meta.target. */
-function adapterP2002(fields: string[], message?: string) {
-  const quoted = fields.map((f) => `"${f}"`);
-  return Object.assign(
-    new Error(message ?? `Unique constraint failed on the fields: (${quoted.map((f) => `\`${f}\``).join(",")})`),
-    {
-      name: "PrismaClientKnownRequestError",
-      code: "P2002",
-      meta: {
-        driverAdapterError: {
-          name: "DriverAdapterError",
-          cause: { kind: "UniqueConstraintViolation", constraint: { fields: quoted } },
-        },
-      },
-    },
-  );
 }
 
 const transaction = vi.fn();
 const findFirst = vi.fn();
 const update = vi.fn();
+const schoolFindMany = vi.fn();
+const schoolCount = vi.fn();
+const requireUser = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -45,25 +31,26 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: (...a: unknown[]) => findFirst(...a),
       update: (...a: unknown[]) => update(...a),
     },
+    school: {
+      findMany: (...a: unknown[]) => schoolFindMany(...a),
+      count: (...a: unknown[]) => schoolCount(...a),
+    },
   },
 }));
-vi.mock("@/lib/auth/session", () => ({
-  requireSchoolUser: vi.fn(async () => ({
-    id: "user-1",
-    schoolId: "school-1",
-    role: "SCHOOL_HEAD" as const,
-    profileCompleted: true,
-  })),
-}));
+vi.mock("@/lib/auth/session", () => ({ requireUser: (...a: unknown[]) => requireUser(...a) }));
 vi.mock("@/lib/audit", () => ({
   writeAudit: vi.fn(async () => {}),
   AUDIT_ACTIONS: new Proxy({}, { get: (_t, key) => String(key) }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/cache/revalidate", () => ({ revalidateSchoolDashboard: vi.fn() }));
+vi.mock("@/lib/cache/revalidate", () => ({
+  revalidateSchoolDashboard: vi.fn(),
+  revalidateAdminDashboard: vi.fn(),
+  revalidateAllCachedData: vi.fn(),
+}));
 vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-TEST0001") }));
 
-const { createSchoolYear, setActiveSchoolYear, updateSchoolYear } = await import(
+const { createDivisionSchoolYear, setActiveSchoolYear, setSchoolYearMonths } = await import(
   "@/lib/actions/school-year"
 );
 
@@ -73,107 +60,133 @@ function form(fields: Record<string, string>): FormData {
   return fd;
 }
 
-const createForm = () =>
-  form({ label: "2026-2027", startDate: "2026-06-08", endDate: "2027-03-31", setActive: "true" });
+const ADMIN = { id: "admin-1", schoolId: null, role: "SUPER_ADMIN" as const };
+const HEAD = { id: "head-1", schoolId: "school-1", role: "SCHOOL_HEAD" as const };
 const YEAR_ID = "11111111-1111-4111-8111-111111111111";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  findFirst.mockResolvedValue({ id: YEAR_ID, label: "2025-2026" });
-});
-
-describe("createSchoolYear P2002 mapping", () => {
-  it("label target (array) reads as a label clash", async () => {
-    transaction.mockRejectedValue(p2002(["schoolId", "label"]));
-    const res = await createSchoolYear(createForm());
-    expect(res).toMatchObject({ ok: false, error: "A school year with this label already exists" });
-  });
-
-  it("label target (string index name) reads as a label clash", async () => {
-    transaction.mockRejectedValue(p2002("SchoolYear_schoolId_label_key"));
-    const res = await createSchoolYear(createForm());
-    expect(res).toMatchObject({ ok: false, error: "A school year with this label already exists" });
-  });
-
-  it("active-year index (string target) is NOT a label clash", async () => {
-    transaction.mockRejectedValue(p2002("SchoolYear_school_active_unique"));
-    const res = await createSchoolYear(createForm());
-    expect(res).toMatchObject({ ok: false, error: ACTIVE_MSG });
-  });
-
-  it("active-year index (schoolId-only array target) is NOT a label clash", async () => {
-    transaction.mockRejectedValue(p2002(["schoolId"]));
-    const res = await createSchoolYear(createForm());
-    expect(res).toMatchObject({ ok: false, error: ACTIVE_MSG });
+  requireUser.mockResolvedValue(ADMIN);
+  findFirst.mockResolvedValue({
+    id: YEAR_ID,
+    schoolId: "school-1",
+    label: "2026-2027",
+    startDate: new Date(Date.UTC(2026, 5, 8)),
+    endDate: null,
   });
 });
 
-describe("createSchoolYear P2002 mapping, real adapter shape", () => {
-  it("fields [schoolId] is the active-year conflict", async () => {
-    transaction.mockRejectedValue(adapterP2002(["schoolId"]));
-    expect(await createSchoolYear(createForm())).toMatchObject({ ok: false, error: ACTIVE_MSG });
+describe("createDivisionSchoolYear", () => {
+  const createForm = () =>
+    form({ label: "2027-2028", startMonth: "2027-06", endMonth: "", setActive: "true" });
+
+  it("is guarded by requireUser('SUPER_ADMIN')", async () => {
+    schoolFindMany.mockResolvedValue([{ id: "s1" }]);
+    schoolCount.mockResolvedValue(1);
+    transaction.mockResolvedValue(undefined);
+    await createDivisionSchoolYear(createForm());
+    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
   });
 
-  it("fields [schoolId, label] is a label clash", async () => {
-    transaction.mockRejectedValue(adapterP2002(["schoolId", "label"]));
-    expect(await createSchoolYear(createForm())).toMatchObject({
-      ok: false,
-      error: "A school year with this label already exists",
-    });
-  });
-
-  it("fields [label, schoolId] (other order) is a label clash", async () => {
-    transaction.mockRejectedValue(adapterP2002(["label", "schoolId"]));
-    expect(await createSchoolYear(createForm())).toMatchObject({
-      ok: false,
-      error: "A school year with this label already exists",
-    });
-  });
-
-  it("message-only fallback: active year", async () => {
-    transaction.mockRejectedValue(p2002(undefined, "Unique constraint failed on the fields: (`\"schoolId\"`)"));
-    expect(await createSchoolYear(createForm())).toMatchObject({ ok: false, error: ACTIVE_MSG });
-  });
-
-  it("message-only fallback: label", async () => {
-    transaction.mockRejectedValue(
-      p2002(undefined, "Unique constraint failed on the fields: (`schoolId`,`label`)"),
+  it("creates the year for every school that lacks it and reports the rest", async () => {
+    schoolFindMany.mockResolvedValue([{ id: "s1" }, { id: "s2" }]);
+    schoolCount.mockResolvedValue(5);
+    const createMany = vi.fn();
+    const updateMany = vi.fn();
+    transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn({ schoolYear: { createMany, updateMany } })
     );
-    expect(await createSchoolYear(createForm())).toMatchObject({
-      ok: false,
-      error: "A school year with this label already exists",
+
+    const res = await createDivisionSchoolYear(createForm());
+
+    expect(res).toEqual({ ok: true, created: 2, skipped: 3 });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { schoolId: { in: ["s1", "s2"] }, isActive: true },
+      data: { isActive: false },
+    });
+    const rows = createMany.mock.calls[0][0].data;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      schoolId: "s1",
+      label: "2027-2028",
+      startDate: new Date(Date.UTC(2027, 5, 1)),
+      endDate: null,
+      isActive: true,
     });
   });
 
-  it("P2002 on an unrelated target is neither mapping and is rethrown", async () => {
-    transaction.mockRejectedValue(adapterP2002(["startDate"]));
-    const res = await createSchoolYear(createForm());
+  it("refuses when every school already has the label", async () => {
+    schoolFindMany.mockResolvedValue([]);
+    schoolCount.mockResolvedValue(5);
+    const res = await createDivisionSchoolYear(createForm());
     expect(res).toMatchObject({ ok: false });
-    expect((res as { error: string }).error).not.toBe(ACTIVE_MSG);
-    expect((res as { error: string }).error).not.toBe("A school year with this label already exists");
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("maps the active-year index to a friendly conflict", async () => {
+    schoolFindMany.mockResolvedValue([{ id: "s1" }]);
+    schoolCount.mockResolvedValue(1);
+    transaction.mockRejectedValue(p2002("SchoolYear_school_active_unique"));
+    const res = await createDivisionSchoolYear(createForm());
+    expect(res).toMatchObject({ ok: false, error: ACTIVE_MSG });
   });
 });
 
-describe("setActiveSchoolYear P2002 mapping", () => {
-  it("maps the active-year index to a friendly conflict", async () => {
-    transaction.mockRejectedValue(p2002("SchoolYear_school_active_unique"));
-    const res = await setActiveSchoolYear(form({ schoolYearId: YEAR_ID }));
-    expect(res).toMatchObject({ ok: false, error: ACTIVE_MSG });
+describe("setActiveSchoolYear", () => {
+  it("is Division Admin only", async () => {
+    transaction.mockResolvedValue(undefined);
+    await setActiveSchoolYear(form({ schoolYearId: YEAR_ID }));
+    expect(requireUser).toHaveBeenCalledWith("SUPER_ADMIN");
   });
 
-  it("maps a schoolId-only array target the same way", async () => {
+  it("maps the active-year index to a friendly conflict", async () => {
     transaction.mockRejectedValue(p2002(["schoolId"]));
     const res = await setActiveSchoolYear(form({ schoolYearId: YEAR_ID }));
     expect(res).toMatchObject({ ok: false, error: ACTIVE_MSG });
   });
 });
 
-describe("updateSchoolYear P2002 mapping", () => {
-  it("still maps the label unique", async () => {
-    update.mockRejectedValue(p2002(["schoolId", "label"]));
-    const res = await updateSchoolYear(
-      form({ schoolYearId: YEAR_ID, label: "2026-2027", startDate: "2026-06-08", endDate: "2027-03-31" })
+describe("setSchoolYearMonths", () => {
+  it("scopes a School Head to their own school", async () => {
+    requireUser.mockResolvedValue(HEAD);
+    update.mockResolvedValue({});
+    await setSchoolYearMonths(form({ schoolYearId: YEAR_ID, startMonth: "2026-07", endMonth: "" }));
+    expect(findFirst.mock.calls[0][0].where).toMatchObject({ id: YEAR_ID, schoolId: "school-1" });
+  });
+
+  it("stores the first day of the start month and a null end when blank", async () => {
+    requireUser.mockResolvedValue(HEAD);
+    update.mockResolvedValue({});
+    const res = await setSchoolYearMonths(
+      form({ schoolYearId: YEAR_ID, startMonth: "2026-07", endMonth: "" })
     );
-    expect(res).toMatchObject({ ok: false, error: "Another school year already uses this label" });
+    expect(res).toEqual({ ok: true });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: YEAR_ID },
+      data: { startDate: new Date(Date.UTC(2026, 6, 1)), endDate: null },
+    });
+  });
+
+  it("stores the last day of the end month", async () => {
+    requireUser.mockResolvedValue(HEAD);
+    update.mockResolvedValue({});
+    await setSchoolYearMonths(
+      form({ schoolYearId: YEAR_ID, startMonth: "2026-06", endMonth: "2027-02" })
+    );
+    expect(update.mock.calls[0][0].data.endDate).toEqual(new Date(Date.UTC(2027, 1, 28)));
+  });
+
+  it("reads another school's year as not found", async () => {
+    requireUser.mockResolvedValue(HEAD);
+    findFirst.mockResolvedValue(null);
+    const res = await setSchoolYearMonths(form({ schoolYearId: YEAR_ID, startMonth: "2026-06" }));
+    expect(res).toMatchObject({ ok: false });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("lets a Division Admin set months at any school", async () => {
+    update.mockResolvedValue({});
+    await setSchoolYearMonths(form({ schoolYearId: YEAR_ID, startMonth: "2026-06" }));
+    expect(findFirst.mock.calls[0][0].where).not.toHaveProperty("schoolId");
   });
 });

@@ -11,8 +11,8 @@ vi.mock("sonner", () => ({ toast: toastFn }));
 
 const setActiveSchoolYear = vi.fn();
 vi.mock("@/lib/actions/school-year", () => ({
-  createSchoolYear: vi.fn(),
-  updateSchoolYear: vi.fn(),
+  createDivisionSchoolYear: vi.fn(),
+  setSchoolYearMonths: vi.fn(),
   deleteSchoolYear: vi.fn(),
   setActiveSchoolYear: (...args: unknown[]) => setActiveSchoolYear(...args),
 }));
@@ -29,8 +29,8 @@ const YEARS = [
   {
     id: "y1",
     label: "2025-2026",
-    startDate: "2025-06-01",
-    endDate: "2026-03-31",
+    startMonth: "2025-06",
+    endMonth: "2026-03",
     isActive: true,
     enrollmentCount: 10,
     termGradeCount: 0,
@@ -38,8 +38,8 @@ const YEARS = [
   {
     id: "y2",
     label: "2026-2027",
-    startDate: "2026-06-01",
-    endDate: "2027-03-31",
+    startMonth: "2026-06",
+    endMonth: null,
     isActive: false,
     enrollmentCount: 0,
     termGradeCount: 0,
@@ -48,7 +48,7 @@ const YEARS = [
 
 describe("SchoolYearsList — set active", () => {
   it("asks first and does not call the action until confirmed", async () => {
-    render(<SchoolYearsList years={YEARS} />);
+    render(<SchoolYearsList years={YEARS} canManage />);
 
     fireEvent.click(screen.getByRole("button", { name: "Set active" }));
     const dialog = await screen.findByRole("alertdialog");
@@ -63,7 +63,7 @@ describe("SchoolYearsList — set active", () => {
 
   it("switches the year after confirming", async () => {
     setActiveSchoolYear.mockResolvedValueOnce({ ok: true });
-    render(<SchoolYearsList years={YEARS} />);
+    render(<SchoolYearsList years={YEARS} canManage />);
 
     fireEvent.click(screen.getByRole("button", { name: "Set active" }));
     const dialog = await screen.findByRole("alertdialog");
@@ -81,7 +81,7 @@ describe("SchoolYearsList — set active", () => {
       code: "DB_UNAVAILABLE",
       error: "Couldn't switch the school year.",
     });
-    render(<SchoolYearsList years={YEARS} />);
+    render(<SchoolYearsList years={YEARS} canManage />);
 
     fireEvent.click(screen.getByRole("button", { name: "Set active" }));
     const dialog = await screen.findByRole("alertdialog");

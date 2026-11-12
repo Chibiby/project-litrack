@@ -122,7 +122,11 @@ import { markAttendance, saveAralWeeklyAttendance } from "@/lib/actions/attendan
 import { saveAralProfile } from "@/lib/actions/aral";
 import { commitLearnerImport } from "@/lib/actions/import-learners";
 import { createSection, deleteSection } from "@/lib/actions/section";
-import { setActiveSchoolYear } from "@/lib/actions/school-year";
+import {
+  createDivisionSchoolYear,
+  deleteSchoolYear,
+  setActiveSchoolYear,
+} from "@/lib/actions/school-year";
 import {
   revealSchoolHeadPassword,
   impersonateUser,
@@ -299,7 +303,10 @@ const ACTIONS: Array<{ name: string; fn: ActionFn; guard: GuardKind }> = [
   // School head: sections, school year, school info
   { name: "createSection", fn: createSection as ActionFn, guard: "schoolHead" },
   { name: "deleteSection", fn: deleteSection as ActionFn, guard: "schoolHead" },
-  { name: "setActiveSchoolYear", fn: setActiveSchoolYear as ActionFn, guard: "schoolHead" },
+  // School years: the Division Admin creates and activates; School Heads only set months.
+  { name: "createDivisionSchoolYear", fn: createDivisionSchoolYear as ActionFn, guard: "superAdmin" },
+  { name: "setActiveSchoolYear", fn: setActiveSchoolYear as ActionFn, guard: "superAdmin" },
+  { name: "deleteSchoolYear", fn: deleteSchoolYear as ActionFn, guard: "superAdmin" },
   { name: "updateSchoolInfo", fn: updateSchoolInfo as ActionFn, guard: "schoolHead" },
   // Accounts (Super Admin, either tier)
   { name: "revealSchoolHeadPassword", fn: revealSchoolHeadPassword as ActionFn, guard: "superAdmin" },

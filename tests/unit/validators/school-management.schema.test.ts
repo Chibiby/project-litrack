@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  createSchoolYearSchema,
+  createDivisionSchoolYearSchema,
   setActiveSchoolYearSchema,
 } from "@/lib/validators/school-year.schema";
 import {
@@ -18,32 +18,30 @@ import {
   adminProfileSchema,
 } from "@/lib/validators/school.schema";
 
-describe("createSchoolYearSchema", () => {
-  it("accepts consecutive YYYY-YYYY labels with ordered dates", () => {
-    const ok = createSchoolYearSchema.safeParse({
-      label: "2025-2026",
-      startDate: "2025-06-01",
-      endDate: "2026-05-31",
+describe("createDivisionSchoolYearSchema", () => {
+  it("accepts a consecutive label, a start month and no end month", () => {
+    const ok = createDivisionSchoolYearSchema.safeParse({
+      label: "2027-2028",
+      startMonth: "2027-06",
+      endMonth: "",
       setActive: "true",
     });
     expect(ok.success).toBe(true);
-    if (ok.success) expect(ok.data.setActive).toBe(true);
+    if (ok.success) {
+      expect(ok.data.setActive).toBe(true);
+      expect(ok.data.endMonth).toBeNull();
+    }
   });
 
-  it("rejects non-consecutive years and end before start", () => {
+  it("rejects non-consecutive years and an end month before the start", () => {
     expect(
-      createSchoolYearSchema.safeParse({
-        label: "2025-2027",
-        startDate: "2025-06-01",
-        endDate: "2026-05-31",
-      }).success
+      createDivisionSchoolYearSchema.safeParse({ label: "2025-2027", startMonth: "2025-06" }).success
     ).toBe(false);
-
     expect(
-      createSchoolYearSchema.safeParse({
+      createDivisionSchoolYearSchema.safeParse({
         label: "2025-2026",
-        startDate: "2026-06-01",
-        endDate: "2025-05-31",
+        startMonth: "2026-06",
+        endMonth: "2025-05",
       }).success
     ).toBe(false);
   });

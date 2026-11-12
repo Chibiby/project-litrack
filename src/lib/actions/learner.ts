@@ -17,6 +17,7 @@ import { ethnicityColumns } from "@/lib/validators/ethnicity";
 import { writeAudit, writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 import { normalizePersonName } from "@/lib/learners/normalize";
 import { reactivateEnrollment } from "@/lib/learners/reactivate-enrollment";
+import { applyLearnerProfileUpdate, sectionBData } from "@/lib/learners/apply-update";
 import {
   formatPersonName,
   formatOptionalPersonName,
@@ -55,22 +56,6 @@ type ActionResult<T = unknown> =
       /** A non-error follow-up the form handles itself (confirm, then resubmit). */
       needs?: "possible_duplicate";
     };
-
-/** Normalize optional Section B for Prisma (clear transferDetails unless MULTIPLE). */
-function sectionBData(data: {
-  modeOfTransportation?: "WALKING" | "MOTORCYCLE" | "BUS_JEEP_CAR";
-  distanceHomeToSchool?: "LESS_THAN_1KM" | "ONE_TO_FIVE_KM" | "MORE_THAN_5KM";
-  previousTransfers?: "NONE" | "ONE" | "MULTIPLE";
-  transferDetails?: string;
-}) {
-  return {
-    modeOfTransportation: data.modeOfTransportation ?? null,
-    distanceHomeToSchool: data.distanceHomeToSchool ?? null,
-    previousTransfers: data.previousTransfers ?? null,
-    transferDetails:
-      data.previousTransfers === "MULTIPLE" ? (data.transferDetails?.trim() || null) : null,
-  };
-}
 
 function formToObj(formData: FormData): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
@@ -277,95 +262,12 @@ export const updateLearner = action("updateLearner", async (formData: FormData):
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
   if (!teacherCanAccessLearner(learner, user.id)) throw resourceNotFound("Learner");
 
-  // Grade comes from the learner's real, current, DB-stored grade — never the
-  // edit form's own state, which never carries a gradeLevelId in the first place.
-  const collectsEnglish = languagesForGrade(learner.gradeLevel.type).includes("ENGLISH");
-  if (collectsEnglish && !parsed.data.englishReadingProfile) {
-    return { ok: false, error: "English reading level is required" };
-  }
-  if (!collectsEnglish && parsed.data.englishReadingProfile) {
-    return { ok: false, error: "English reading level is not collected for this grade" };
-  }
-  // A legacy value outside the grade's current allowed set (e.g. a pre-rubric
-  // K/1/2 band, or a retired SHS Non-Decoder) must stay editable for every
-  // OTHER field on the row (decision I, docs/reading-policy-spec.md section 2:
-  // "legacy rows render raw and unchanged; nothing is converted or
-  // reinterpreted"). A submitted value is accepted when it is either in policy
-  // for this grade, or byte-identical to what is already stored — only a value
-  // that is both out-of-policy AND changed gets rejected. This carve-out is
-  // update-only: `createLearner` has no stored value to compare against, so
-  // every value there must be in policy.
-  // Except: a Grade 1-3 legacy combined level must be re-picked even when
-  // unchanged — the project owner wants those rows re-assessed, not carried.
-  const profiles = [parsed.data.englishReadingProfile, parsed.data.filipinoReadingProfile];
-  if (profiles.some((v) => isLegacyReadingValue(v, learner.gradeLevel.type))) {
-    return { ok: false, error: LEGACY_READING_VALUE_MESSAGE };
-  }
-  if (
-    parsed.data.englishReadingProfile &&
-    parsed.data.englishReadingProfile !== learner.englishReadingProfile &&
-    !allowedReadingValuesForGrade(learner.gradeLevel.type).includes(parsed.data.englishReadingProfile)
-  ) {
-    return { ok: false, error: "Invalid English reading level for this grade" };
-  }
-  if (
-    parsed.data.filipinoReadingProfile !== learner.filipinoReadingProfile &&
-    !allowedReadingValuesForGrade(learner.gradeLevel.type).includes(parsed.data.filipinoReadingProfile)
-  ) {
-    return { ok: false, error: "Invalid Filipino reading level for this grade" };
-  }
-
-  // Placement is not editable here. The edit form no longer offers a section, and
-  // moving a learner between sections is the School Head's transfer flow — not a
-  // side effect of correcting a spelling. Any `sectionId` in the payload is
-  // ignored rather than trusted.
+  // Placement is not editable here: moving a learner between sections is the
+  // School Head's transfer flow. Any `sectionId` in the payload is ignored.
   const sectionId = learner.sectionId;
 
-  const firstName = formatPersonName(parsed.data.firstName);
-  const lastName = formatPersonName(parsed.data.lastName);
-  const middleName = formatOptionalPersonName(parsed.data.middleName);
-  const fullName = buildFullName(firstName, middleName, lastName);
-
-  // Form only manages 4Ps; preserve any existing IPS flag (no longer offered in UI).
-  const governmentBenefits = [
-    ...(parsed.data.governmentBenefits.includes("FOUR_PS")
-      ? (["FOUR_PS"] as const)
-      : []),
-    ...(learner.governmentBenefits.includes("IPS") ? (["IPS"] as const) : []),
-  ];
-
-  await prisma.$transaction(async (tx) => {
-    await tx.learner.update({
-      where: { id: learner.id },
-      data: {
-        firstName,
-        middleName,
-        lastName,
-        fullName,
-        age: parsed.data.age,
-        gender: parsed.data.gender,
-        nutritionalStatus: parsed.data.nutritionalStatus,
-        // Omitted (not set to null) when the grade doesn't collect English — this
-        // is what keeps a Kinder/Grade 1/Grade 2 edit from ever touching a value that may
-        // have been stored earlier (e.g. when Kinder still collected it), or from clobbering what a previous edit
-        // already left alone (docs/reading-policy-spec.md section 4a).
-        ...(collectsEnglish
-          ? { englishReadingProfile: parsed.data.englishReadingProfile }
-          : {}),
-        englishFrustrationSubtypes: parsed.data.englishFrustrationSubtypes,
-        filipinoReadingProfile: parsed.data.filipinoReadingProfile,
-        filipinoFrustrationSubtypes: parsed.data.filipinoFrustrationSubtypes,
-        governmentBenefits,
-        parentEducation: parsed.data.parentEducation,
-        ...ethnicityColumns(parsed.data),
-        ...sectionBData(parsed.data),
-      },
-    });
-
-    // No enrollment write. The learner's section is untouched above, so the active
-    // Enrollment row already points where it should — the reconcile that used to
-    // live here existed only because this action could move a learner.
-  });
+  const refused = await applyLearnerProfileUpdate(learner, parsed.data);
+  if (refused) return { ok: false, error: refused };
 
   await writeAudit({
     userId: user.id,
