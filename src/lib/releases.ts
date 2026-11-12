@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.55.0",
+    date: "2026-11-12",
+    title: "Deleted Records in one place, a calmer theme switch",
+    announce: true,
+    fixes: [
+      { text: "Deleted teachers and deleted learners are now together on one page: Monitoring, then Deleted Records. It replaces Archived Records and Deleted learners in the menu.", roles: ["SUPER_ADMIN"] },
+      { text: "On Deleted Records, one School and Search filter narrows both lists, and each learner shows their district, grade and section, and when they were removed and deleted.", roles: ["SUPER_ADMIN"] },
+      { text: "Developer Admins can restore or permanently delete a learner right from the Deleted learners list.", roles: ["SUPER_ADMIN"] },
+      "The light and dark mode circle still starts slowly, but no longer rushes at the end: it keeps a steady speed all the way to the corner.",
+    ],
+  },
+  {
     version: "2.54.0",
     date: "2026-11-12",
     title: "MOSY and BOSY in the Division Summary",
