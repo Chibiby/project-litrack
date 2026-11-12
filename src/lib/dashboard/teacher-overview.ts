@@ -63,7 +63,7 @@ export type TeacherOverview = {
     excused: number;
     noClass: number;
     totalMarks: number;
-    /** Present ÷ every session that should have been marked so far. */
+    /** Present ÷ the attendance marks recorded (present, late, absent, excused). */
     presentRate: number;
   };
 
@@ -279,7 +279,9 @@ export async function getTeacherOverview(
       // Sessions that should exist by now but carry no record at all.
       const expected = aralLearners * schoolDaysElapsed;
       const noClass = Math.max(expected - totalMarks, 0);
-      const denominator = totalMarks + noClass;
+      // Rates count only the days someone recorded attendance; unrecorded
+      // days stay in `noClass` for the reminder, not in the percentage.
+      const denominator = totalMarks;
 
       const completed = readingAssessed;
       const pending = Math.max(aralLearners - completed, 0);

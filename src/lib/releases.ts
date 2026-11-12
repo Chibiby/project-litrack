@@ -135,6 +135,27 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.52.0",
+    date: "2026-11-12",
+    title: "School years set by the division, promotion and enrollment from last year",
+    announce: true,
+    fixes: [
+      { text: "You now create school years for every school and set the months each year is active. Schools can make changes only inside those months.", roles: ["SUPER_ADMIN"] },
+      { text: "School years are now set by the Division. You can still adjust the start and end months of your own school's years.", roles: ["SCHOOL_HEAD"] },
+      "When no school year is active, LITRACK is read-only. A \"No active school year\" badge at the top tells you why.",
+      { text: "In the last month of the school year, \"Promote learners\" lets you mark each learner in your advisory Promoted or Retained.", roles: ["TEACHER"] },
+      { text: "\"Enroll learner\" now opens on the list of learners promoted into your grade, so you can enroll them in one go. \"New learner\" is the second tab. If you advise more than one section, you pick which one first.", roles: ["TEACHER"] },
+      "Removing a learner now asks why: No longer participating (NLPA), transferred out, dropped out, duplicate, or another reason with a note.",
+      "NLPA is now a move-out reason in the MOSY report.",
+      { text: "You can open and edit a learner's profile from the admin learner list.", roles: ["SUPER_ADMIN"] },
+      "Emptying a learner's middle name and saving now clears it. Before, the old middle name came back.",
+      "Switching between light and dark mode now spreads the new look from the button in one smooth circle, and the icon turns from sun to moon.",
+      "On phones and tablets, you can switch dark mode from your profile menu.",
+      "Attendance percentages on the dashboard now count only the days attendance was recorded. Days nobody marked no longer pull the present rate down.",
+      { text: "Your dashboard is cleaner: the tip cards and extra lines are gone, and the attendance and reading charts fill their panels.", roles: ["TEACHER"] },
+    ],
+  },
+  {
     version: "2.51.1",
     date: "2026-11-12",
     title: "ARAL learners export shows counts only",

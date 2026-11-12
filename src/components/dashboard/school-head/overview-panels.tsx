@@ -311,12 +311,6 @@ export function SchoolAttendancePanel({
     { label: "Late", value: mix.late, stroke: "stroke-amber-500", dot: "bg-amber-500" },
     { label: "Absent", value: mix.absent, stroke: "stroke-rose-500", dot: "bg-rose-500" },
     { label: "Excused", value: mix.excused, stroke: "stroke-sky-500", dot: "bg-sky-500", desktopOnly: true },
-    {
-      label: "Unmarked",
-      value: mix.noClass,
-      stroke: "stroke-slate-300 dark:stroke-slate-600",
-      dot: "bg-muted-foreground/50",
-    },
   ];
   const rate = percentOf(mix.present, mix.denominator);
 

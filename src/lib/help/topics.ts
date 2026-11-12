@@ -151,7 +151,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       "unmarked",
     ],
     body: [
-      "The Attendance Overview card on your dashboard shows this week's totals and present rate, broken down by Present, Late, Absent, Excused and Unmarked.",
+      "The Attendance Overview card on your dashboard shows this week's totals and present rate, broken down by Present, Late, Absent and Excused. Only days with recorded attendance count toward the percentages.",
       "For a longer range, generate an Attendance report from Reports — you can set the date range there and export it as Excel or PDF.",
     ],
     routes: ["/teacher", "/school-head"],

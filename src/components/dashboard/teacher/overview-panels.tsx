@@ -147,11 +147,11 @@ function Legend({ segments, total }: { segments: Segment[]; total: number }) {
   return (
     <>
       {/* Desktop: one tile per state, count large and share beside it. */}
-      <ul className="hidden w-full gap-2 lg:grid lg:grid-cols-[repeat(auto-fit,minmax(6.25rem,1fr))]">
+      <ul className="hidden w-full gap-2 lg:grid lg:grid-cols-2">
         {segments.map((s) => (
           <li
             key={s.label}
-            className="rounded-lg border border-border/60 bg-background/50 px-3 py-2.5 dark:bg-white/[0.03]"
+            className="rounded-lg border border-border/60 bg-background/50 px-3 py-2.5 dark:bg-foreground/[0.03]"
           >
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", s.dot)} />
@@ -189,13 +189,13 @@ export function AttendanceOverviewPanel({
   href: string;
 }) {
   const a = data.attendance;
-  // LITRACK records LATE as its own status, so the ring carries five states.
+  // LITRACK records LATE as its own status, so the ring carries four states.
+  // Only recorded marks count: a day nobody marked is not in the total.
   const segments: Segment[] = [
     { label: "Present", value: a.present, stroke: "stroke-emerald-500", dot: "bg-emerald-500" },
     { label: "Late", value: a.late, stroke: "stroke-amber-500", dot: "bg-amber-500" },
     { label: "Absent", value: a.absent, stroke: "stroke-rose-500", dot: "bg-rose-500" },
     { label: "Excused", value: a.excused, stroke: "stroke-sky-500", dot: "bg-sky-500", desktopOnly: true },
-    { label: "Unmarked", value: a.noClass, stroke: "stroke-slate-300 dark:stroke-slate-600", dot: "bg-muted-foreground/50" },
   ];
   const total = segments.reduce((acc, s) => acc + s.value, 0);
 

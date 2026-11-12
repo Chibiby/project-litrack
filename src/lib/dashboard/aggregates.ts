@@ -647,12 +647,14 @@ export async function getSchoolHeadAttendanceMix(schoolId: string) {
       // Sessions with no record at all — expected marks minus what was entered.
       const expected = aralLearners * schoolDaysElapsed;
       const noClass = Math.max(expected - totalMarks, 0);
-      const denominator = totalMarks + noClass;
+      // Rates count only the days someone recorded attendance; unrecorded
+      // days stay in `noClass` for the reminder, not in the percentage.
+      const denominator = totalMarks;
 
       return { present, absent, late, excused, noClass, totalMarks, denominator };
     },
     {
-      keyParts: ["school-head-attendance-mix-v1", schoolId, formatLocalDateKey(start)],
+      keyParts: ["school-head-attendance-mix-v2", schoolId, formatLocalDateKey(start)],
       tags: [schoolDashboard(schoolId)],
       profile: "aggregate",
     }
@@ -959,7 +961,9 @@ export async function getTeacherAttendanceOverview(opts: TeacherOpts) {
       // Sessions with no record at all — expected marks minus what was entered.
       const expected = aralLearners * schoolDaysElapsed;
       const noClass = Math.max(expected - totalMarks, 0);
-      const denominator = totalMarks + noClass;
+      // Rates count only the days someone recorded attendance; unrecorded
+      // days stay in `noClass` for the reminder, not in the percentage.
+      const denominator = totalMarks;
 
       return {
         present,
