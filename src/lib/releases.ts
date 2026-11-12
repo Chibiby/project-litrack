@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.56.0",
+    date: "2026-11-13",
+    title: "Deleted Records: tabs, page numbers and easier search",
+    announce: true,
+    fixes: [
+      { text: "Deleted Records now has a Learners tab and a Teachers tab, each with its own count.", roles: ["SUPER_ADMIN"] },
+      { text: "Deleted lists have page numbers, and you can show 25, 50 or 100 rows per page. This includes the district Deleted learners page.", roles: ["SUPER_ADMIN"] },
+      { text: "Searching a deleted name now finds it in any word order, so \"Cruz, Ruby\" finds Ruby Dela Cruz.", roles: ["SUPER_ADMIN"] },
+      { text: "The deleted teachers list fits the screen without hiding the Restore and Delete buttons, and the tabs fit on a phone.", roles: ["SUPER_ADMIN"] },
+      { text: "Nothing changes on your pages in this update.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+    ],
+  },
+  {
     version: "2.55.0",
     date: "2026-11-12",
     title: "Deleted Records in one place, a calmer theme switch",
