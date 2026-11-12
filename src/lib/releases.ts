@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.57.0",
+    date: "2026-11-13",
+    title: "IP Learners gets its own page",
+    announce: true,
+    fixes: [
+      { text: "Everything about IP learners is now on one page: Management, then IP Learners. It shows how many there are, their groups, grades, districts and schools, and the list of IP learners.", roles: ["SUPER_ADMIN"] },
+      { text: "On IP Learners, picking a district or a school narrows every figure, chart and list on the page.", roles: ["SUPER_ADMIN"] },
+      { text: "The dashboard now shows learners per teacher, schools that have learners but no active teacher, learners by grade, and the schools with the most learners per teacher.", roles: ["SUPER_ADMIN"] },
+      { text: "The Learners page no longer shows IP figures, and shows the largest grade instead.", roles: ["SUPER_ADMIN"] },
+      { text: "Nothing changes on your pages in this update.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+    ],
+  },
+  {
     version: "2.56.0",
     date: "2026-11-13",
     title: "Deleted Records: tabs, page numbers and easier search",
