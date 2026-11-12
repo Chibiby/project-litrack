@@ -53,7 +53,8 @@ export function ResponsiveTable({
   breakpoint?: ResponsiveTableBreakpoint;
   className?: string;
 }) {
-  const bp = BREAKPOINT[breakpoint];
+  // A hot reload can re-render with a stale prop; fall back rather than crash.
+  const bp = BREAKPOINT[breakpoint] ?? BREAKPOINT[700];
   return (
     <div className={cn("@container/rt w-full min-w-0", className)}>
       <div className={bp.table}>{table}</div>
