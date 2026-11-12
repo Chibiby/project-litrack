@@ -1941,7 +1941,7 @@ function SettingsFormCard({
       <CardHeader className="flex-row items-center gap-3 space-y-0 p-5">
         <span
           aria-hidden
-          className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+          className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-primary"
         >
           <Icon className="size-4" />
         </span>

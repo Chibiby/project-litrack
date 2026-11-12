@@ -128,7 +128,7 @@ export function TermsReportSummary({
 
       <div className="mt-3 flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50/70 p-3 dark:border-violet-900/60 dark:bg-violet-950/30 sm:mt-4 sm:p-4">
         <span
-          className="flex size-9 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200 sm:size-10"
+          className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200 sm:size-10"
           aria-hidden
         >
           <Lock className="size-4 sm:size-5" />

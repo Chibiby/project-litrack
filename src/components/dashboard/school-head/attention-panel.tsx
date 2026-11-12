@@ -33,7 +33,7 @@ export function SchoolAttentionPanel({ items }: { items: AttentionItem[] }) {
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
         >
           <ClipboardCheck className="size-5" />
         </span>
@@ -142,7 +142,7 @@ export function SchoolQuickActionsPanel({
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
         >
           <Zap className="size-5" />
         </span>

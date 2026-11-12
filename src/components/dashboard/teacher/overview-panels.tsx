@@ -205,7 +205,7 @@ export function AttendanceOverviewPanel({
       period="This Week"
       subtitle="Total attendance marks across all learners"
       icon={Users}
-      iconTile="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+      iconTile="icon-glass text-violet-700 dark:text-violet-200"
       action={{ label: "View weekly attendance", href }}
     >
       <div className="lg:flex lg:flex-col lg:items-center lg:gap-6">
@@ -247,7 +247,7 @@ export function ReadingOverviewPanel({
       period="This Month"
       subtitle="Reading records submitted by learners"
       icon={BookOpen}
-      iconTile="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+      iconTile="icon-glass text-blue-700 dark:text-blue-200"
       action={{ label: "Go to Monthly Reading Level", href }}
     >
       <div className="lg:flex lg:flex-col lg:items-center lg:gap-6">

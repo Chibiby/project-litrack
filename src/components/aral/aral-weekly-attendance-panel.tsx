@@ -549,7 +549,7 @@ function InfoCard({
   return (
     <div className="flex gap-3 rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30">
       <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200"
+        className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
         aria-hidden
       >
         {icon}

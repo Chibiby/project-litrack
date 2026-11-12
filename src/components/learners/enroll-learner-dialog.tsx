@@ -87,7 +87,7 @@ export function EnrollLearnerDialog({
       <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:rounded-xl">
         <header className="space-y-3 border-b border-border px-5 py-4 pr-14 sm:px-6">
           <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-primary">
               <UserRoundPlus className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0">

@@ -33,14 +33,12 @@ import { SummarySectionCard } from "./summary-section-card";
 import { SummaryListCard } from "./summary-list-card";
 import { SummaryNotes } from "./summary-notes";
 import { SummaryPeriodBarSkeleton, SummaryResultsSkeleton } from "./summary-skeleton";
-import { SummaryFacetSwitcher } from "./summary-facet-index";
+import { SummaryBackLink } from "./summary-facet-index";
 import { resolvePageSummaryScope } from "./resolve-page-scope";
 import { formatComputedAt, formatCount } from "./summary-format";
 import {
-  SUMMARY_SCOPE_KEYS,
   flattenSearchParams,
   sectionAnchorId,
-  summaryHref,
   withoutListParams,
   type FlatSearchParams,
 } from "./summary-href";
@@ -66,11 +64,6 @@ function isPastPeriod(params: FacetResult["params"]): boolean {
   const { month, from, to } = params;
   const end = month ?? (from && to ? (from <= to ? to : from) : null);
   return end !== null && isPastMonth(end, formatLocalDateKey(schoolToday()));
-}
-
-function scopeQuery(flat: FlatSearchParams): string {
-  const href = summaryHref("", flat, {}, SUMMARY_SCOPE_KEYS);
-  return href.startsWith("?") ? href.slice(1) : "";
 }
 
 /**
@@ -155,7 +148,7 @@ export async function SummaryFacetView({
   return (
     <ListNavigationProvider>
       <div className="min-w-0 space-y-4">
-        <SummaryFacetSwitcher basePath={basePath} current={facetId} scopeQuery={scopeQuery(flat)} />
+        <SummaryBackLink basePath={basePath} />
 
         <Surface as="section" aria-label="Summary filters" className="min-w-0 rounded-lg">
           <div className="p-3 sm:p-4 lg:px-5">

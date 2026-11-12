@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  ArrowLeft,
   BookOpen,
   BookOpenCheck,
   CalendarDays,
@@ -16,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { SUMMARY_FACET_LIST } from "@/lib/summary/facet-meta";
 import type { SummaryFacetId } from "@/lib/summary/types";
 
@@ -34,8 +36,8 @@ export const SUMMARY_FACET_ICON: Record<SummaryFacetId, LucideIcon> = {
   advisory: UsersRound,
 };
 
-const PRIMARY_TILE = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200";
-const ARAL_TILE = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200";
+const PRIMARY_TILE = "icon-glass text-blue-700 dark:text-blue-200";
+const ARAL_TILE = "icon-glass text-violet-700 dark:text-violet-200";
 
 // Same tile palette as the dashboard stat cards. Violet is the ARAL accent:
 // only the facets whose population is ARAL learners.
@@ -45,8 +47,8 @@ export const SUMMARY_FACET_TILE: Record<SummaryFacetId, string> = {
   "end-of-term": PRIMARY_TILE,
   attendance: ARAL_TILE,
   "reading-levels": ARAL_TILE,
-  compliance: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
-  profiling: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
+  compliance: "icon-glass text-amber-700 dark:text-amber-200",
+  profiling: "icon-glass text-emerald-700 dark:text-emerald-200",
   aral: ARAL_TILE,
   bosy: ARAL_TILE,
   mosy: ARAL_TILE,
@@ -81,7 +83,14 @@ export function SummaryFacetIndex({
             <Link
               href={`${basePath}/${facet.id}${query ? `?${query}` : ""}`}
               prefetch={true}
-              className="group flex h-full items-start gap-3 rounded-lg border border-border/80 bg-card p-4 shadow-card transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-5"
+              className={cn(
+                "group flex h-full items-start gap-3 rounded-lg border p-4 sm:p-5",
+                // Frosted glass, the stat card recipe: a translucent surface over a blur.
+                "border-white/60 bg-card/55 backdrop-blur-xl dark:border-white/10 dark:bg-card/45",
+                "shadow-[0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[0_8px_24px_-12px_rgb(0_0_0/0.5)]",
+                "transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:hover:shadow-[0_16px_32px_-12px_rgb(0_0_0/0.6)] motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              )}
             >
               <span
                 aria-hidden
@@ -109,45 +118,17 @@ export function SummaryFacetIndex({
 }
 
 /**
- * Links between facets on a facet page, keeping the chosen scope. Drawn like
- * the School Head workspace tab bar (`TabNav`): an underlined strip that
- * scrolls sideways inside itself on a phone instead of wrapping into rows.
+ * The way back from a facet page to the list of summaries (the index of
+ * cards above). One button, not a strip of every facet: picking another
+ * summary happens on the index.
  */
-export function SummaryFacetSwitcher({
-  basePath,
-  current,
-  scopeQuery,
-}: {
-  basePath: string;
-  current: SummaryFacetId;
-  scopeQuery: string;
-}) {
+export function SummaryBackLink({ basePath }: { basePath: string }) {
   return (
-    <nav aria-label="Summaries" className="min-w-0 overflow-x-auto">
-      <ul className="flex min-w-max items-center gap-1 border-b border-border/70">
-        {SUMMARY_FACET_LIST.map((facet) => {
-          const active = facet.id === current;
-          return (
-            <li key={facet.id}>
-              <Link
-                href={`${basePath}/${facet.id}${scopeQuery ? `?${scopeQuery}` : ""}`}
-                prefetch={true}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  // -mb-px lifts the 2px active underline over the ul's 1px rule.
-                  "-mb-px flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors sm:min-h-10 lg:min-h-9",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  active
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
-                )}
-              >
-                {facet.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <Button asChild variant="outline" size="sm" className="w-fit">
+      <Link href={basePath} prefetch={true}>
+        <ArrowLeft aria-hidden className="size-4" />
+        Back to summaries
+      </Link>
+    </Button>
   );
 }

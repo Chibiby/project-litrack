@@ -55,23 +55,23 @@ const ICONS: Record<ReleaseHighlightIcon, LucideIcon> = {
 const TONES: Record<ReleaseHighlightTone, { card: string; chip: string }> = {
   violet: {
     card: "bg-violet-50/80 dark:bg-violet-950/30",
-    chip: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200",
+    chip: "icon-glass text-violet-700 dark:text-violet-200",
   },
   emerald: {
     card: "bg-emerald-50/80 dark:bg-emerald-950/30",
-    chip: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
+    chip: "icon-glass text-emerald-700 dark:text-emerald-200",
   },
   blue: {
     card: "bg-blue-50/80 dark:bg-blue-950/30",
-    chip: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
+    chip: "icon-glass text-blue-700 dark:text-blue-200",
   },
   amber: {
     card: "bg-amber-50/80 dark:bg-amber-950/30",
-    chip: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
+    chip: "icon-glass text-amber-700 dark:text-amber-200",
   },
   rose: {
     card: "bg-rose-50/80 dark:bg-rose-950/30",
-    chip: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200",
+    chip: "icon-glass text-rose-700 dark:text-rose-200",
   },
   purple: {
     card: "bg-purple-50/80 dark:bg-purple-950/30",

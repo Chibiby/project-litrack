@@ -107,7 +107,7 @@ export function SummarySectionCard({
       <div className="flex items-start gap-3 border-b border-border/60 px-4 py-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-blue-700 dark:text-blue-200"
         >
           <Icon className="size-5" />
         </span>

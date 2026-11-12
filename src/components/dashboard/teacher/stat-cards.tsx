@@ -41,12 +41,12 @@ const TILE: Record<StatTone, string> = {
 };
 
 /**
- * Plain, uncoloured glassmorphism for the icon tile, the same recipe as the
+ * Plain, uncoloured glassmorphism for the icon tile (`.icon-glass` in
+ * globals.css, the app-wide icon container), the same recipe as the
  * header and the sidebar highlight: a translucent white fill, backdrop blur, a
  * thin bright border, a top-edge highlight and a soft shadow.
  */
-const TILE_GLASS =
-  "border border-white/60 bg-glass/40 dark:bg-glass/10 shadow-[0_4px_12px_rgb(15_23_42/0.08),inset_0_1px_0_rgb(255_255_255/0.7)] backdrop-blur-md dark:border-white/10 dark:shadow-[0_4px_12px_rgb(0_0_0/0.3),inset_0_1px_0_rgb(255_255_255/0.08)]";
+const TILE_GLASS = "icon-glass";
 
 /** Hover arrow colour. */
 const LINK: Record<StatTone, string> = {

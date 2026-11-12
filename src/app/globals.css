@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The icon tile: every icon that sits in its own container (stat cards,
+   panel and card headers, summary links, dialog headers) uses this plain,
+   uncoloured glass. The icon carries the tone through its text colour
+   (text-violet-700 dark:text-violet-200 and so on); the tile never does.
+   In the components layer, so a utility on the same element still wins. */
+@layer components {
+  .icon-glass {
+    border: 1px solid rgb(255 255 255 / 0.6);
+    background-color: rgb(255 255 255 / 0.4);
+    box-shadow: 0 4px 12px rgb(15 23 42 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.7);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .dark .icon-glass {
+    border-color: rgb(255 255 255 / 0.1);
+    background-color: rgb(255 255 255 / 0.1);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+}
+
 @layer base {
   :root {
     /* Themes native form controls (select popups, checkboxes, date inputs)

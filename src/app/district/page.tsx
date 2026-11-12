@@ -270,7 +270,7 @@ export default async function DistrictOverviewPage() {
               <div className="mb-3 flex items-center gap-3">
                 <span
                   aria-hidden
-                  className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-xl icon-glass text-blue-700 dark:text-blue-200"
                 >
                   <BarChart3 className="size-5" />
                 </span>

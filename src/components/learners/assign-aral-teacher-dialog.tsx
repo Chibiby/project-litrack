@@ -222,7 +222,7 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <span className="flex size-10 items-center justify-center rounded-md bg-violet-soft text-violet-soft-foreground">
+          <span className="flex size-10 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200">
             {enrolling ? (
               <Sparkles className="h-5 w-5" aria-hidden />
             ) : (

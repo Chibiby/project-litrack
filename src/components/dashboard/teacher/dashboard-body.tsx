@@ -261,7 +261,7 @@ function GradeChartCard({
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden
-            className="flex size-11 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+            className="flex size-11 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
           >
             <BarChart3 className="size-5" />
           </span>

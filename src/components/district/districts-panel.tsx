@@ -72,7 +72,7 @@ export function DistrictsPanel({
       <div className="flex flex-wrap items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-blue-700 dark:text-blue-200"
         >
           <MapPin className="size-5" />
         </span>

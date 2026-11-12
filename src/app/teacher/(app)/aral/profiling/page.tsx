@@ -297,7 +297,7 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
 
       <Surface as="section" className="mt-4 flex flex-col gap-2 rounded-lg p-4 sm:p-5">
         <div className="flex items-center gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl icon-glass text-violet-700 dark:text-violet-200">
             <BookOpen className="size-4" aria-hidden />
           </span>
           <h2 className="text-sm font-semibold text-foreground sm:text-base">

@@ -207,7 +207,7 @@ export function AralCoveragePanel({
       period="This school year"
       subtitle="Learners currently in the ARAL program"
       icon={Sparkles}
-      iconTile="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+      iconTile="icon-glass text-violet-700 dark:text-violet-200"
       action={{ label: "Designate ARAL teachers", href }}
     >
       <div className="lg:flex lg:items-center lg:gap-6">
@@ -256,7 +256,7 @@ export function IpCoveragePanel({
       period="Active enrolment"
       subtitle="Indigenous People learners currently enrolled"
       icon={Users}
-      iconTile="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+      iconTile="icon-glass text-blue-700 dark:text-blue-200"
       action={{ label: "View IP learners", href }}
     >
       <div className="lg:flex lg:items-center lg:gap-6">
@@ -320,7 +320,7 @@ export function SchoolAttendancePanel({
       period="This week"
       subtitle="ARAL attendance marks across every section"
       icon={CalendarCheck}
-      iconTile="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"
+      iconTile="icon-glass text-violet-700 dark:text-violet-200"
       action={{ label: "View ARAL program", href }}
       className={className}
     >

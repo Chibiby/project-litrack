@@ -180,7 +180,7 @@ export function TransferLearnersDialog({
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : close())}>
       <DialogContent className="flex max-h-[92vh] flex-col gap-4 overflow-hidden sm:max-w-lg">
         <DialogHeader>
-          <span className="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <span className="flex size-10 items-center justify-center rounded-md icon-glass text-primary">
             <ArrowRightLeft className="h-5 w-5" aria-hidden />
           </span>
           <DialogTitle className="mt-3">{title}</DialogTitle>

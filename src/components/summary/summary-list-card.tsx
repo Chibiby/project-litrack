@@ -33,8 +33,8 @@ export function SummaryListCard({ list }: { list: SummaryList }) {
           className={cn(
             "flex size-10 shrink-0 items-center justify-center rounded-md",
             list.rows.length > 0
-              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
-              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
+              ? "icon-glass text-amber-700 dark:text-amber-200"
+              : "icon-glass text-emerald-700 dark:text-emerald-200"
           )}
         >
           {list.rows.length > 0 ? <School className="size-5" /> : <CheckCircle2 className="size-5" />}

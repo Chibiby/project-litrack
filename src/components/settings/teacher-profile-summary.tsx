@@ -100,7 +100,7 @@ export function TeacherProfileSummary({
           label="Account Status"
           icon={ShieldCheck}
           className="bg-emerald-50 dark:bg-emerald-950/30"
-          iconClassName="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+          iconClassName="icon-glass text-emerald-700 dark:text-emerald-200"
         >
           <p className="flex items-center gap-2 text-sm font-bold text-foreground sm:text-base">
             <span
@@ -121,7 +121,7 @@ export function TeacherProfileSummary({
           label="School"
           icon={School}
           className="bg-amber-50 dark:bg-amber-950/30"
-          iconClassName="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+          iconClassName="icon-glass text-amber-700 dark:text-amber-200"
         >
           <p className="break-words text-sm font-bold text-foreground sm:text-base">
             {schoolName ?? "—"}

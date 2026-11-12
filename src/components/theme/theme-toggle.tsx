@@ -38,7 +38,11 @@ export function ThemeIcon({
       aria-hidden
       className={cn(
         "h-5 w-5",
-        viewBoxOrigin,
+        // The outer <svg> is a CSS box, not an SVG child: `transform-box:
+        // view-box` does not apply to it, so a 12px origin is a CSS 12px and
+        // the turn shoves any icon smaller than 24px sideways (8px at 16px).
+        // Turn it about its own centre at every size.
+        "[transform-origin:center]",
         ease,
         dark ? "rotate-0" : "rotate-90",
         className
