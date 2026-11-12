@@ -130,6 +130,14 @@ describe("updateLearnerAsAdmin", () => {
     );
   });
 
+  it("clears the middle name when it is emptied", async () => {
+    m.learnerFindFirst.mockResolvedValue(storedLearner);
+    await updateLearnerAsAdmin(form({ ...payload, middleName: "" }));
+    const arg = m.txLearnerUpdate.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(arg.data.middleName).toBeNull();
+    expect(arg.data.fullName).toBe("Maria Santos");
+  });
+
   it("refuses an out-of-policy reading level without writing", async () => {
     m.learnerFindFirst.mockResolvedValue({ ...storedLearner, gradeLevel: { type: "KINDER" } });
     const res = await updateLearnerAsAdmin(form(payload));

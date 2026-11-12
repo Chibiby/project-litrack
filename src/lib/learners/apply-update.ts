@@ -107,7 +107,9 @@ export async function applyLearnerProfileUpdate(
       where: { id: learner.id },
       data: {
         firstName,
-        middleName,
+        // null, not undefined: an emptied middle name must clear the column
+        // (Prisma skips undefined, which kept the old value while fullName dropped it).
+        middleName: middleName ?? null,
         lastName,
         fullName,
         age: data.age,
