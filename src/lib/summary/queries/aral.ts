@@ -480,7 +480,7 @@ function advisoryExportList(args: {
 
 /**
  * Learners export: one row per school (district, scope) with the ARAL learner
- * count first, then per grade a count and its % of the row's ARAL learners.
+ * count first, then the learner count per grade. Counts only, no percentages.
  */
 function aralLearnerExportList(args: {
   schools: readonly ScopeSchool[];
@@ -494,13 +494,8 @@ function aralLearnerExportList(args: {
   return {
     id: "aral-learners-per-school",
     title: "ARAL learners",
-    note: "<Grade> % is of the row's ARAL learners; a blank % means the row has no ARAL learners.",
-    columns: [
-      ...leadColumns(level),
-      "ARAL learners",
-      ...gradeBuckets.flatMap((b) => [b.label, `${b.label} %`]),
-    ],
-    groups: gradeBuckets.map((b, i) => ({ label: b.label, start: leadColumns(level).length + 1 + i * 2, count: 2 })),
+    columns: [...leadColumns(level), "ARAL learners", ...gradeBuckets.map((b) => b.label)],
+    groups: gradeBuckets.map((b, i) => ({ label: b.label, start: leadColumns(level).length + 1 + i, count: 1 })),
     rows: buildExportRows({
       schools,
       level,
@@ -510,10 +505,7 @@ function aralLearnerExportList(args: {
         const g = byKey.get(key);
         return [g?.base ?? 0, ...gradeBuckets.map((b) => g?.cells[b.id]?.count ?? 0)];
       },
-      figures: (n) => {
-        const total = n[0] ?? 0;
-        return [total, ...gradeBuckets.flatMap((_, i) => [n[i + 1] ?? 0, pct(n[i + 1] ?? 0, total)])];
-      },
+      figures: (n) => [n[0] ?? 0, ...gradeBuckets.map((_, i) => n[i + 1] ?? 0)],
     }),
   };
 }
