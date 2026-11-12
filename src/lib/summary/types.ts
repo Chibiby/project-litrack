@@ -23,6 +23,8 @@ export type SummaryFacetId = (typeof SUMMARY_FACET_IDS)[number];
 
 /** Which rows a summary table has: one for the whole scope, one per district, or one per school. */
 export const SUMMARY_LEVELS = ["overall", "district", "school"] as const;
+/** What a summary shows when the URL names no level: one row per school. */
+export const DEFAULT_SUMMARY_LEVEL = "school" as const;
 export type SummaryLevel = (typeof SUMMARY_LEVELS)[number];
 
 /** One school a scope covers, as `resolveScopeSchools` returns it. */

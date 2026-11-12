@@ -14,7 +14,7 @@ import { SearchableSelect, type SearchableOption } from "@/components/ui/searcha
 import { useListNavigate, useListPending } from "@/components/nav/list-navigation";
 import { cn } from "@/lib/utils";
 import { NO_DISTRICT_LABEL } from "@/lib/summary/shape/rollup";
-import type { SummaryLevel } from "@/lib/summary/types";
+import { DEFAULT_SUMMARY_LEVEL, type SummaryLevel } from "@/lib/summary/types";
 import {
   SUMMARY_SCOPE_KEYS,
   summaryHref,
@@ -48,9 +48,9 @@ export type SummaryScopeBarProps = {
 };
 
 const LEVELS: { id: SummaryLevel; label: string }[] = [
-  { id: "overall", label: "Overall" },
-  { id: "district", label: "By district" },
   { id: "school", label: "By school" },
+  { id: "district", label: "By district" },
+  { id: "overall", label: "Overall" },
 ];
 
 /** Radix Select cannot hold an empty item value. */
@@ -121,7 +121,7 @@ export function SummaryScopeBar({
                 variant="ghost"
                 aria-pressed={active}
                 onClick={() => {
-                  if (!active) go({ level: item.id === "overall" ? null : item.id });
+                  if (!active) go({ level: item.id === DEFAULT_SUMMARY_LEVEL ? null : item.id });
                 }}
                 className={cn(
                   "h-11 px-2 text-sm sm:px-3 lg:h-9",

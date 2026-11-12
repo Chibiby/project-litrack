@@ -44,18 +44,19 @@ describe("SummaryScopeBar", () => {
 
     const url = hrefOfLastPush();
     expect(url.pathname).toBe("/district/summary/learners");
-    expect(url.searchParams.get("level")).toBe("school");
+    // By school is the default, so it leaves no ?level.
+    expect(url.searchParams.has("level")).toBe(false);
     expect(url.searchParams.get("district")).toBe("Alabel 1");
   });
 
-  it("going back to Overall removes the level param", () => {
+  it("choosing Overall sets ?level=overall", () => {
     render(
       <SummaryScopeBar {...base} level="district" searchParams={{ level: "district", district: "Alabel 1" }} />
     );
     fireEvent.click(screen.getByRole("button", { name: "Overall" }));
 
     const url = hrefOfLastPush();
-    expect(url.searchParams.has("level")).toBe(false);
+    expect(url.searchParams.get("level")).toBe("overall");
     expect(url.searchParams.get("district")).toBe("Alabel 1");
   });
 
@@ -67,7 +68,8 @@ describe("SummaryScopeBar", () => {
 
     fireEvent.click(bySchool);
     const url = hrefOfLastPush();
-    expect(url.searchParams.get("level")).toBe("school");
+    // By school is the default, so it leaves no ?level.
+    expect(url.searchParams.has("level")).toBe(false);
     expect(url.searchParams.has("district")).toBe(false);
   });
 
@@ -125,7 +127,8 @@ describe("SummaryScopeBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "By school" }));
 
     const url = hrefOfLastPush();
-    expect(url.searchParams.get("level")).toBe("school");
+    // By school is the default, so it leaves no ?level.
+    expect(url.searchParams.has("level")).toBe(false);
     expect(url.searchParams.get("month")).toBe("2026-05");
     expect(url.searchParams.get("district")).toBe("Alabel 1");
     expect(url.searchParams.has("q")).toBe(false);
@@ -144,7 +147,8 @@ describe("SummaryScopeBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "By school" }));
 
     const url = hrefOfLastPush();
-    expect(url.searchParams.get("level")).toBe("school");
+    // By school is the default, so it leaves no ?level.
+    expect(url.searchParams.has("level")).toBe(false);
     expect([...url.searchParams.keys()].filter((k) => /^(sort|dir|page)\./.test(k))).toEqual([]);
   });
 

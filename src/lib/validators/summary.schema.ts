@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { reportPurposeSchema } from "./report.schema";
-import { SUMMARY_FACET_IDS, SUMMARY_LEVELS } from "@/lib/summary/types";
+import { DEFAULT_SUMMARY_LEVEL, SUMMARY_FACET_IDS, SUMMARY_LEVELS } from "@/lib/summary/types";
 import { COMPLIANCE_FLAG_FILTER_IDS } from "@/lib/summary/shape/compliance";
 
 /**
@@ -33,7 +33,7 @@ export const summaryLevelSchema = z
     (v) => (v === "" || v === null ? undefined : v),
     z.enum(SUMMARY_LEVELS, { message: "Choose overall, by district or by school" }).optional()
   )
-  .transform((v) => v ?? "overall");
+  .transform((v) => v ?? DEFAULT_SUMMARY_LEVEL);
 
 function monthsApart(from: string, to: string): number {
   const [fy, fm] = from.split("-").map(Number);

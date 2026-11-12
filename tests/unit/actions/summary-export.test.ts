@@ -351,7 +351,7 @@ describe("exportSummary scope (T9)", () => {
       },
     ]);
 
-    const res = await exportSummary({ facet: "compliance", format: "EXCEL", flag: "NO_ENCODED_DATA" });
+    const res = await exportSummary({ facet: "compliance", format: "EXCEL", level: "overall", flag: "NO_ENCODED_DATA" });
 
     expect(res).toMatchObject({
       ok: true,

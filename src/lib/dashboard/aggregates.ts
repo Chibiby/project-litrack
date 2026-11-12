@@ -109,8 +109,13 @@ export async function getAdminMetricCounts() {
         prisma.user.count({
           where: { role: "TEACHER", deletedAt: null, isActive: true, ...viaSchool },
         }),
-        prisma.learner.count({ where: { deletedAt: null, ...viaSchool } }),
-        prisma.learner.count({ where: { deletedAt: null, isAralLearner: true, ...viaSchool } }),
+        // A removed learner (archived: moved out, dropped out, NLPA…) is no
+        // longer one of the division's learners, and has no active enrollment,
+        // so counting them made "Learners" exceed "Enrolled this school year".
+        prisma.learner.count({ where: { deletedAt: null, archivedAt: null, ...viaSchool } }),
+        prisma.learner.count({
+          where: { deletedAt: null, archivedAt: null, isAralLearner: true, ...viaSchool },
+        }),
         prisma.user.count({
           where: {
             role: "TEACHER",

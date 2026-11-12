@@ -172,7 +172,7 @@ describe("SummaryFacetView — division scope, By school, no district picked", (
     const jsx = await SummaryFacetView({
       facetId: "learners",
       adminScope: { kind: "division" },
-      searchParams: {},
+      searchParams: { level: "overall" },
       basePath: "/admin/summary",
       userId: "admin-1",
     });

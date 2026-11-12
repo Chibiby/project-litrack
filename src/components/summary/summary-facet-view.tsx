@@ -19,7 +19,7 @@ import {
   readSchoolQuery,
   readSchoolTableParams,
 } from "@/lib/summary/shape/school-page";
-import type { FacetResult, SummaryFacetId, SummaryLevel, SummarySection } from "@/lib/summary/types";
+import { DEFAULT_SUMMARY_LEVEL, type FacetResult, type SummaryFacetId, type SummaryLevel, type SummarySection } from "@/lib/summary/types";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Surface } from "@/components/ui/surface";
 import { ListNavigationProvider } from "@/components/nav/list-navigation";
@@ -53,7 +53,9 @@ function monthOptions(): string[] {
 }
 
 function levelOf(flat: FlatSearchParams): SummaryLevel {
-  return flat.level === "district" || flat.level === "school" ? flat.level : "overall";
+  return flat.level === "overall" || flat.level === "district" || flat.level === "school"
+    ? flat.level
+    : DEFAULT_SUMMARY_LEVEL;
 }
 
 /**
