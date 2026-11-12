@@ -155,13 +155,14 @@ describe("exportListReportTable pdfParts", () => {
     expect(list.columns[g3.start + 2]).toBe("Grade 3 Non-DepEd");
   });
 
-  it("ARAL learners (count + % per grade): same invariants", () => {
+  it("ARAL learners (one count column per grade): same invariants", () => {
     const result = learnersResult(ALL_GRADES);
     expect(result.exportList!.columns.length).toBeGreaterThan(MAX_PART);
     expectWellFormedParts(result);
     const g = result.exportList!.groups!.find((x) => x.label === "Grade 1")!;
-    expect(g.count).toBe(2);
-    expect(result.exportList!.columns[g.start + 1]).toBe("Grade 1 %");
+    expect(g.count).toBe(1);
+    expect(result.exportList!.columns[g.start]).toBe("Grade 1");
+    expect(result.exportList!.columns.some((c) => c.includes("%"))).toBe(false);
   });
 
   it("Advisory (one column per grade): same invariants", () => {

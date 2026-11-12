@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.51.1",
+    date: "2026-11-12",
+    title: "ARAL learners export shows counts only",
+    announce: true,
+    fixes: [
+      "The ARAL learners summary export (Excel and PDF) now lists only the number of learners per grade. The percentage columns are gone.",
+    ],
+  },
+  {
     version: "2.51.0",
     date: "2026-11-10",
     title: "A new glass look for every dashboard",

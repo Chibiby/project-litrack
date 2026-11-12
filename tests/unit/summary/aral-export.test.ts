@@ -5,10 +5,10 @@ import type { ScopeSchool } from "@/lib/summary/types";
 
 /**
  * ARAL learners export: one row per school (or district, or the whole scope)
- * with the ARAL learner count first, then per grade a learner count and its %
- * of the row's learners, in place of the long Category/Count/Base/% blocks. At
- * school and district level a bold Total row closes the list when there is
- * more than one row, its percentages recomputed from the summed counts. The
+ * with the ARAL learner count first, then a learner count per grade (no
+ * percentages), in place of the long Category/Count/Base/% blocks. At school
+ * and district level a bold Total row closes the list when there is more than
+ * one row. The
  * teachers export is covered in aral-teachers.test.ts.
  */
 
@@ -73,7 +73,7 @@ function shape(
 }
 
 describe("ARAL learners export list", () => {
-  it("at school level: one row per school, the learner count first, then a count and % per grade, then a Total row", () => {
+  it("at school level: one row per school, the learner count first, then a count per grade (no %), then a Total row", () => {
     const list = shape("school").exportList!;
     expect(list.columns).toEqual([
       "School",
@@ -81,19 +81,21 @@ describe("ARAL learners export list", () => {
       "District",
       "ARAL learners",
       "Grade 3",
-      "Grade 3 %",
       "Grade 4",
-      "Grade 4 %",
       "Grade 5",
-      "Grade 5 %",
     ]);
     const byName = new Map(list.rows.map((r) => [r[0], r]));
     expect(list.rows).toHaveLength(4);
-    expect(byName.get("Alabel CES")).toEqual(["Alabel CES", "code-s1", "Alabel 1", 15, 10, 66.7, 5, 33.3, 0, 0]);
-    expect(byName.get("Bagacay ES")).toEqual(["Bagacay ES", "code-s2", "Alabel 1", 7, 7, 100, 0, 0, 0, 0]);
-    expect(byName.get("Glan CES")).toEqual(["Glan CES", "code-s3", "Glan 1", 3, 0, 0, 0, 0, 3, 100]);
-    // Recomputed from the summed counts, not an average of the rows' percentages.
-    expect(list.rows.at(-1)).toEqual(["Total", "", "", 25, 17, 68, 5, 20, 3, 12]);
+    expect(byName.get("Alabel CES")).toEqual(["Alabel CES", "code-s1", "Alabel 1", 15, 10, 5, 0]);
+    expect(byName.get("Bagacay ES")).toEqual(["Bagacay ES", "code-s2", "Alabel 1", 7, 7, 0, 0]);
+    expect(byName.get("Glan CES")).toEqual(["Glan CES", "code-s3", "Glan 1", 3, 0, 0, 3]);
+    expect(list.rows.at(-1)).toEqual(["Total", "", "", 25, 17, 5, 3]);
+  });
+
+  it("has no percentage columns", () => {
+    const list = shape("school").exportList!;
+    expect(list.columns.some((c) => c.includes("%"))).toBe(false);
+    expect(list.note).toBeUndefined();
   });
 
   it("has no teacher columns and no teacher-derived numbers", () => {
@@ -102,12 +104,12 @@ describe("ARAL learners export list", () => {
     expect(list.id).toBe("aral-learners-per-school");
   });
 
-  it("a row with no ARAL learners has a blank (null) % per grade, not a false 0%", () => {
+  it("a row with no ARAL learners shows zeros", () => {
     const list = shape("school", RAW, SCHOOLS_WITH_EMPTY).exportList!;
     const empty = list.rows.find((r) => r[0] === "Empty ES")!;
-    expect(empty).toEqual(["Empty ES", "code-s4", "Glan 1", 0, 0, null, 0, null, 0, null]);
+    expect(empty).toEqual(["Empty ES", "code-s4", "Glan 1", 0, 0, 0, 0]);
     // The empty school does not disturb the Total row.
-    expect(list.rows.at(-1)).toEqual(["Total", "", "", 25, 17, 68, 5, 20, 3, 12]);
+    expect(list.rows.at(-1)).toEqual(["Total", "", "", 25, 17, 5, 3]);
   });
 
   it("at district level: one row per district plus a Total row, no School ID column", () => {
@@ -115,9 +117,9 @@ describe("ARAL learners export list", () => {
     expect(list.columns.slice(0, 2)).toEqual(["District", "ARAL learners"]);
     expect(list.columns).not.toContain("School ID");
     const byName = new Map(list.rows.map((r) => [r[0], r]));
-    expect(byName.get("Alabel 1")).toEqual(["Alabel 1", 22, 17, 77.3, 5, 22.7, 0, 0]);
-    expect(byName.get("Glan 1")).toEqual(["Glan 1", 3, 0, 0, 0, 0, 3, 100]);
-    expect(list.rows.at(-1)).toEqual(["Total", 25, 17, 68, 5, 20, 3, 12]);
+    expect(byName.get("Alabel 1")).toEqual(["Alabel 1", 22, 17, 5, 0]);
+    expect(byName.get("Glan 1")).toEqual(["Glan 1", 3, 0, 0, 3]);
+    expect(list.rows.at(-1)).toEqual(["Total", 25, 17, 5, 3]);
   });
 
   it("no Total row when a level has a single row", () => {
@@ -131,7 +133,7 @@ describe("ARAL learners export list", () => {
     const list = shape("overall").exportList!;
     expect(list.columns[0]).toBe("Scope");
     expect(list.rows).toHaveLength(1);
-    expect(list.rows[0]?.slice(1)).toEqual([25, 17, 68, 5, 20, 3, 12]);
+    expect(list.rows[0]?.slice(1)).toEqual([25, 17, 5, 3]);
   });
 });
 
@@ -143,6 +145,7 @@ describe("ARAL learners report table", () => {
     expect(block.columns.map((c) => c.header)).not.toContain("Category");
     expect(block.rows).toHaveLength(4);
     expect(block.boldRowIndices).toEqual([3]);
+    expect(table.summary?.join(" ")).not.toMatch(/Percentages/);
   });
 
   it("overall has no bold row", () => {

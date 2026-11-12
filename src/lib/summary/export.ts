@@ -178,7 +178,12 @@ export function exportListReportTable(result: FacetResult, frame: ReportFrame): 
     freezeColumns: 1,
     ...pdfPartsFor(list),
   };
-  return { ...table, blocks: [block] };
+  // A counts-only list has no % column, so the rounding note would describe nothing.
+  const hasPct = list.columns.some((c) => c.includes("%"));
+  const summary = hasPct
+    ? table.summary
+    : [`${result.schoolCount} ${result.schoolCount === 1 ? "school" : "schools"}.`, ...(table.summary ?? []).slice(1)];
+  return { ...table, summary, blocks: [block] };
 }
 
 /** A facet result as a report table. Every facet's `toReportTable`. */
