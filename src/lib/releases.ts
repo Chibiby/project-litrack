@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.59.0",
+    date: "2026-11-13",
+    title: "Summaries slide like the sign-in steps",
+    announce: true,
+    fixes: [
+      { text: "Opening a summary slides it in from the right, and Back to summaries slides the list back in from the left, like the sign-in steps.", roles: ["SUPER_ADMIN"] },
+      { text: "A table that briefly failed to show while a page refreshed now shows normally.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.58.0",
     date: "2026-11-13",
     title: "Frosted icon tiles and a simpler way back",
