@@ -45,6 +45,10 @@ type LearnersDirectoryProps = {
   filters: ListFilterField[];
   /** Drops the School column — a single-school view has nothing to tell apart. */
   hideSchool?: boolean;
+  /** List heading; defaults to "Learner directory". */
+  heading?: string;
+  /** One line under the heading, e.g. what the list counts that the cards do not. */
+  headingNote?: string;
   /** Params that survive "Clear filters" (a Super Admin's `schoolId` view context). */
   keepParams?: readonly string[];
   /** Where "Clear filters" in the empty state goes; defaults to `basePath`. */
@@ -157,6 +161,8 @@ function LearnersDirectoryInner({
   basePath,
   filters,
   hideSchool = false,
+  heading = "Learner directory",
+  headingNote,
   keepParams,
   clearHref,
   emptyDescription = "Learners appear here once a school adds them.",
@@ -187,10 +193,13 @@ function LearnersDirectoryInner({
       </Surface>
       <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-lg">
         <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
-          <h2 className="text-base font-semibold">
-            Learner directory{" "}
-            <span className="text-muted-foreground">({list.totalCount.toLocaleString()})</span>
-          </h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold">
+              {heading}{" "}
+              <span className="text-muted-foreground">({list.totalCount.toLocaleString()})</span>
+            </h2>
+            {headingNote ? <p className="mt-0.5 text-xs text-muted-foreground">{headingNote}</p> : null}
+          </div>
           {bulkActions ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               {bulkActions}

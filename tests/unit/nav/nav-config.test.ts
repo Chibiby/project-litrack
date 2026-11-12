@@ -515,6 +515,7 @@ describe("getNavGroups — admin", () => {
     expect(groups[0].items[0].href).toBe("/admin");
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
+      "IP Learners",
       "Teachers",
       "ARAL Teachers",
       "School Heads",

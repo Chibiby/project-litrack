@@ -4,7 +4,7 @@ import {
   getAdminRecentSchools,
   getAdminIpAndAdvisoryMetrics,
 } from "@/lib/dashboard/aggregates";
-import { collapseKindsToOthers, topSchoolsWithIp } from "@/lib/dashboard/ip-metrics";
+import { getLearnersSummary } from "@/lib/admin/management";
 import {
   Table,
   TableBody,
@@ -25,7 +25,6 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import {
   DashboardBarChart,
   DashboardLineChart,
-  DashboardPieChart,
 } from "@/components/dashboard/lazy-charts";
 import {
   School,
@@ -33,11 +32,12 @@ import {
   ChevronRight,
   CalendarCheck,
   GraduationCap,
+  UserX,
 } from "lucide-react";
 
 /**
  * The Super Admin dashboard sections that fetch on their own and stream
- * behind their own `<Suspense>`: IP metrics, the two trend charts and the
+ * behind their own `<Suspense>`: enrollment and staffing, the two trend charts and the
  * recent-schools drill-down. The hero, stat row, attention rail and quick
  * actions live in `src/components/dashboard/admin/dashboard-body.tsx`.
  */
@@ -95,61 +95,118 @@ export async function AdminChartsSection() {
   );
 }
 
-export async function AdminIpAdvisorySection() {
-  let data: Awaited<ReturnType<typeof getAdminIpAndAdvisoryMetrics>> | null =
-    null;
-  try {
-    data = await getAdminIpAndAdvisoryMetrics();
-  } catch (err) {
-    console.error("[AdminIpAdvisorySection] failed to load:", err);
-  }
+/** Axis label: "Grade 3" → "G3", "Kinder" → "K". Local: the charts module is client-only. */
+function shortGradeLabel(label: string): string {
+  if (label === "Kinder") return "K";
+  const m = /^Grade (\d+)$/.exec(label);
+  return m ? `G${m[1]}` : label;
+}
 
-  const schools = topSchoolsWithIp(data?.schools ?? [], 5);
-  const kinds = collapseKindsToOthers(data?.ipKinds ?? [], 5);
+/** Schools with the heaviest load: most enrolled learners per active teacher. */
+function busiestSchools(
+  rows: readonly {
+    schoolId: string;
+    name: string;
+    totalLearners: number;
+    activeTeachers: number;
+    learnersPerTeacher: string;
+  }[],
+  n: number
+) {
+  return rows
+    .filter((r) => r.activeTeachers > 0 && r.totalLearners > 0)
+    .map((r) => ({ ...r, ratio: r.totalLearners / r.activeTeachers }))
+    .sort((a, b) => b.ratio - a.ratio || a.name.localeCompare(b.name))
+    .slice(0, n);
+}
 
-  const viewAll = (
-    <Button asChild size="sm" variant="outline" className="lg:h-9">
-      <PrefetchLink href={ADMIN_ROUTES.learners}>View all</PrefetchLink>
-    </Button>
-  );
+/**
+ * Enrollment and staffing at a glance: learners per teacher, schools with
+ * learners but no active teacher, learners by grade, and the schools carrying
+ * the most learners per teacher. IP figures live on Management → IP Learners.
+ */
+export async function AdminLearnerMixSection() {
+  const [staffing, summary] = await Promise.all([
+    getAdminIpAndAdvisoryMetrics().catch((err) => {
+      console.error("[AdminLearnerMixSection] failed to load staffing:", err);
+      return null;
+    }),
+    getLearnersSummary().catch((err) => {
+      console.error("[AdminLearnerMixSection] failed to load learners:", err);
+      return null;
+    }),
+  ]);
+
+  const busiest = busiestSchools(staffing?.schools ?? [], 5);
+  const noTeacher = (staffing?.schools ?? []).filter(
+    (r) => r.activeTeachers === 0 && r.totalLearners > 0
+  ).length;
+  const grades = (summary?.byGrade ?? [])
+    .filter((g) => g.grade !== "UNASSIGNED")
+    .map((g) => ({ name: shortGradeLabel(g.label), value: g.count }));
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <StatCard
           title="Learners per teacher"
-          value={data?.national.learnersPerTeacher ?? "—"}
-          hint={`${data?.national.totalLearners ?? 0} enrolled · ${data?.national.activeTeachers ?? 0} active teachers`}
+          value={staffing?.national.learnersPerTeacher ?? "—"}
+          hint={`${(staffing?.national.totalLearners ?? 0).toLocaleString()} enrolled · ${(staffing?.national.activeTeachers ?? 0).toLocaleString()} active teachers`}
           icon={Users}
           tone="primary"
           denseOnPhone
+          href={ADMIN_ROUTES.teachers}
         />
         <StatCard
-          title="IP learners"
-          value={data?.national.ipLearners ?? 0}
-          hint={`${data?.national.ipPercent ?? "—"} of enrolled learners`}
-          icon={GraduationCap}
-          tone="amber"
+          title="Schools with no teacher"
+          value={noTeacher.toLocaleString()}
+          hint={noTeacher > 0 ? "Learners, no active teacher" : "All schools are staffed"}
+          icon={UserX}
+          tone={noTeacher > 0 ? "amber" : "emerald"}
           denseOnPhone
-          href={ADMIN_ROUTES.learners}
+          href={ADMIN_ROUTES.schools}
         />
       </div>
 
       {/* One-up at xl, where the attention rail narrows this column; two-up
-          again at 2xl once it is wide enough for a table beside a donut. */}
+          again at 2xl once it is wide enough for a table beside a chart. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
         <ChartCard
-          title="Schools with IP learners"
-          description="Top 5 by count"
-          action={viewAll}
+          title="Learners by grade"
+          description="Every learner, by current grade"
+          action={
+            <Button asChild size="sm" variant="outline" className="lg:h-9">
+              <PrefetchLink href={ADMIN_ROUTES.learners}>View all</PrefetchLink>
+            </Button>
+          }
+          className="min-w-0 rounded-lg"
+        >
+          {grades.length === 0 ? (
+            <EmptyState
+              title="No learners yet"
+              description="Appears once schools add learners."
+              icon={GraduationCap}
+            />
+          ) : (
+            <DashboardBarChart data={grades} height={240} />
+          )}
+        </ChartCard>
+        <ChartCard
+          title="Most learners per teacher"
+          description="Top 5 schools by enrolled learners per active teacher"
+          action={
+            <Button asChild size="sm" variant="outline" className="lg:h-9">
+              <PrefetchLink href={ADMIN_ROUTES.schools}>Schools</PrefetchLink>
+            </Button>
+          }
           className="min-w-0 rounded-lg"
           contentClassName="p-0 sm:p-2"
         >
-          {schools.length === 0 ? (
+          {busiest.length === 0 ? (
             <div className="p-5">
               <EmptyState
-                title="No IP learners yet"
-                description="Appears once enrolled learners have an IP ethnicity recorded."
+                title="No data yet"
+                description="Appears once schools have enrolled learners and active teachers."
                 icon={School}
               />
             </div>
@@ -160,66 +217,50 @@ export async function AdminIpAdvisorySection() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>School</TableHead>
+                      <TableHead numeric>Teachers</TableHead>
+                      <TableHead numeric>Enrolled</TableHead>
                       <TableHead numeric>Per teacher</TableHead>
-                      <TableHead numeric>IP</TableHead>
-                      <TableHead numeric>Total</TableHead>
-                      <TableHead numeric>IP %</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {schools.map((s) => (
+                    {busiest.map((s) => (
                       <TableRow key={s.schoolId}>
                         <TableCell className="max-w-[14rem] font-medium">
                           <CellText>{s.name}</CellText>
                         </TableCell>
+                        <TableCell numeric>{s.activeTeachers.toLocaleString()}</TableCell>
+                        <TableCell numeric>{s.totalLearners.toLocaleString()}</TableCell>
                         <TableCell numeric>{s.learnersPerTeacher}</TableCell>
-                        <TableCell numeric>{s.ipLearners}</TableCell>
-                        <TableCell numeric>{s.totalLearners}</TableCell>
-                        <TableCell numeric>{s.ipPercent}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               }
               stacked={
-                <StackedList aria-label="Schools with IP learners">
-                  {schools.map((s) => (
+                <StackedList aria-label="Most learners per teacher">
+                  {busiest.map((s) => (
                     <StackedRow
                       key={s.schoolId}
                       title={s.name}
                       value={
                         <>
-                          {s.ipLearners}
-                          <span className="ml-1 text-xs font-normal text-muted-foreground">IP</span>
+                          {s.learnersPerTeacher}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            per teacher
+                          </span>
                         </>
                       }
                       meta={
-                        <>
-                          <span className="tabular-nums">{s.ipPercent} of {s.totalLearners}</span>
-                          <span className="tabular-nums">{s.learnersPerTeacher} per teacher</span>
-                        </>
+                        <span className="tabular-nums">
+                          {s.totalLearners.toLocaleString()} enrolled ·{" "}
+                          {s.activeTeachers.toLocaleString()} teachers
+                        </span>
                       }
                     />
                   ))}
                 </StackedList>
               }
             />
-          )}
-        </ChartCard>
-        <ChartCard
-          title="IP learners by group"
-          description="A learner with two IP groups counts in both"
-          action={viewAll}
-          className="min-w-0 rounded-lg"
-        >
-          {kinds.length === 0 ? (
-            <EmptyState
-              title="No data yet"
-              description="Appears once enrolled learners have an IP ethnicity recorded."
-              icon={GraduationCap}
-            />
-          ) : (
-            <DashboardPieChart data={kinds} />
           )}
         </ChartCard>
       </div>

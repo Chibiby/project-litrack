@@ -157,7 +157,7 @@ describe("/admin/summary", () => {
 
 describe("the other moved pages", () => {
   const cases: Array<[string, (p: { searchParams: Promise<Search> }) => Promise<unknown>, Search, string]> = [
-    ["/admin/ip-learners", LegacyIpLearners, { ip: "yes", page: "2" }, "/admin/management/learners?ip=yes&page=2"],
+    ["/admin/ip-learners", LegacyIpLearners, { ip: "yes", page: "2" }, "/admin/management/ip-learners?ip=yes&page=2"],
     ["/admin/school-years", LegacySchoolYears, {}, "/admin/school-setup/school-years"],
     ["/admin/term-subjects", LegacyTermSubjects, { type: "G1" }, "/admin/school-setup/term-subjects?type=G1"],
     [

@@ -11,6 +11,7 @@ import {
   FileBarChart,
   FileCheck2,
   FileText,
+  Feather,
   FlaskConical,
   GraduationCap,
   HandHelping,
@@ -196,6 +197,7 @@ export function getNavGroups(
           label: "Management",
           items: [
             { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
+            { id: "admin-ip-learners", label: "IP Learners", href: ADMIN_ROUTES.ipLearners, icon: Feather },
             { id: "admin-teachers", label: "Teachers", href: ADMIN_ROUTES.teachers, icon: Users, heavy: true },
             { id: "admin-aral-teachers", label: "ARAL Teachers", href: ADMIN_ROUTES.aralTeachers, icon: HandHelping },
             { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },

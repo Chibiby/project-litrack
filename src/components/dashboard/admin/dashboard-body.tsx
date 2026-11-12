@@ -21,7 +21,7 @@ import { SchoolHeadStatRow } from "@/components/dashboard/school-head/stat-row";
 import { SchoolAttentionPanel } from "@/components/dashboard/school-head/attention-panel";
 import {
   AdminChartsSection,
-  AdminIpAdvisorySection,
+  AdminLearnerMixSection,
   AdminRecentSchoolsSection,
 } from "@/components/dashboard/admin-dashboard-sections";
 import { ChartSectionSkeleton, ListCardSkeleton } from "@/components/loading";
@@ -112,7 +112,7 @@ export async function loadAdminDashboard({
               hint="Across every school"
               icon={GraduationCap}
               tone="amber"
-              action={{ label: "IP learners", href: ADMIN_ROUTES.learners }}
+              action={{ label: "View learners", href: ADMIN_ROUTES.learners }}
             />
             <StatCard
               title="ARAL learners"
@@ -133,7 +133,7 @@ export async function loadAdminDashboard({
           </SchoolHeadStatRow>
 
           <Suspense fallback={<ChartSectionSkeleton columns={2} />}>
-            <AdminIpAdvisorySection />
+            <AdminLearnerMixSection />
           </Suspense>
         </div>
 

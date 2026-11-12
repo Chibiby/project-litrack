@@ -20,6 +20,8 @@ export const ADMIN_ROUTES = {
 
   // Management
   learners: "/admin/management/learners",
+  /** Indigenous Peoples learners: every IP figure, chart and list in one place. */
+  ipLearners: "/admin/management/ip-learners",
   teachers: "/admin/management/teachers",
   aralTeachers: "/admin/management/aral-teachers",
   schoolHeads: "/admin/management/school-heads",
@@ -63,7 +65,7 @@ export const LEGACY_ADMIN_REDIRECTS: Readonly<Record<string, string>> = {
   "/admin/schools": ADMIN_ROUTES.schools,
   "/admin/accounts": ADMIN_ROUTES.teachers,
   "/admin/school-accounts": ADMIN_ROUTES.schoolHeads,
-  "/admin/ip-learners": ADMIN_ROUTES.learners,
+  "/admin/ip-learners": ADMIN_ROUTES.ipLearners,
   "/admin/school-years": ADMIN_ROUTES.schoolYears,
   "/admin/term-subjects": ADMIN_ROUTES.termSubjects,
   "/admin/submissions": ADMIN_ROUTES.reportSubmissions,

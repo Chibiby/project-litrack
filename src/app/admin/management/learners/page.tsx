@@ -1,8 +1,6 @@
 import { Suspense } from "react";
-import { BookOpen, CalendarCheck, GraduationCap, School, Sparkles, Users } from "lucide-react";
+import { BookOpen, BarChart3, CalendarCheck, GraduationCap, Sparkles, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth/session";
-import { getAdminIpAndAdvisoryMetrics } from "@/lib/dashboard/aggregates";
-import { topSchoolsWithIp } from "@/lib/dashboard/ip-metrics";
 import {
   getLearnersHubPage,
   getLearnersSummary,
@@ -20,16 +18,6 @@ import {
 import { AdminPage } from "@/components/admin/admin-page";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  CellText,
-} from "@/components/ui/table";
-import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { MetricsGridSkeleton, TableSectionSkeleton, ListCardSkeleton } from "@/components/loading";
@@ -50,7 +38,7 @@ import { ADMIN_ROUTES } from "@/lib/routes/admin";
 export const dynamic = "force-dynamic";
 
 /** Params that change the directory rows; `q` left out so typing keeps focus (see `listKey`). */
-const LEARNERS_LIST_KEYS = ["page", "district", "schoolId", "grade", "section", "ip", "aral"] as const;
+const LEARNERS_LIST_KEYS = ["page", "district", "schoolId", "grade", "section", "aral"] as const;
 /** The figures follow the district / school scope only. */
 const LEARNERS_SUMMARY_KEYS = ["district", "schoolId"] as const;
 
@@ -74,9 +62,12 @@ async function LearnersCards({ params }: { params: LearnersHubParams }) {
     return <SummaryUnavailable what="learner" />;
   }
   const card = { denseOnPhone: true } as const;
+  const largest = summary.byGrade
+    .filter((g) => g.grade !== "UNASSIGNED")
+    .reduce<(typeof summary.byGrade)[number] | null>((best, g) => (!best || g.count > best.count ? g : best), null);
   return (
     <SummaryGrid scope={scope} label="Learner overview">
-      {/* Learners, IP and ARAL use the dashboard's figures and words. */}
+      {/* Learners and ARAL use the dashboard's figures and words. IP figures live on Management → IP Learners. */}
       <StatCard
         title="Learners"
         value={n(summary.totalLearners)}
@@ -88,7 +79,14 @@ async function LearnersCards({ params }: { params: LearnersHubParams }) {
       <StatCard title="Enrolled this school year" value={n(summary.enrolledThisYear)} hint="Active enrollment in the current year" icon={CalendarCheck} tone="primary" {...card} />
       <StatCard title="Male" value={n(summary.bySex.male)} hint="Of all learners" icon={Users} tone="neutral" {...card} />
       <StatCard title="Female" value={n(summary.bySex.female)} hint="Of all learners" icon={Users} tone="neutral" {...card} />
-      <StatCard title="IP learners (enrolled)" value={n(summary.ipLearners)} hint={`${summary.ipPercent} of enrolled`} icon={School} tone="amber" {...card} />
+      <StatCard
+        title="Largest grade"
+        value={largest ? largest.label : "—"}
+        hint={largest ? `${n(largest.count)} learners` : "No learners yet"}
+        icon={BarChart3}
+        tone="emerald"
+        {...card}
+      />
       <StatCard title="ARAL learners" value={n(summary.aralLearners)} hint="In the ARAL program" icon={Sparkles} tone="violet" {...card} />
     </SummaryGrid>
   );
@@ -110,11 +108,8 @@ async function LearnersBreakdowns({ params }: { params: LearnersHubParams }) {
     console.error("[AdminLearnersPage] failed to load breakdowns:", err);
     return <SummaryUnavailable what="breakdown" />;
   }
-  const ipTotal = summary.ipByGroup.reduce((sum, g) => sum + g.count, 0);
-
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-      <Surface as="section" className="min-w-0 rounded-lg">
+    <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceHeader>
           <h2 className="text-base font-semibold">Learners by grade</h2>
           <span className="text-xs text-muted-foreground">{scope}</span>
@@ -128,7 +123,12 @@ async function LearnersBreakdowns({ params }: { params: LearnersHubParams }) {
             />
           </SurfaceBody>
         ) : (
-          <ul className="space-y-2 px-4 pb-4 pt-1" aria-label="Learners by grade">
+          <ul
+            // Two columns from lg, read top-to-bottom: Kinder–Grade 6, then the rest.
+            className="grid gap-y-2.5 px-4 pb-4 pt-1 lg:grid-flow-col lg:grid-cols-2 lg:gap-x-10 lg:[grid-template-rows:repeat(var(--rows),auto)]"
+            style={{ "--rows": Math.ceil(summary.byGrade.length / 2) } as React.CSSProperties}
+            aria-label="Learners by grade"
+          >
             {summary.byGrade.map((g) => (
               <li key={g.grade} className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-center gap-3 text-sm">
                 <span className="font-medium">{g.label}</span>
@@ -150,127 +150,6 @@ async function LearnersBreakdowns({ params }: { params: LearnersHubParams }) {
         )}
       </Surface>
 
-      <Surface as="section" className="min-w-0 rounded-lg">
-        <SurfaceHeader>
-          <h2 className="text-base font-semibold">IP learners by group</h2>
-          <span className="text-xs text-muted-foreground">
-            A learner with two IP groups counts in both
-          </span>
-        </SurfaceHeader>
-        {summary.ipByGroup.length === 0 ? (
-          <SurfaceBody>
-            <EmptyState
-              title="No IP learners"
-              description="Appears once enrolled learners have an IP ethnicity recorded."
-              icon={GraduationCap}
-            />
-          </SurfaceBody>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-4">Group</TableHead>
-                <TableHead numeric>Count</TableHead>
-                <TableHead numeric className="pr-4">Share</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {summary.ipByGroup.map((g) => (
-                <TableRow key={g.key}>
-                  <TableCell className="pl-4 font-medium">{g.name}</TableCell>
-                  <TableCell numeric>{n(g.count)}</TableCell>
-                  <TableCell numeric className="pr-4">{share(g.count, ipTotal)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Surface>
-    </div>
-  );
-}
-
-async function SchoolsWithIp() {
-  let data: Awaited<ReturnType<typeof getAdminIpAndAdvisoryMetrics>> | null = null;
-  try {
-    data = await getAdminIpAndAdvisoryMetrics();
-  } catch (err) {
-    console.error("[AdminLearnersPage] failed to load schools with IP learners:", err);
-  }
-  const schools = topSchoolsWithIp(data?.schools ?? [], Number.POSITIVE_INFINITY);
-
-  return (
-    <Surface as="section" className="min-w-0 rounded-lg">
-      <SurfaceHeader>
-        <h2 className="text-base font-semibold">Schools with IP learners</h2>
-        <span className="text-xs text-muted-foreground">Whole division · ignores the filters above</span>
-      </SurfaceHeader>
-      {!data ? (
-        <SurfaceBody>
-          <p className="text-sm text-muted-foreground">
-            This table could not be loaded right now. Reload the page to try again.
-          </p>
-        </SurfaceBody>
-      ) : schools.length === 0 ? (
-        <SurfaceBody>
-          <EmptyState
-            title="No IP learners yet"
-            description="Appears once enrolled learners have an IP ethnicity recorded."
-            icon={School}
-          />
-        </SurfaceBody>
-      ) : (
-        <ResponsiveTable
-          table={
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">School</TableHead>
-                  <TableHead numeric>Per teacher</TableHead>
-                  <TableHead numeric>IP</TableHead>
-                  <TableHead numeric>Total</TableHead>
-                  <TableHead numeric className="pr-4">IP %</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {schools.map((s) => (
-                  <TableRow key={s.schoolId}>
-                    <TableCell className="max-w-[20rem] pl-4 font-medium">
-                      <CellText>{s.name}</CellText>
-                    </TableCell>
-                    <TableCell numeric>{s.learnersPerTeacher}</TableCell>
-                    <TableCell numeric>{s.ipLearners}</TableCell>
-                    <TableCell numeric>{s.totalLearners}</TableCell>
-                    <TableCell numeric className="pr-4">{s.ipPercent}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          }
-          stacked={
-            <StackedList aria-label="Schools with IP learners">
-              {schools.map((s) => (
-                <StackedRow
-                  key={s.schoolId}
-                  title={s.name}
-                  value={
-                    <>
-                      {s.ipLearners}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">IP</span>
-                    </>
-                  }
-                  meta={
-                    <span className="tabular-nums">
-                      {s.ipPercent} IP · {s.totalLearners} enrolled · {s.learnersPerTeacher} per teacher
-                    </span>
-                  }
-                />
-              ))}
-            </StackedList>
-          }
-        />
-      )}
-    </Surface>
   );
 }
 
@@ -285,13 +164,6 @@ async function directoryFilters(params: LearnersHubParams): Promise<ListFilterFi
     schoolField(schools, params.schoolId, ["section"]),
     gradeField(listGradeOptions(), params.grade, ["section"]),
     sectionField(sections, params.section, { schoolId: params.schoolId, grade: params.grade }),
-    yesNoField(
-      "ip",
-      "IP learner",
-      params.ip,
-      { all: "IP and non-IP", yes: "IP learners only", no: "Non-IP only" },
-      "Filter covers every learner; the card counts enrolled learners only."
-    ),
     yesNoField("aral", "ARAL", params.aral, { all: "ARAL and non-ARAL", yes: "ARAL learners only", no: "Not in ARAL" }),
   ];
 }
@@ -337,7 +209,7 @@ async function LearnersDirectoryBody({ params }: { params: LearnersHubParams }) 
 
 /**
  * Division-wide learner hub: headline figures, the searchable directory, the
- * grade and IP-group breakdowns, and the schools-with-IP table. The figures
+ * grade breakdown. The figures
  * and breakdowns follow the district / school filters; the directory follows
  * every filter.
  */
@@ -361,7 +233,7 @@ export default async function AdminLearnersPage({
           eyebrow="Management"
           eyebrowIcon={GraduationCap}
           title="Learners"
-          subtitle="Every learner in the division. Find a learner, or see how they break down by grade, IP group and ARAL."
+          subtitle="Every learner in the division. Find a learner, or see how they break down by grade and ARAL."
         />
       }
     >
@@ -380,9 +252,6 @@ export default async function AdminLearnersPage({
         <LearnersBreakdowns params={params} />
       </Suspense>
 
-      <Suspense fallback={<TableSectionSkeleton rows={6} columns={5} />}>
-        <SchoolsWithIp />
-      </Suspense>
     </AdminPage>
   );
 }
