@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { SUMMARY_FACET_META, isSummaryFacetId } from "@/lib/summary/facet-meta";
 import { AppShell } from "@/components/app-shell";
+import { SummarySlide } from "@/components/summary/summary-slide";
 import { SummaryFacetView } from "@/components/summary/summary-facet-view";
 import { SummaryPageHero } from "@/components/summary/summary-page-hero";
 import { describeScope } from "@/components/district/scope-label";
@@ -28,16 +29,22 @@ export default async function DistrictSummaryFacetPage({
       userName={user.fullName || user.email}
       hideTitle
     >
-      <div className="mb-6">
-        <SummaryPageHero facetId={facet} portal="district" meta={describeScope(scope)} />
-      </div>
-      <SummaryFacetView
-        facetId={facet}
-        adminScope={scope}
-        searchParams={await searchParams}
-        basePath="/district/summary"
-        userId={user.id}
-      />
+      <SummarySlide side="summary">
+        <div className="mb-6">
+          <SummaryPageHero
+            facetId={facet}
+            portal="district"
+            meta={describeScope(scope)}
+          />
+        </div>
+        <SummaryFacetView
+          facetId={facet}
+          adminScope={scope}
+          searchParams={await searchParams}
+          basePath="/district/summary"
+          userId={user.id}
+        />
+      </SummarySlide>
     </AppShell>
   );
 }

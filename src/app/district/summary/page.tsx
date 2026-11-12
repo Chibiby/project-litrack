@@ -1,6 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { AppShell } from "@/components/app-shell";
+import { SummarySlide } from "@/components/summary/summary-slide";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { SummaryFacetIndex } from "@/components/summary/summary-facet-index";
 import { describeScope } from "@/components/district/scope-label";
@@ -18,16 +19,18 @@ export default async function DistrictSummaryIndexPage() {
       userName={user.fullName || user.email}
       hideTitle
     >
-      <div className="mb-6">
-        <SchoolHeadHero
-          eyebrow="District summary"
-          eyebrowIcon={BarChart3}
-          title="District Summary"
-          subtitle="Learners, reading and compliance across your schools, overall and by school."
-          meta={describeScope(scope)}
-        />
-      </div>
-      <SummaryFacetIndex basePath="/district/summary" />
+      <SummarySlide side="list">
+        <div className="mb-6">
+          <SchoolHeadHero
+            eyebrow="District summary"
+            eyebrowIcon={BarChart3}
+            title="District Summary"
+            subtitle="Learners, reading and compliance across your schools, overall and by school."
+            meta={describeScope(scope)}
+          />
+        </div>
+        <SummaryFacetIndex basePath="/district/summary" />
+      </SummarySlide>
     </AppShell>
   );
 }
