@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { AdminPage } from "@/components/admin/admin-page";
+import { PageNavLink, PageSlide } from "@/components/ui/page-slide";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { Button } from "@/components/ui/button";
 import { SchoolDetailView } from "@/components/admin/school-detail-view";
@@ -46,31 +46,33 @@ export default async function SchoolDetailPage({ params, searchParams }: PagePro
   if (!detail) notFound();
 
   return (
-    <AdminPage
-      title={detail.school.name}
-      role={user.role}
-      userName={user.fullName || user.email}
-      hero={
-        <SchoolHeadHero
-          eyebrow="School"
-          eyebrowIcon={School}
-          title={detail.school.name}
-          subtitle={`School ID ${detail.school.schoolIdCode}`}
-          meta={[detail.school.district, detail.school.division]
-            .filter((part): part is string => Boolean(part?.trim()))
-            .join(" · ") || undefined}
-          topRight={
-            <Button asChild variant="ghost" size="sm" className="lg:h-9">
-              <Link href={ADMIN_ROUTES.schools}>
-                <ChevronLeft aria-hidden />
-                <span className="max-sm:sr-only">All schools</span>
-              </Link>
-            </Button>
-          }
-        />
-      }
-    >
-      <SchoolDetailView detail={detail} searchParams={sp} />
-    </AdminPage>
+    <PageSlide side="child">
+      <AdminPage
+        title={detail.school.name}
+        role={user.role}
+        userName={user.fullName || user.email}
+        hero={
+          <SchoolHeadHero
+            eyebrow="School"
+            eyebrowIcon={School}
+            title={detail.school.name}
+            subtitle={`School ID ${detail.school.schoolIdCode}`}
+            meta={[detail.school.district, detail.school.division]
+              .filter((part): part is string => Boolean(part?.trim()))
+              .join(" · ") || undefined}
+            topRight={
+              <Button asChild variant="ghost" size="sm" className="lg:h-9">
+                <PageNavLink dir="back" href={ADMIN_ROUTES.schools}>
+                  <ChevronLeft aria-hidden />
+                  <span className="max-sm:sr-only">All schools</span>
+                </PageNavLink>
+              </Button>
+            }
+          />
+        }
+      >
+        <SchoolDetailView detail={detail} searchParams={sp} />
+      </AdminPage>
+    </PageSlide>
   );
 }
