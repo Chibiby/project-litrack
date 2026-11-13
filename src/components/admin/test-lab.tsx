@@ -52,7 +52,10 @@ export type TestLabPageData = {
 
 const START_BUTTONS: { persona: TestLabPersona; label: string }[] = [
   { persona: "head", label: "Open as School Head" },
-  { persona: "teacher", label: "Open as Teacher" },
+  { persona: "teacher", label: "Open as Multi-advisory Teacher" },
+  { persona: "teacher-single", label: "Open as Single-advisory Teacher" },
+  { persona: "teacher-floating", label: "Open as Floating Teacher" },
+  { persona: "teacher-volunteer", label: "Open as Non-DepEd ARAL Volunteer" },
   { persona: "pending-teacher", label: "Open as Pending Teacher" },
 ];
 

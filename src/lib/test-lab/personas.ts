@@ -14,7 +14,19 @@ import { schoolHeadSyntheticEmail, teacherSyntheticEmail } from "@/lib/auth/synt
  * import it.
  */
 
-export const TEST_LAB_PERSONAS = ["head", "teacher", "pending-teacher"] as const;
+/**
+ * `teacher` is the multi-advisory teacher (two sections). The other teacher
+ * personas cover the remaining kinds: one advisory section, floating (none),
+ * and the Non-DepEd ARAL Volunteer.
+ */
+export const TEST_LAB_PERSONAS = [
+  "head",
+  "teacher",
+  "teacher-single",
+  "teacher-floating",
+  "teacher-volunteer",
+  "pending-teacher",
+] as const;
 export type TestLabPersona = (typeof TEST_LAB_PERSONAS)[number];
 
 /** The demo school Test Lab works in. `DEMO_SCHOOLS` holds exactly this one. */
@@ -35,6 +47,12 @@ export function testLabPersonaEmail(persona: TestLabPersona): string {
       return schoolHeadSyntheticEmail(code);
     case "teacher":
       return teacherSyntheticEmail(`testlab.teacher.${code}`);
+    case "teacher-single":
+      return teacherSyntheticEmail(`testlab.single.${code}`);
+    case "teacher-floating":
+      return teacherSyntheticEmail(`testlab.floating.${code}`);
+    case "teacher-volunteer":
+      return teacherSyntheticEmail(`testlab.volunteer.${code}`);
     case "pending-teacher":
       return teacherSyntheticEmail(`testlab.pending.${code}`);
   }

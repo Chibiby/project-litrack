@@ -40,7 +40,12 @@ type Usr = {
   approvedById: string | null;
   deletedAt: Date | null;
 };
-type Profile = { userId: string; advisoryMode: string };
+type Profile = {
+  userId: string;
+  advisoryMode: string;
+  designation?: string;
+  employmentType?: string;
+};
 type LearnerRow = {
   id: string;
   schoolId: string;
@@ -49,6 +54,9 @@ type LearnerRow = {
   teacherId: string;
   aralTeacherId: string | null;
   isAralLearner: boolean;
+  firstName: string;
+  lastName: string;
+  fullName: string;
   deletedAt: Date | null;
 };
 type EnrollmentRow = {
@@ -194,6 +202,12 @@ const prismaMock = {
     create: vi.fn(async ({ data }: { data: Omit<LearnerRow, "id" | "deletedAt"> }) => {
       const row: LearnerRow = { id: nextId("learner"), deletedAt: null, ...data };
       learners.push(row);
+      return row;
+    }),
+    update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<LearnerRow> }) => {
+      const row = learners.find((l) => l.id === where.id);
+      if (!row) throw new Error("learner not found");
+      Object.assign(row, data);
       return row;
     }),
   },
@@ -354,11 +368,12 @@ describe("prepareTestLabFixtures — idempotency", () => {
 
     expect(first.prepared).toBe(true);
     expect(years).toHaveLength(1);
-    expect(grades).toHaveLength(2);
-    expect(sections).toHaveLength(2);
-    // Two new auth users: the demo teacher and the pending teacher.
-    expect(users).toHaveLength(3);
-    expect(createUserMock).toHaveBeenCalledTimes(2);
+    // Kinder, Grade 1 and Grade 2, one section each.
+    expect(grades).toHaveLength(3);
+    expect(sections).toHaveLength(3);
+    // Five new auth users: the four kinds of teacher and the pending teacher.
+    expect(users).toHaveLength(6);
+    expect(createUserMock).toHaveBeenCalledTimes(5);
     expect(learners.length).toBeGreaterThan(0);
     expect(enrollments).toHaveLength(learners.length);
     // Every learner's Enrollment points at the same grade/section/teacher as
@@ -392,7 +407,7 @@ describe("prepareTestLabFixtures — idempotency", () => {
     expect(users).toHaveLength(counts.users);
     expect(learners).toHaveLength(counts.learners);
     expect(enrollments).toHaveLength(counts.enrollments);
-    expect(createUserMock).toHaveBeenCalledTimes(2); // no new auth users
+    expect(createUserMock).toHaveBeenCalledTimes(5); // no new auth users
     expect(second).toEqual(first);
   });
 });
@@ -443,9 +458,83 @@ describe("prepareTestLabFixtures — partial failure", () => {
     const inputs = createUserMock.mock.calls.map(
       (c) => c[0] as { email: string; password: { hash: string } }
     );
-    expect(inputs).toHaveLength(2);
-    expect(new Set(inputs.map((i) => i.email)).size).toBe(2);
-    expect(inputs[0].password.hash).not.toBe(inputs[1].password.hash);
+    expect(inputs).toHaveLength(5);
+    expect(new Set(inputs.map((i) => i.email)).size).toBe(5);
+    expect(new Set(inputs.map((i) => i.password.hash)).size).toBe(5);
+  });
+});
+
+/**
+ * The demo school is what orientation screenshots show, so its people carry
+ * invented everyday names and it holds one teacher of each kind.
+ */
+describe("prepareTestLabFixtures — named people and teacher kinds", () => {
+  it("names every learner and teacher, with no placeholder left", async () => {
+    seedLiveDemoSchool();
+    await prepareTestLabFixtures(ADMIN_ID);
+
+    expect(learners.map((l) => l.fullName)).toContain("Juan Santos Dela Cruz");
+    expect(users.map((u) => u.fullName)).toContain("Anna Lopez Meyer");
+    for (const name of [...learners, ...users].map((r) => r.fullName)) {
+      expect(name).not.toMatch(/Learner \d|Test Lab/);
+    }
+    expect(new Set(learners.map((l) => l.fullName)).size).toBe(learners.length);
+  });
+
+  it("creates one teacher of each kind", async () => {
+    seedLiveDemoSchool();
+    const result = await prepareTestLabFixtures(ADMIN_ID);
+
+    const modeOf = (id: string | null) => profiles.find((p) => p.userId === id)?.advisoryMode;
+    expect(modeOf(result.teacherId)).toBe("MULTI_GRADE");
+    expect(modeOf(result.singleTeacherId)).toBe("DEFAULT");
+    expect(modeOf(result.floatingTeacherId)).toBe("FLOATING");
+
+    const volunteer = profiles.find((p) => p.userId === result.volunteerTeacherId);
+    expect(volunteer).toMatchObject({
+      designation: "Non-DepEd ARAL Volunteer",
+      employmentType: "NON_DEPED",
+    });
+
+    const advises = (id: string | null) => sections.filter((s) => s.adviserId === id).length;
+    expect(advises(result.teacherId)).toBe(2);
+    expect(advises(result.singleTeacherId)).toBe(1);
+    expect(advises(result.floatingTeacherId)).toBe(0);
+    expect(advises(result.volunteerTeacherId)).toBe(0);
+
+    // The two teachers without a section still reach learners, as ARAL tutors.
+    for (const id of [result.floatingTeacherId, result.volunteerTeacherId]) {
+      expect(learners.filter((l) => l.aralTeacherId === id).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("renames a tenant prepared by an earlier release instead of adding to it", async () => {
+    seedLiveDemoSchool();
+    const first = await prepareTestLabFixtures(ADMIN_ID);
+
+    // Put the old placeholders back on the Kinder section and its teacher.
+    const kinder = learners.filter((l) => l.sectionId === first.kinderSectionId);
+    kinder.splice(3).forEach((extra) => learners.splice(learners.indexOf(extra), 1));
+    kinder.forEach((l, i) => {
+      l.firstName = "Kinder";
+      l.lastName = `Learner ${i + 1}`;
+      l.fullName = `Kinder Learner ${i + 1}`;
+    });
+    const teacher = users.find((u) => u.id === first.teacherId)!;
+    Object.assign(teacher, { firstName: "Test Lab", lastName: "Teacher", fullName: "Test Lab Teacher" });
+    const keptIds = kinder.map((l) => l.id);
+
+    await prepareTestLabFixtures(ADMIN_ID);
+
+    expect(teacher.fullName).toBe("Anna Lopez Meyer");
+    const after = learners.filter((l) => l.sectionId === first.kinderSectionId);
+    expect(after).toHaveLength(5);
+    // The same three rows, renamed in order; nothing was deleted to make room.
+    expect(keptIds.map((id) => learners.find((l) => l.id === id)?.fullName)).toEqual([
+      "Juan Santos Dela Cruz",
+      "Maria Angelica Rivera Santos",
+      "Miguel Andres Reyes",
+    ]);
   });
 });
 

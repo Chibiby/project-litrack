@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.62.0",
+    date: "2026-11-13",
+    title: "A fuller demo school for Test Lab",
+    announce: false,
+    fixes: [
+      { text: "The demo school now has named learners and one teacher of each kind: single-advisory, multi-advisory, floating, and Non-DepEd ARAL Volunteer. Click Prepare test data in Test Lab to update it.", roles: ["SUPER_ADMIN"] },
+      { text: "This update only changes the practice school used for training. Nothing on your pages changed.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+    ],
+  },
+  {
     version: "2.61.2",
     date: "2026-11-13",
     title: "Attendance only for days that have happened",

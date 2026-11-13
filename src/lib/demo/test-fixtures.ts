@@ -1,11 +1,13 @@
 import "server-only";
-import type { GradeLevelType } from "@prisma/client";
+import type { AdvisoryMode, Gender, GradeLevelType, ReadingProfile } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createIdentity } from "@/lib/auth/identity";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { assertTestableSchool } from "@/lib/auth/test-lab";
 import { findDemoSchools } from "@/lib/demo/provision";
-import { testLabPersonaEmail } from "@/lib/test-lab/personas";
+import { testLabPersonaEmail, type TestLabPersona } from "@/lib/test-lab/personas";
+import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
+import { buildFullName } from "@/lib/names";
 import { setTeacherAdvisory } from "@/lib/teachers/section-assignment";
 import { generateActivationCredential } from "@/lib/auth/credentials";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -23,6 +25,128 @@ import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 const SECTION_NAME = "A";
 const TEST_LAB_YEAR_LABEL = "Test Lab";
 
+/**
+ * The demo people. Invented, common Filipino names rather than "Learner 1":
+ * the demo school is what orientation screenshots and recordings show, and a
+ * roster of placeholders reads as a broken system. None of these is a real
+ * person; the school, district and division keep their bracketed demo names so
+ * nobody mistakes the tenant for a real one.
+ */
+type TeacherKey = "multi" | "single" | "floating" | "volunteer";
+
+type DemoTeacherSpec = {
+  persona: TestLabPersona;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  gender: Gender;
+  advisoryMode: AdvisoryMode;
+  volunteer: boolean;
+};
+
+/**
+ * One demo teacher per kind of teacher the system knows:
+ *  - multi: advises Kinder-A and Grade 1-A (multi-advisory, stored MULTI_GRADE)
+ *  - single: advises Grade 2-A only
+ *  - floating: DepEd teacher with no advisory section, ARAL tutor only
+ *  - volunteer: Non-DepEd ARAL Volunteer, ARAL tutor only
+ */
+const DEMO_TEACHERS: Record<TeacherKey, DemoTeacherSpec> = {
+  multi: {
+    persona: "teacher",
+    firstName: "Anna",
+    middleName: "Lopez",
+    lastName: "Meyer",
+    gender: "FEMALE",
+    advisoryMode: "MULTI_GRADE",
+    volunteer: false,
+  },
+  single: {
+    persona: "teacher-single",
+    firstName: "Maria Teresa",
+    middleName: "Cruz",
+    lastName: "Santos",
+    gender: "FEMALE",
+    advisoryMode: "DEFAULT",
+    volunteer: false,
+  },
+  floating: {
+    persona: "teacher-floating",
+    firstName: "Jose",
+    middleName: "Pineda",
+    lastName: "Reyes",
+    gender: "MALE",
+    advisoryMode: "FLOATING",
+    volunteer: false,
+  },
+  volunteer: {
+    persona: "teacher-volunteer",
+    firstName: "Liza",
+    middleName: "Marquez",
+    lastName: "Garcia",
+    gender: "FEMALE",
+    advisoryMode: "DEFAULT",
+    volunteer: true,
+  },
+};
+
+const PENDING_TEACHER_NAME = { firstName: "Ramon", middleName: "Diaz", lastName: "Bautista" };
+const DEMO_HEAD_NAME = { firstName: "Rosario", middleName: "Castro", lastName: "Villanueva" };
+
+type DemoLearnerSpec = {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  gender: Gender;
+  reading: ReadingProfile;
+  /** Who tutors this learner in ARAL; null = not an ARAL learner. */
+  aral: TeacherKey | null;
+};
+
+const L = (
+  firstName: string,
+  middleName: string,
+  lastName: string,
+  gender: Gender,
+  reading: ReadingProfile,
+  aral: TeacherKey | null = null
+): DemoLearnerSpec => ({ firstName, middleName, lastName, gender, reading, aral });
+
+/**
+ * Rosters, in order. The first two of Kinder and Grade 1 are ARAL learners on
+ * purpose: a tenant prepared by an earlier release holds three placeholder
+ * learners per section with the first two in ARAL, and those rows are renamed
+ * in place to the first three names here.
+ */
+const KINDER_ROSTER: readonly DemoLearnerSpec[] = [
+  L("Juan", "Santos", "Dela Cruz", "MALE", "CANNOT_NAME_SOUND_LETTERS", "multi"),
+  L("Maria Angelica", "Rivera", "Santos", "FEMALE", "LETTER_LEVEL", "multi"),
+  L("Miguel", "Andres", "Reyes", "MALE", "CV_BLENDING"),
+  L("Sofia", "Bernardo", "Garcia", "FEMALE", "CVC_BLENDING"),
+  L("Gabriel", "Tolentino", "Mendoza", "MALE", "CV_BLENDING"),
+];
+const G1_ROSTER: readonly DemoLearnerSpec[] = [
+  L("Althea Mae", "Domingo", "Ramos", "FEMALE", "LETTER_LEVEL", "multi"),
+  L("Joshua", "Perez", "Bautista", "MALE", "CANNOT_NAME_SOUND_LETTERS", "multi"),
+  L("Princess Joy", "Lim", "Flores", "FEMALE", "CVC_BLENDING"),
+  L("John Paul", "Corpuz", "Villanueva", "MALE", "CV_BLENDING"),
+  L("Angel Grace", "Morales", "Aquino", "FEMALE", "CVC_BLENDING"),
+];
+const G2_ROSTER: readonly DemoLearnerSpec[] = [
+  L("Mark Anthony", "Valdez", "Castillo", "MALE", "LETTER_LEVEL", "single"),
+  L("Jasmine", "Espiritu", "Navarro", "FEMALE", "CV_BLENDING", "single"),
+  L("Daniel", "Ocampo", "Fernandez", "MALE", "CANNOT_NAME_SOUND_LETTERS", "floating"),
+  L("Kimberly Anne", "Salazar", "Torres", "FEMALE", "LETTER_LEVEL", "floating"),
+  L("Christian Jay", "Nepomuceno", "Pascual", "MALE", "LETTER_LEVEL", "volunteer"),
+  L("Samantha Nicole", "Gonzales", "Domingo", "FEMALE", "CV_BLENDING", "volunteer"),
+  L("Rafael", "Ignacio", "Soriano", "MALE", "CVC_BLENDING"),
+  L("Bea Katrina", "Manalo", "De Guzman", "FEMALE", "CVC_BLENDING"),
+];
+
+/** A learner or teacher row written by an earlier release, before real names. */
+const PLACEHOLDER_LEARNER = /^Learner \d+$/;
+const PLACEHOLDER_TEACHER_FIRST_NAME = "Test Lab";
+
 export type TestLabFixtures = {
   prepared: boolean;
   schoolId: string | null;
@@ -31,7 +155,14 @@ export type TestLabFixtures = {
   g1GradeId: string | null;
   kinderSectionId: string | null;
   g1SectionId: string | null;
+  /** The multi-advisory demo teacher (Kinder-A and Grade 1-A). */
   teacherId: string | null;
+  /** Grade 2-A, advised by the single-advisory demo teacher. */
+  g2GradeId: string | null;
+  g2SectionId: string | null;
+  singleTeacherId: string | null;
+  floatingTeacherId: string | null;
+  volunteerTeacherId: string | null;
   pendingTeacherId: string | null;
   /** Every learner rostered under the demo teacher, across both sections. */
   learnerIds: string[];
@@ -48,6 +179,11 @@ const EMPTY_FIXTURES: TestLabFixtures = {
   kinderSectionId: null,
   g1SectionId: null,
   teacherId: null,
+  g2GradeId: null,
+  g2SectionId: null,
+  singleTeacherId: null,
+  floatingTeacherId: null,
+  volunteerTeacherId: null,
   pendingTeacherId: null,
   learnerIds: [],
   aralLearnerIds: [],
@@ -70,13 +206,14 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
   });
 
   const grades = await prisma.gradeLevel.findMany({
-    where: { schoolId, type: { in: ["KINDER", "G1"] }, deletedAt: null },
+    where: { schoolId, type: { in: ["KINDER", "G1", "G2"] }, deletedAt: null },
     select: { id: true, type: true },
   });
   const kinderGradeId = grades.find((g) => g.type === "KINDER")?.id ?? null;
   const g1GradeId = grades.find((g) => g.type === "G1")?.id ?? null;
+  const g2GradeId = grades.find((g) => g.type === "G2")?.id ?? null;
 
-  const gradeIds = [kinderGradeId, g1GradeId].filter((id): id is string => id !== null);
+  const gradeIds = [kinderGradeId, g1GradeId, g2GradeId].filter((id): id is string => id !== null);
   const sections =
     gradeIds.length > 0
       ? await prisma.section.findMany({
@@ -86,15 +223,18 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
       : [];
   const kinderSectionId = sections.find((s) => s.gradeLevelId === kinderGradeId)?.id ?? null;
   const g1SectionId = sections.find((s) => s.gradeLevelId === g1GradeId)?.id ?? null;
+  const g2SectionId = sections.find((s) => s.gradeLevelId === g2GradeId)?.id ?? null;
 
-  const teacher = await prisma.user.findFirst({
-    where: { email: testLabPersonaEmail("teacher"), role: "TEACHER", schoolId, deletedAt: null },
-    select: { id: true },
-  });
-  const pendingTeacher = await prisma.user.findFirst({
-    where: { email: testLabPersonaEmail("pending-teacher"), role: "TEACHER", schoolId, deletedAt: null },
-    select: { id: true },
-  });
+  const findTeacher = (persona: TestLabPersona) =>
+    prisma.user.findFirst({
+      where: { email: testLabPersonaEmail(persona), role: "TEACHER", schoolId, deletedAt: null },
+      select: { id: true },
+    });
+  const teacher = await findTeacher("teacher");
+  const singleTeacher = await findTeacher("teacher-single");
+  const floatingTeacher = await findTeacher("teacher-floating");
+  const volunteerTeacher = await findTeacher("teacher-volunteer");
+  const pendingTeacher = await findTeacher("pending-teacher");
 
   const learners = teacher
     ? await prisma.learner.findMany({
@@ -109,7 +249,12 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
       g1GradeId &&
       kinderSectionId &&
       g1SectionId &&
+      g2GradeId &&
+      g2SectionId &&
       teacher &&
+      singleTeacher &&
+      floatingTeacher &&
+      volunteerTeacher &&
       pendingTeacher &&
       learners.length > 0
   );
@@ -123,6 +268,11 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
     kinderSectionId,
     g1SectionId,
     teacherId: teacher?.id ?? null,
+    g2GradeId,
+    g2SectionId,
+    singleTeacherId: singleTeacher?.id ?? null,
+    floatingTeacherId: floatingTeacher?.id ?? null,
+    volunteerTeacherId: volunteerTeacher?.id ?? null,
     pendingTeacherId: pendingTeacher?.id ?? null,
     learnerIds: learners.map((l) => l.id),
     aralLearnerIds: learners.filter((l) => l.isAralLearner).map((l) => l.id),
@@ -190,13 +340,31 @@ async function ensureSection(schoolId: string, gradeLevelId: string): Promise<st
 async function ensureDemoSchoolHead(schoolId: string): Promise<void> {
   const head = await prisma.user.findFirst({
     where: { email: testLabPersonaEmail("head"), role: "SCHOOL_HEAD", schoolId, deletedAt: null },
-    select: { id: true, profileCompleted: true, mustChangePassword: true },
+    select: { id: true, profileCompleted: true, mustChangePassword: true, firstName: true },
   });
   if (!head) return; // Provisioned by `provisionDemoTenant`, not created here.
-  if (head.profileCompleted && !head.mustChangePassword) return;
+  // Provisioning leaves the head nameless (its full name is the school's). Give
+  // the account a person's name once; a name somebody typed since is kept.
+  const unnamed = head.firstName === "";
+  if (head.profileCompleted && !head.mustChangePassword && !unnamed) return;
   await prisma.user.update({
     where: { id: head.id },
-    data: { profileCompleted: true, mustChangePassword: false },
+    data: {
+      profileCompleted: true,
+      mustChangePassword: false,
+      ...(unnamed
+        ? {
+            firstName: DEMO_HEAD_NAME.firstName,
+            middleName: DEMO_HEAD_NAME.middleName,
+            lastName: DEMO_HEAD_NAME.lastName,
+            fullName: buildFullName(
+              DEMO_HEAD_NAME.firstName,
+              DEMO_HEAD_NAME.middleName,
+              DEMO_HEAD_NAME.lastName
+            ),
+          }
+        : {}),
+    },
   });
 }
 
@@ -205,6 +373,7 @@ async function createTeacherAuthUser(params: {
   email: string;
   schoolId: string;
   firstName: string;
+  middleName: string;
   lastName: string;
 }): Promise<{ id: string; authId: string }> {
   // Generated once, never returned or logged: nobody signs in as this account
@@ -212,7 +381,7 @@ async function createTeacherAuthUser(params: {
   // impersonation ticket. Hashed before the transaction so bcrypt does not
   // run while it is open.
   const hash = await hashPassword(generateActivationCredential());
-  const fullName = `${params.firstName} ${params.lastName}`;
+  const fullName = buildFullName(params.firstName, params.middleName, params.lastName);
   // One transaction: the persona's email is fixed, so an identity left behind
   // by a failed `User.create` would make every later Prepare fail.
   return prisma.$transaction(async (tx) => {
@@ -227,6 +396,7 @@ async function createTeacherAuthUser(params: {
         role: "TEACHER",
         schoolId: params.schoolId,
         firstName: params.firstName,
+        middleName: params.middleName,
         lastName: params.lastName,
         fullName,
         isActive: true,
@@ -238,28 +408,56 @@ async function createTeacherAuthUser(params: {
 }
 
 /**
- * The demo teacher: APPROVED, active, profiled, advising Kinder-A and Grade
- * 1-A through the real `setTeacherAdvisory`, so the legacy `TeacherSection`
- * and `taughtGrades` mirrors are genuinely exercised.
+ * Give an account written by an earlier release ("Test Lab Teacher") its real
+ * demo name. Only the placeholder is replaced; a name typed since is kept.
+ */
+async function renamePlaceholderTeacher(
+  teacher: { id: string; firstName: string },
+  name: { firstName: string; middleName: string; lastName: string }
+): Promise<void> {
+  if (teacher.firstName !== PLACEHOLDER_TEACHER_FIRST_NAME) return;
+  await prisma.user.update({
+    where: { id: teacher.id },
+    data: {
+      firstName: name.firstName,
+      middleName: name.middleName,
+      lastName: name.lastName,
+      fullName: buildFullName(name.firstName, name.middleName, name.lastName),
+    },
+  });
+}
+
+/**
+ * One demo teacher: APPROVED, active, profiled, and advising `sectionIds`
+ * through the real `setTeacherAdvisory`, so the legacy `TeacherSection` and
+ * `taughtGrades` mirrors are genuinely exercised. A floating teacher and a
+ * Non-DepEd ARAL Volunteer pass no sections: they reach learners only as the
+ * designated ARAL tutor.
  */
 async function ensureDemoTeacher(params: {
+  spec: DemoTeacherSpec;
   schoolId: string;
   createdById: string;
-  kinderSectionId: string;
-  g1SectionId: string;
+  sectionIds: string[];
 }): Promise<string> {
-  const email = testLabPersonaEmail("teacher");
-  let teacher = await prisma.user.findFirst({
+  const { spec } = params;
+  const email = testLabPersonaEmail(spec.persona);
+  const existing = await prisma.user.findFirst({
     where: { email, role: "TEACHER", schoolId: params.schoolId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, firstName: true },
   });
 
-  if (!teacher) {
+  let teacherId: string;
+  if (existing) {
+    teacherId = existing.id;
+    await renamePlaceholderTeacher(existing, spec);
+  } else {
     const created = await createTeacherAuthUser({
       email,
       schoolId: params.schoolId,
-      firstName: "Test Lab",
-      lastName: "Teacher",
+      firstName: spec.firstName,
+      middleName: spec.middleName,
+      lastName: spec.lastName,
     });
     await prisma.user.update({
       where: { id: created.id },
@@ -269,55 +467,59 @@ async function ensureDemoTeacher(params: {
         approvedAt: new Date(),
         approvedById: params.createdById,
         profileCompleted: true,
+        registeredAsAralVolunteer: spec.volunteer,
       },
     });
     await prisma.teacherProfile.create({
       data: {
         userId: created.id,
+        designation: spec.volunteer ? ARAL_VOLUNTEER_DESIGNATION : "Teacher",
+        employmentType: spec.volunteer ? "NON_DEPED" : "DEPED_PLANTILLA",
+        gender: spec.gender,
         educationalAttainment: "BACHELORS",
         fieldOfSpecialization: "GENERAL_EDUCATION",
         hasReadingTraining: false,
         hasEnglishTraining: false,
         highestTrainingLevel: "NA",
-        advisoryMode: "MULTI_GRADE",
+        advisoryMode: spec.advisoryMode,
       },
     });
-    teacher = { id: created.id };
+    teacherId = created.id;
   }
 
+  if (params.sectionIds.length === 0) return teacherId;
+
   const advisory = await prisma.section.findMany({
-    where: { adviserId: teacher.id, schoolId: params.schoolId, deletedAt: null },
+    where: { adviserId: teacherId, schoolId: params.schoolId, deletedAt: null },
     select: { id: true },
   });
   const held = new Set(advisory.map((s) => s.id));
-  for (const sectionId of [params.kinderSectionId, params.g1SectionId]) {
+  for (const sectionId of params.sectionIds) {
     if (held.has(sectionId)) continue;
     await prisma.$transaction((tx) =>
       setTeacherAdvisory(tx, {
-        teacherId: teacher!.id,
+        teacherId,
         schoolId: params.schoolId,
         change: { op: "add", sectionId },
       })
     );
   }
 
-  return teacher.id;
+  return teacherId;
 }
 
 async function ensurePendingTeacher(schoolId: string): Promise<string> {
   const email = testLabPersonaEmail("pending-teacher");
   const existing = await prisma.user.findFirst({
     where: { email, role: "TEACHER", schoolId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, firstName: true },
   });
-  if (existing) return existing.id;
+  if (existing) {
+    await renamePlaceholderTeacher(existing, PENDING_TEACHER_NAME);
+    return existing.id;
+  }
 
-  const created = await createTeacherAuthUser({
-    email,
-    schoolId,
-    firstName: "Test Lab",
-    lastName: "Pending Teacher",
-  });
+  const created = await createTeacherAuthUser({ email, schoolId, ...PENDING_TEACHER_NAME });
   await prisma.user.update({
     where: { id: created.id },
     data: { isActive: false, approvalStatus: "PENDING" },
@@ -325,35 +527,57 @@ async function ensurePendingTeacher(schoolId: string): Promise<string> {
   return created.id;
 }
 
-/** ~3 learners in one section, 2 of them ARAL. No-op once any exist there. */
+/**
+ * The named roster of one section. Idempotent by full name: a learner already
+ * there is left alone, a placeholder from an earlier release ("Learner 1") is
+ * renamed in place to the next unused name, and only the names still missing
+ * are created.
+ */
 async function ensureSectionLearners(params: {
   schoolId: string;
   gradeLevelId: string;
   sectionId: string;
+  /** The section's adviser, who rosters every learner in it. */
   teacherId: string;
   schoolYearId: string;
-  namePrefix: string;
+  age: number;
+  roster: readonly DemoLearnerSpec[];
+  teacherIds: Record<TeacherKey, string>;
 }): Promise<{ learnerIds: string[]; aralLearnerIds: string[] }> {
   const existing = await prisma.learner.findMany({
-    where: {
-      schoolId: params.schoolId,
-      sectionId: params.sectionId,
-      teacherId: params.teacherId,
-      deletedAt: null,
-    },
-    select: { id: true, isAralLearner: true },
+    where: { schoolId: params.schoolId, sectionId: params.sectionId, deletedAt: null },
+    select: { id: true, lastName: true, fullName: true, isAralLearner: true },
   });
-  if (existing.length > 0) {
-    return {
-      learnerIds: existing.map((l) => l.id),
-      aralLearnerIds: existing.filter((l) => l.isAralLearner).map((l) => l.id),
-    };
+
+  const nameOf = (spec: DemoLearnerSpec) =>
+    buildFullName(spec.firstName, spec.middleName, spec.lastName);
+  const taken = new Set(existing.map((l) => l.fullName));
+  const unused = params.roster.filter((spec) => !taken.has(nameOf(spec)));
+
+  // Placeholders take the first unused names, in "Learner 1, 2, 3" order, and
+  // keep everything else about the row: its ARAL state, enrollment and marks.
+  const placeholders = existing
+    .filter((l) => PLACEHOLDER_LEARNER.test(l.lastName))
+    .sort((a, b) => a.lastName.localeCompare(b.lastName, undefined, { numeric: true }));
+  for (const row of placeholders) {
+    const spec = unused.shift();
+    if (!spec) break;
+    await prisma.learner.update({
+      where: { id: row.id },
+      data: {
+        firstName: spec.firstName,
+        middleName: spec.middleName,
+        lastName: spec.lastName,
+        fullName: nameOf(spec),
+        gender: spec.gender,
+      },
+    });
   }
 
-  const learnerIds: string[] = [];
-  const aralLearnerIds: string[] = [];
-  for (let i = 0; i < 3; i += 1) {
-    const isAral = i < 2;
+  const learnerIds = existing.map((l) => l.id);
+  const aralLearnerIds = existing.filter((l) => l.isAralLearner).map((l) => l.id);
+  for (const spec of unused) {
+    const aralTeacherId = spec.aral ? params.teacherIds[spec.aral] : null;
     const learner = await prisma.$transaction(async (tx) => {
       const row = await tx.learner.create({
         data: {
@@ -361,16 +585,17 @@ async function ensureSectionLearners(params: {
           gradeLevelId: params.gradeLevelId,
           sectionId: params.sectionId,
           teacherId: params.teacherId,
-          firstName: params.namePrefix,
-          lastName: `Learner ${i + 1}`,
-          fullName: `${params.namePrefix} Learner ${i + 1}`,
-          age: 6,
-          gender: i % 2 === 0 ? "MALE" : "FEMALE",
-          filipinoReadingProfile: "INDEPENDENT_GRADE_READY",
+          firstName: spec.firstName,
+          middleName: spec.middleName,
+          lastName: spec.lastName,
+          fullName: nameOf(spec),
+          age: params.age,
+          gender: spec.gender,
+          filipinoReadingProfile: spec.reading,
           parentEducation: "COLLEGE_GRADUATE",
-          isAralLearner: isAral,
-          aralEnrolledAt: isAral ? new Date() : null,
-          aralTeacherId: isAral ? params.teacherId : null,
+          isAralLearner: aralTeacherId !== null,
+          aralEnrolledAt: aralTeacherId ? new Date() : null,
+          aralTeacherId,
         },
       });
       await tx.enrollment.create({
@@ -411,24 +636,34 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
   const g1GradeId = await ensureGrade(school, "G1");
   const kinderSectionId = await ensureSection(school, kinderGradeId);
   const g1SectionId = await ensureSection(school, g1GradeId);
+  const g2GradeId = await ensureGrade(school, "G2");
+  const g2SectionId = await ensureSection(school, g2GradeId);
 
   await ensureDemoSchoolHead(school);
 
-  const teacherId = await ensureDemoTeacher({
-    schoolId: school,
-    createdById,
-    kinderSectionId,
-    g1SectionId,
-  });
+  const teacherOf = (key: TeacherKey, sectionIds: string[]) =>
+    ensureDemoTeacher({ spec: DEMO_TEACHERS[key], schoolId: school, createdById, sectionIds });
+  const teacherId = await teacherOf("multi", [kinderSectionId, g1SectionId]);
+  const singleTeacherId = await teacherOf("single", [g2SectionId]);
+  const floatingTeacherId = await teacherOf("floating", []);
+  const volunteerTeacherId = await teacherOf("volunteer", []);
   const pendingTeacherId = await ensurePendingTeacher(school);
 
+  const teacherIds: Record<TeacherKey, string> = {
+    multi: teacherId,
+    single: singleTeacherId,
+    floating: floatingTeacherId,
+    volunteer: volunteerTeacherId,
+  };
   const kinder = await ensureSectionLearners({
     schoolId: school,
     gradeLevelId: kinderGradeId,
     sectionId: kinderSectionId,
     teacherId,
     schoolYearId,
-    namePrefix: "Kinder",
+    age: 5,
+    roster: KINDER_ROSTER,
+    teacherIds,
   });
   const g1 = await ensureSectionLearners({
     schoolId: school,
@@ -436,7 +671,21 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
     sectionId: g1SectionId,
     teacherId,
     schoolYearId,
-    namePrefix: "Grade 1",
+    age: 6,
+    roster: G1_ROSTER,
+    teacherIds,
+  });
+  // Grade 2-A belongs to the single-advisory teacher. Its ids stay out of
+  // `learnerIds`, which is the multi-advisory teacher's roster by contract.
+  const g2 = await ensureSectionLearners({
+    schoolId: school,
+    gradeLevelId: g2GradeId,
+    sectionId: g2SectionId,
+    teacherId: singleTeacherId,
+    schoolYearId,
+    age: 7,
+    roster: G2_ROSTER,
+    teacherIds,
   });
 
   const learnerIds = [...kinder.learnerIds, ...g1.learnerIds];
@@ -455,9 +704,12 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
       kinderSectionId,
       g1SectionId,
       teacherId,
+      singleTeacherId,
+      floatingTeacherId,
+      volunteerTeacherId,
       pendingTeacherId,
-      learnerCount: learnerIds.length,
-      aralLearnerCount: aralLearnerIds.length,
+      learnerCount: learnerIds.length + g2.learnerIds.length,
+      aralLearnerCount: aralLearnerIds.length + g2.aralLearnerIds.length,
     },
   });
 
@@ -470,6 +722,11 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
     kinderSectionId,
     g1SectionId,
     teacherId,
+    g2GradeId,
+    g2SectionId,
+    singleTeacherId,
+    floatingTeacherId,
+    volunteerTeacherId,
     pendingTeacherId,
     learnerIds,
     aralLearnerIds,
