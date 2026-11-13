@@ -140,7 +140,7 @@ export const RELEASES: readonly Release[] = [
     title: "Behind-the-scenes fix for the 2.61.0 update",
     announce: false,
     fixes: [
-      { text: "The font used by the opening animation now ships with LITRACK, so installing an update no longer depends on downloading it.", roles: ["SUPER_ADMIN"] },
+      { text: "The font used by the opening animation now ships with LITRACK, so installing an update no longer depends on downloading it.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
     ],
   },
   {
