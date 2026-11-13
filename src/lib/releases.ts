@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.60.0",
+    date: "2026-11-13",
+    title: "A tidier, faster look",
+    announce: true,
+    fixes: [
+      { text: "On a phone, cards and icon tiles are now solid instead of frosted, so pages scroll more smoothly.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "Colours, shadows and animations now follow one shared set, so the look is the same on every page, in light and dark mode.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "Opening a learner from Learners slides their page in from the right, and Back to learners slides the list back in from the left, like the summaries.", roles: ["SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.59.0",
     date: "2026-11-13",
     title: "Summaries slide like the sign-in steps",
