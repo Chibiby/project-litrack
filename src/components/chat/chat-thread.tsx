@@ -29,8 +29,17 @@ import type { ChatChannelKind } from "@prisma/client";
  * a background tab costs nothing.
  */
 
-/** How often an open, visible thread asks for new messages. */
-const POLL_MS = 6000;
+/**
+ * How long to wait before the next poll, by how long the thread has been quiet.
+ * A live conversation polls every 6 s; a room nobody has written in for a
+ * minute slows to 15 s, and after five minutes to 30 s. Any new message, or
+ * coming back to the tab, puts it back on 6 s.
+ */
+export function chatPollDelayMs(quietForMs: number): number {
+  if (quietForMs < 60_000) return 6_000;
+  if (quietForMs < 5 * 60_000) return 15_000;
+  return 30_000;
+}
 
 /** Consecutive failed polls before the thread says it is stale. */
 const POLL_FAILURES_BEFORE_NOTICE = 3;
@@ -93,6 +102,8 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
   const [refreshNotice, setRefreshNotice] = useState(false);
   const [pollStalled, setPollStalled] = useState(false);
   const pollFailuresRef = useRef(0);
+  /** When the thread last showed a new message, for the poll back-off. */
+  const lastChangeAtRef = useRef(Date.now());
   const refreshNoticeRef = useRef(false);
 
   const logRef = useRef<HTMLDivElement>(null);
@@ -131,6 +142,7 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
     const newest = result.data.messages.at(-1)?.id ?? null;
     if (latestRef.current !== undefined && newest === latestRef.current) return null;
     latestRef.current = newest;
+    lastChangeAtRef.current = Date.now();
     setChannel(result.data);
 
     if (markRead) void callAction(() => markChannelRead({ channelId }));
@@ -183,7 +195,8 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
   // Poll only while the tab is visible. A backgrounded phone should not be
   // making a request every six seconds on a teacher's mobile data.
   useEffect(() => {
-    function tick() {
+    let timer: number | undefined;
+    function poll() {
       if (document.visibilityState !== "visible" || navigator.onLine === false) return;
       const id = channelIdRef.current;
       if (!id) return;
@@ -193,11 +206,25 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
         if (pollFailuresRef.current >= POLL_FAILURES_BEFORE_NOTICE) setPollStalled(true);
       });
     }
-    const timer = setInterval(tick, POLL_MS);
-    document.addEventListener("visibilitychange", tick);
+    function schedule() {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        poll();
+        schedule();
+      }, chatPollDelayMs(Date.now() - lastChangeAtRef.current));
+    }
+    function onVisibility() {
+      if (document.visibilityState !== "visible") return;
+      // Back on the tab: check now, and poll at the live rate again.
+      lastChangeAtRef.current = Date.now();
+      poll();
+      schedule();
+    }
+    schedule();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", tick);
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [refresh]);
 
