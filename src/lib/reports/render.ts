@@ -91,6 +91,10 @@ export type ReportTable = {
   blocks?: ReportBlock[];
   /** School, school year and signatories. A table without one prints the template with those blank. */
   frame?: ReportFrame;
+  /** For a table without `blocks`: rows drawn bold (a Total row), as on a block. */
+  boldRowIndices?: number[];
+  /** For a table without `blocks`: leading columns frozen in Excel, as on a block. */
+  freezeColumns?: number;
 };
 
 export type RenderOptions = {
@@ -108,7 +112,16 @@ export function reportBlocks(table: ReportTable, format?: "pdf" | "excel"): Repo
   // An EMPTY `blocks` falls back too: SF2 attendance over a weekend-only range
   // has no month to emit, and zero blocks would write a zero-sheet workbook
   // (which Excel refuses to open) and a PDF with no "no records" line.
-  if (!table.blocks || table.blocks.length === 0) return [{ columns: table.columns, rows: table.rows }];
+  if (!table.blocks || table.blocks.length === 0) {
+    return [
+      {
+        columns: table.columns,
+        rows: table.rows,
+        boldRowIndices: table.boldRowIndices,
+        freezeColumns: table.freezeColumns,
+      },
+    ];
+  }
   if (!format) return table.blocks;
   const forFormat = table.blocks.filter((b) => !b.formats || b.formats.includes(format));
   return forFormat.length > 0 ? forFormat : table.blocks;

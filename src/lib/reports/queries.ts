@@ -178,7 +178,7 @@ function gradeSectionLabelFromLearners(
 }
 
 /**
- * Attendance and Weekly Reading Level render a GRID: every date/period in the
+ * Attendance and Monthly Reading Level render a GRID: every date/period in the
  * resolved range crossed with every in-scope learner, blank where nothing was
  * recorded yet, so a teacher sees the gaps rather than a report that only
  * shows what already got entered. The two builders below share the range
@@ -442,7 +442,7 @@ export async function buildReadingLevelTable(
       }
     }
     return {
-      heading: `Weekly Reading Level — ${periodKey}`,
+      heading: `Monthly Reading Level — ${periodKey}`,
       sheetName: periodKey,
       columns,
       rows: blockRows,
@@ -460,7 +460,7 @@ export async function buildReadingLevelTable(
   });
 
   return {
-    title: "Weekly Reading Level",
+    title: "Monthly Reading Level",
     reportingPeriod: periodFromRange(range.label),
     gradeSection,
     summary: [
@@ -794,6 +794,7 @@ export async function buildTeacherSummaryTable(
   });
 
   const rows: (string | number | null)[][] = [];
+  const total = { learners: 0, aral: 0, present: 0, absent: 0, excused: 0, gradeReady: 0 };
 
   for (const section of sections) {
     const scopedLearners = {
@@ -828,6 +829,12 @@ export async function buildTeacherSummaryTable(
     // Guarded, not `|| 0`: a class with no marked days must read "—" rather
     // than 0%, which would be indistinguishable from perfect absenteeism.
     const rate = marked > 0 ? `${Math.round((present / marked) * 100)}%` : "—";
+    total.learners += learnerCount;
+    total.aral += aralCount;
+    total.present += present;
+    total.absent += absent;
+    total.excused += excused;
+    total.gradeReady += gradeReady;
 
     rows.push([
       `${GRADE_LEVEL_LABELS[section.gradeLevel.type] ?? section.gradeLevel.type} - ${section.name}`,
@@ -839,6 +846,24 @@ export async function buildTeacherSummaryTable(
       excused,
       rate,
       gradeReady,
+    ]);
+  }
+
+  // A Total row, bold and last, as on the Division Summary exports. One class
+  // needs none: its own row is already the total.
+  const hasTotal = sections.length > 1;
+  if (hasTotal) {
+    const marked = total.present + total.absent + total.excused;
+    rows.push([
+      "Total",
+      "",
+      total.learners,
+      total.aral,
+      total.present,
+      total.absent,
+      total.excused,
+      marked > 0 ? `${Math.round((total.present / marked) * 100)}%` : "—",
+      total.gradeReady,
     ]);
   }
 
@@ -862,11 +887,16 @@ export async function buildTeacherSummaryTable(
   });
 
   return {
-    title: "Teacher Summary",
+    title: "Class Summary",
     reportingPeriod: periodFromFilters(filters),
     gradeSection,
-    summary: [`${sections.length} class(es)`],
+    summary: [
+      `${sections.length} ${sections.length === 1 ? "class" : "classes"}.`,
+      "Present counts days marked Present or Late. Attendance Rate = Present divided by all marked days.",
+    ],
     frame,
+    freezeColumns: 1,
+    ...(hasTotal ? { boldRowIndices: [rows.length - 1] } : {}),
     columns: [
       { header: "Class", width: 22 },
       { header: "Adviser", width: 24 },

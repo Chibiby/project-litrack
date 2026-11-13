@@ -4,10 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
-import {
-  ReportsHub,
-  ReportSettingsButton,
-} from "@/components/reports/reports-hub";
+import { ReportsHub } from "@/components/reports/reports-hub";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { advisoryRosterDenial, teacherGradeScope } from "@/lib/teachers/scope";
 import { reportLocksFor } from "@/lib/reports/availability";
@@ -101,13 +98,12 @@ export default async function TeacherReportsPage() {
 
   return (
     <AppShell
-      title="Reports Hub"
-      subtitle="Generate, view and download reports for your classes and subjects."
+      title="Reports"
+      subtitle="Download attendance, reading level and grade reports for your classes."
       role={user.role}
       userName={user.fullName || `${user.firstName} ${user.lastName}`}
-      actions={<ReportSettingsButton />}
     >
-      <Suspense fallback={<TableSectionSkeleton rows={12} columns={6} />}>
+      <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
         <TeacherReportBody
           schoolId={schoolId}
           teacherId={user.id}

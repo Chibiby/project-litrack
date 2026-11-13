@@ -4,10 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
-import {
-  ReportsHub,
-  ReportSettingsButton,
-} from "@/components/reports/reports-hub";
+import { ReportsHub } from "@/components/reports/reports-hub";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { loadRecentReports } from "@/lib/reports/recent";
 import { TableSectionSkeleton } from "@/components/loading";
@@ -74,12 +71,11 @@ export default async function SchoolHeadReportsPage({ searchParams }: Props) {
 
   return (
     <SchoolHeadPage
-      title="Reports Hub"
-      description="Generate, view and download reports for the school."
+      title="Reports"
+      description="Download attendance, reading level and grade reports for the school."
       view={view}
-      actions={<ReportSettingsButton />}
     >
-      <Suspense fallback={<TableSectionSkeleton rows={12} columns={6} />}>
+      <Suspense fallback={<TableSectionSkeleton rows={8} columns={5} />}>
         <SchoolHeadReportBody schoolId={view.schoolId} userId={user.id} />
       </Suspense>
     </SchoolHeadPage>

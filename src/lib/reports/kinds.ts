@@ -52,63 +52,66 @@ export type ReportFilters = {
 };
 
 /**
- * The cards on the hub, in the order the design lays them out. MOSY has no card:
- * it is exported from its own page (`/teacher/aral/mosy`). The `MOSY` kind, its
- * builder and its validator entry stay so a Recent Reports row of that kind can
- * still be re-generated.
+ * The periods a report's Export control can offer. `school-year` sends no
+ * dates, which every dated builder reads as "the school year to date".
  */
-export const REPORT_CARDS: {
+export type ReportPeriodId = "this-week" | "this-month" | "school-year" | "custom";
+
+export const REPORT_PERIOD_LABELS: Record<ReportPeriodId, string> = {
+  "this-week": "This week",
+  "this-month": "This month",
+  "school-year": "School year",
+  custom: "Custom dates",
+};
+
+export type ReportCard = {
   kind: ReportKind;
   title: string;
+  /** One sentence: what is in the file. */
   blurb: string;
-  bullets: string[];
-  /** Not yet built: renders inert with a "Soon" pill, as the nav does. */
-  soon?: boolean;
-}[] = [
+  /**
+   * The periods this report can be cut to, the first one preselected. Empty
+   * for a report that has no dates (grades, roster), so its Export control
+   * shows no period at all rather than one that does nothing.
+   */
+  periods: ReportPeriodId[];
+};
+
+/**
+ * The reports on the page, most used first. MOSY has no card: it is exported
+ * from its own page (`/teacher/aral/mosy`). The `MOSY` kind, its builder and
+ * its validator entry stay so a Recent downloads row of that kind can still be
+ * downloaded again. `CUSTOM` was never built and has no card either.
+ */
+export const REPORT_CARDS: ReportCard[] = [
   {
     kind: "ATTENDANCE",
-    title: "Attendance Records",
-    blurb: "Generate detailed attendance logs weekly, monthly or by date range.",
-    bullets: ["Daily / Weekly / Monthly", "Absences with reasons", "Summary per learner"],
+    title: "Attendance",
+    blurb: "ARAL attendance for every school day, with totals per learner. One sheet per month.",
+    periods: ["this-month", "this-week", "school-year", "custom"],
   },
   {
     kind: "READING_LEVEL",
-    title: "Weekly Reading Level",
-    blurb: "View and export weekly reading levels of learners.",
-    bullets: ["Per week summary", "Reading level per learner", "Progress comparison"],
+    title: "Monthly Reading Level",
+    blurb: "Each ARAL learner's reading level, month by month.",
+    periods: ["school-year", "this-month", "custom"],
   },
   {
     kind: "TERM_GRADES",
-    title: "End of Term Report (Grades)",
-    blurb: "Generate grades per subject for selected term.",
-    bullets: ["First / Second / Third Term", "Subject grades summary", "General Average"],
+    title: "End of Term Grades",
+    blurb: "Grades per subject and the general average, for each term.",
+    periods: [],
+  },
+  {
+    kind: "CLASS_ROSTER",
+    title: "Class Roster",
+    blurb: "Every learner in the class, with grade, section and gender.",
+    periods: [],
   },
   {
     kind: "TEACHER_SUMMARY",
-    title: "Teacher Summary",
-    blurb: "Overview of your classes and learner performance.",
-    bullets: ["Class performance summary", "Attendance overview", "Reading level insights"],
+    title: "Class Summary",
+    blurb: "One row per section: learners, attendance and reading levels.",
+    periods: ["school-year", "this-month", "custom"],
   },
-  {
-    kind: "CUSTOM",
-    title: "Custom Report",
-    blurb: "Create a custom report based on your selected data.",
-    bullets: ["Choose data type", "Select fields", "Filter and export"],
-    soon: true,
-  },
-];
-
-/** The one-click chips under Quick Generate. */
-export const QUICK_ACTIONS: {
-  id: string;
-  label: string;
-  kind: ReportKind;
-  /** Resolved against the school's local today when the chip is pressed. */
-  range: "this-week" | "this-month" | "none";
-}[] = [
-  { id: "week-attendance", label: "This Week Attendance", kind: "ATTENDANCE", range: "this-week" },
-  { id: "month-attendance", label: "This Month Attendance", kind: "ATTENDANCE", range: "this-month" },
-  { id: "week-reading", label: "This Week Reading Level", kind: "READING_LEVEL", range: "this-week" },
-  { id: "term-grades", label: "This Term Grades", kind: "TERM_GRADES", range: "none" },
-  { id: "class-roster", label: "Class Roster", kind: "CLASS_ROSTER", range: "none" },
 ];

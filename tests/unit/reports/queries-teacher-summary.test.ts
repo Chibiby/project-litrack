@@ -118,3 +118,34 @@ describe("buildTeacherSummaryTable — adviser cell is surname-first", () => {
     expect(args.where.schoolId).toBe("school-1");
   });
 });
+
+describe("buildTeacherSummaryTable: Total row", () => {
+  const section = (id: string, name: string) => ({ id, name, gradeLevel: { type: "G3" }, adviser: null });
+
+  it("adds a bold Total row, last, when there is more than one class", async () => {
+    learnerCount.mockResolvedValue(10);
+    attendanceGroupBy.mockResolvedValue([
+      { status: "PRESENT", _count: { _all: 30 } },
+      { status: "ABSENT", _count: { _all: 10 } },
+    ]);
+    readingLevelRecordCount.mockResolvedValue(2);
+    sectionFindMany.mockResolvedValueOnce([section("sec-1", "A"), section("sec-2", "B")]);
+
+    const table = await buildTeacherSummaryTable(SCOPE, {});
+
+    expect(table.rows).toHaveLength(3);
+    // Class, Adviser, Learners, ARAL, Present, Absent, Excused, Rate, Grade-ready.
+    expect(table.rows[2]).toEqual(["Total", "", 20, 20, 60, 20, 0, "75%", 4]);
+    expect(table.boldRowIndices).toEqual([2]);
+  });
+
+  it("adds no Total row for a single class", async () => {
+    stubAggregates();
+    sectionFindMany.mockResolvedValueOnce([section("sec-1", "A")]);
+
+    const table = await buildTeacherSummaryTable(SCOPE, {});
+
+    expect(table.rows).toHaveLength(1);
+    expect(table.boldRowIndices).toBeUndefined();
+  });
+});

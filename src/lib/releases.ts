@@ -135,6 +135,20 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.63.0",
+    date: "2026-11-14",
+    title: "A simpler Reports page",
+    announce: true,
+    fixes: [
+      { text: "Reports is one page of five reports: Attendance, Monthly Reading Level, End of Term Grades, Class Roster and Class Summary. Each has one Export button where you pick the period and the format, then Download.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "Removed what did nothing or repeated itself: the tabs, Quick Generate, Report Settings, Custom Report, Report Tips and View Guide. Class Roster now has its own card.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "Grade and Section filters appear only when you have more than one to choose from, and the page says which classes every report will cover.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "Each report shows when you last downloaded it. Recent downloads shows the period of each file, and Download again uses the same format as the first time.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "The reading level report is now named Monthly Reading Level, in the page and in the file. Teacher Summary is now Class Summary and ends with a Total row when it covers more than one class.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "This update changes the Reports page of Teachers and School Heads. Nothing on your pages changed.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.62.0",
     date: "2026-11-13",
     title: "A fuller demo school and a demo district for Test Lab",
