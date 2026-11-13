@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.61.2",
+    date: "2026-11-13",
+    title: "Attendance only for days that have happened",
+    announce: true,
+    fixes: [
+      { text: "Weekly attendance can be marked for today and earlier days only. Days that have not come yet show as Not yet and open on the day itself.", roles: ["TEACHER"] },
+      { text: "Teachers can no longer mark attendance ahead of time, so attendance figures count only days that have happened.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.61.1",
     date: "2026-11-13",
     title: "Behind-the-scenes fix for the 2.61.0 update",

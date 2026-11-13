@@ -6,7 +6,7 @@
 // trusting the developer's box.
 process.env.TZ = "Asia/Manila";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatLocalDateKey } from "@/lib/date-keys";
 
 /**
@@ -769,5 +769,54 @@ describe("saveAralWeeklyAttendance - revalidation fan-out", () => {
     expect(paths).toHaveLength(2 + learnerIds.length * 2);
     expect(paths).toContain(`/teacher/aral/${GRADE_ID}/attendance`);
     expect(paths).toContain("/teacher/aral");
+  });
+});
+
+/**
+ * Attendance records what happened. With the clock at noon Manila on Tuesday
+ * of the week under test, Wednesday has not come yet: a mark for it is refused
+ * before any write, while clearing it stays allowed so a mark saved before this
+ * rule existed can still be removed.
+ */
+describe("saveAralWeeklyAttendance - days that have not happened yet", () => {
+  const WEDNESDAY = "2026-08-26";
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-25T04:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("refuses a mark for tomorrow and writes nothing", async () => {
+    const res = await post({
+      cells: [
+        { learnerId: "learner-a", date: TUESDAY, status: "PRESENT" },
+        { learnerId: "learner-a", date: WEDNESDAY, status: "PRESENT" },
+      ],
+    });
+
+    expect(res).toMatchObject({ ok: false, error: expect.stringContaining("today or earlier") });
+    expect(rawCalls).toHaveLength(0);
+  });
+
+  it("accepts a mark for today", async () => {
+    const res = await post({
+      cells: [{ learnerId: "learner-a", date: TUESDAY, status: "PRESENT" }],
+    });
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("still lets a future day be cleared", async () => {
+    attendance = [{ learnerId: "learner-a", dateKey: WEDNESDAY, notes: null }];
+
+    const res = await post({
+      cells: [{ learnerId: "learner-a", date: WEDNESDAY, status: null }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(attendance).toHaveLength(0);
   });
 });

@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
+import { addDays, formatLocalDateKey, parseLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { cn } from "@/lib/utils";
 import { saveAralWeeklyAttendance } from "@/lib/actions/attendance";
 import { callAction } from "@/lib/ui/call-action";
@@ -169,7 +169,16 @@ function changedCells(
   return cells;
 }
 
-function buildDays(weekStartKey: string, holidayKeys: string[]): Day[] {
+/**
+ * The week's columns. A day after `todayKey` (today in the school's timezone)
+ * is locked as "Not yet": attendance records what happened, and the server
+ * refuses a mark for a future day.
+ */
+export function buildDays(
+  weekStartKey: string,
+  holidayKeys: string[],
+  todayKey: string = formatLocalDateKey(schoolToday())
+): Day[] {
   const holidays = new Set(holidayKeys);
   const start = parseLocalDateKey(weekStartKey);
   return Array.from({ length: WEEK_COLUMNS }, (_, i) => {
@@ -178,14 +187,15 @@ function buildDays(weekStartKey: string, holidayKeys: string[]): Day[] {
     const dow = date.getDay();
     const weekend = dow === 0 || dow === 6;
     const holiday = holidays.has(key);
+    const future = key > todayKey;
     const monthDay = `${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`;
     return {
       key,
       weekday: WEEKDAYS_SHORT[dow],
       monthDay,
       aria: `${WEEKDAYS_LONG[dow]}, ${monthDay}`,
-      locked: weekend || holiday,
-      lockReason: holiday ? "Holiday" : weekend ? "No class" : "",
+      locked: weekend || holiday || future,
+      lockReason: holiday ? "Holiday" : weekend ? "No class" : future ? "Not yet" : "",
     };
   });
 }

@@ -35,6 +35,13 @@ import { assertSchoolYearOpen } from "@/lib/school-year/gate";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
+/**
+ * Attendance records what happened, so a day that has not come yet in the
+ * school's timezone cannot be marked. Clearing such a day stays allowed, so a
+ * mark saved before this rule existed can still be removed.
+ */
+const FUTURE_DAY_ERROR = "You can only mark attendance for today or earlier days.";
+
 function normalizeDate(d: Date): Date {
   const date = new Date(d);
   date.setHours(0, 0, 0, 0);
@@ -70,6 +77,9 @@ export const markAttendance = action("markAttendance", async (formData: FormData
   }
 
   const date = normalizeDate(parsed.data.date);
+  if (formatLocalDateKey(date) > formatLocalDateKey(schoolToday())) {
+    return { ok: false, error: FUTURE_DAY_ERROR };
+  }
   const weekStart = getMonday(date);
 
   await prisma.attendance.upsert({
@@ -232,6 +242,11 @@ export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async
     });
   }
   const cells = [...cellByKey.values()];
+
+  const todayKey = formatLocalDateKey(schoolToday());
+  if (cells.some((c) => c.status !== null && formatLocalDateKey(c.date) > todayKey)) {
+    return { ok: false, error: FUTURE_DAY_ERROR };
+  }
 
   if (cells.length === 0) {
     return { ok: false, error: "Nothing to save" };
