@@ -11,6 +11,7 @@ import {
   AnnouncementsList,
 } from "@/components/school-head/announcement-forms";
 import { Megaphone } from "lucide-react";
+import { formatSchoolDateKey } from "@/lib/format-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ export default async function AnnouncementsPage({ searchParams }: PageProps) {
                 title: a.title,
                 body: a.body,
                 authorName: a.author?.fullName ?? PURGED_USER_LABEL,
-                publishedAt: a.publishedAt.toISOString().slice(0, 10),
+                publishedAt: formatSchoolDateKey(a.publishedAt),
                 broadcastFrom: a.broadcastId
                   ? a.author?.role === "DISTRICT_ADMIN"
                     ? "district"

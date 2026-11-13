@@ -252,6 +252,18 @@ export class PartBuffer {
     return this.size >= this.partSize;
   }
 
+  /**
+   * Exactly `n` bytes from the front, keeping the rest buffered. For stores
+   * (R2) that need every part but the last to be the same size.
+   */
+  takeExact(n: number): Uint8Array {
+    if (n > this.size) throw new Error(`takeExact(${n}) with only ${this.size} buffered`);
+    const all = this.take();
+    const rest = all.subarray(n);
+    if (rest.byteLength > 0) this.push(rest);
+    return all.subarray(0, n);
+  }
+
   /** Everything buffered, as one contiguous part, and reset. */
   take(): Uint8Array {
     const out = new Uint8Array(this.size);

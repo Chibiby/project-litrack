@@ -8,6 +8,7 @@ import {
   CellText,
   NoValue,
 } from "@/components/ui/table";
+import { formatSchoolTimestamp } from "@/lib/format-datetime";
 import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -34,7 +35,7 @@ export type ErrorLogRow = {
 };
 
 function when(event: ErrorLogRow): string {
-  return event.createdAt.toISOString().replace("T", " ").slice(0, 19);
+  return formatSchoolTimestamp(event.createdAt);
 }
 
 function schoolLabel(event: ErrorLogRow): string {

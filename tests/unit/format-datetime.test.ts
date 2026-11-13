@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { SCHOOL_TIME_ZONE } from "@/lib/date-keys";
-import { formatSchoolDate, formatSchoolDateTime } from "@/lib/format-datetime";
+import {
+  formatSchoolDate,
+  formatSchoolDateKey,
+  formatSchoolDateTime,
+  formatSchoolTimestamp,
+} from "@/lib/format-datetime";
 
 const INSTANT = "2026-10-05T17:30:00Z";
 
@@ -21,5 +26,14 @@ describe("format-datetime", () => {
     const ms = Date.parse(INSTANT);
     expect(formatSchoolDateTime(new Date(ms))).toBe(formatSchoolDateTime(INSTANT));
     expect(formatSchoolDateTime(ms)).toBe(formatSchoolDateTime(INSTANT));
+  });
+
+  it("formatSchoolTimestamp is a 24-hour Manila stamp", () => {
+    expect(formatSchoolTimestamp(INSTANT)).toBe("2026-10-06 01:30:00");
+    expect(formatSchoolTimestamp("2026-10-05T03:04:05Z")).toBe("2026-10-05 11:04:05");
+  });
+
+  it("formatSchoolDateKey uses the Manila calendar day", () => {
+    expect(formatSchoolDateKey(INSTANT)).toBe("2026-10-06");
   });
 });

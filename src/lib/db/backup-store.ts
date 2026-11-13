@@ -10,11 +10,13 @@ import {
   type Part,
 } from "@vercel/blob";
 import { PartBuffer } from "@/lib/db/snapshot-format";
+import { r2BackupBucket, r2List, r2SaveStream } from "@/lib/db/backup-store-r2";
 
 /**
  * Where automatic backups live, and how they rotate.
  *
- * Vercel Blob rather than a table inside Postgres: a backup stored in the
+ * Cloudflare R2 (binding `BACKUPS`, `backup-store-r2.ts`) when the Worker has
+ * it, else Vercel Blob. Either way, not a table inside Postgres: a backup stored in the
  * database it backs up only survives the failures that leave the database
  * intact, which is the smaller half of what backups are for.
  *
@@ -53,11 +55,11 @@ export type StoredBackup = {
 };
 
 export function isBackupStoreConfigured(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+  return Boolean(r2BackupBucket()) || Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
 }
 
 export const BACKUP_STORE_SETUP_MESSAGE =
-  "Backup storage is not connected. Add a Vercel Blob store to this project and set BLOB_READ_WRITE_TOKEN, then reload this page.";
+  "Backup storage is not connected. Bind the R2 bucket litrack-backups as BACKUPS (wrangler.jsonc), or set BLOB_READ_WRITE_TOKEN, then reload this page.";
 
 /** `YYYY-MM-DD` in Asia/Manila, so a "daily" backup matches the local school day. */
 export function localDayStamp(at: Date = new Date()): string {
@@ -100,7 +102,8 @@ export const UPLOAD_PART_BYTES = 8 * 1024 * 1024;
 export async function listBackups(kind?: BackupKind): Promise<StoredBackup[]> {
   if (!isBackupStoreConfigured()) return [];
   const prefix = kind ? `${ROOT}/${kind}/` : `${ROOT}/`;
-  const { blobs } = await list({ prefix });
+  const bucket = r2BackupBucket();
+  const blobs = bucket ? await r2List(bucket, prefix) : (await list({ prefix })).blobs;
 
   return blobs
     .map((b) => {
@@ -173,6 +176,14 @@ export async function saveBackupStream(
   if (!isBackupStoreConfigured()) throw new Error(BACKUP_STORE_SETUP_MESSAGE);
 
   const pathname = pathFor(kind, stamp);
+
+  const bucket = r2BackupBucket();
+  if (bucket) {
+    const size = await r2SaveStream(bucket, pathname, body, UPLOAD_PART_BYTES);
+    if (prune) await pruneKind(kind);
+    return { kind, stamp, pathname, size, uploadedAt: new Date() };
+  }
+
   const blobOptions = {
     access: "private",
     // Same-day re-runs replace the day's file rather than accumulating beside
@@ -230,7 +241,9 @@ export async function pruneKind(kind: BackupKind): Promise<string[]> {
   const existing = await listBackups(kind);
   const doomed = existing.slice(RETENTION[kind]);
   if (doomed.length === 0) return [];
-  await del(doomed.map((b) => b.pathname));
+  const bucket = r2BackupBucket();
+  if (bucket) await bucket.delete(doomed.map((b) => b.pathname));
+  else await del(doomed.map((b) => b.pathname));
   return doomed.map((b) => b.pathname);
 }
 
@@ -252,6 +265,12 @@ export async function openBackupStream(
     throw new Error("Not a backup path");
   }
 
+  const bucket = r2BackupBucket();
+  if (bucket) {
+    const object = await bucket.get(pathname);
+    return object ? { stream: object.body, size: object.size } : null;
+  }
+
   // `useCache: false` — a restore must read the bytes that are actually stored,
   // not a CDN copy of a blob that was overwritten minutes ago at the same path.
   const result = await get(pathname, { access: "private", useCache: false });
@@ -261,7 +280,9 @@ export async function openBackupStream(
 
 export async function deleteBackup(pathname: string): Promise<void> {
   if (!parsePath(pathname)) throw new Error("Not a backup path");
-  await del(pathname);
+  const bucket = r2BackupBucket();
+  if (bucket) await bucket.delete(pathname);
+  else await del(pathname);
 }
 
 /** The single undo point, or null when nothing destructive has run. */

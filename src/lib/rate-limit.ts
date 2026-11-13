@@ -1,22 +1,25 @@
 /**
  * Sliding-window rate limiter.
  *
- * Two backends:
+ * Three backends, tried in order:
  *
  * 1. Redis (default when UPSTASH_REDIS_REST_URL/_TOKEN are set): a shared,
  *    cross-instance window — correct on serverless, where requests for the
  *    same key can land on different lambdas. Uses a ZSET per key with a TTL,
  *    so idle keys expire instead of accumulating.
- * 2. In-memory (fallback): a per-instance sliding window. Fine as a soft
+ * 2. Cloudflare D1 (`src/lib/rate-limit-d1.ts`), shared across isolates. The
+ *    production backend while Upstash is not configured.
+ * 3. In-memory (fallback): a per-instance sliding window. Fine as a soft
  *    abuse ceiling on a single instance; on serverless a burst spread across
  *    cold starts or replicas can exceed the intended limit. Kept so local dev
  *    and unconfigured preview deploys still rate-limit.
  *
- * The chosen backend must never be observable as an error: every Redis
- * failure degrades to the in-memory window instead of throwing.
+ * The chosen backend must never be observable as an error: every Redis or D1
+ * failure degrades to the next backend instead of throwing.
  */
 
 import { upstashCommand, upstashPipeline } from "@/lib/cache/upstash";
+import { d1Check, d1Peek } from "@/lib/rate-limit-d1";
 
 type WindowEntry = {
   timestamps: number[];
@@ -130,7 +133,7 @@ export async function checkRateLimit(
 ): Promise<RateLimitResult> {
   const now = Date.now();
 
-  const shared = await redisCheck(key, options, now);
+  const shared = (await redisCheck(key, options, now)) ?? (await d1Check(key, options, now));
   if (shared) return shared;
 
   warnDegradedOnce();
@@ -151,7 +154,7 @@ export async function peekRateLimit(
 ): Promise<RateLimitResult> {
   const now = Date.now();
 
-  const shared = await redisPeek(key, options, now);
+  const shared = (await redisPeek(key, options, now)) ?? (await d1Peek(key, options, now));
   if (shared) return shared;
 
   warnDegradedOnce();
@@ -219,6 +222,6 @@ function warnDegradedOnce(): void {
   if (warnedDegraded) return;
   warnedDegraded = true;
   console.warn(
-    "[rate-limit] UPSTASH_REDIS_REST_URL/_TOKEN unset or unreachable — falling back to a per-instance window. On serverless this is not an effective limit; see docs/runbook.md."
+    "[rate-limit] Neither Upstash nor the RATE_LIMIT_D1 binding is reachable — falling back to a per-instance window. On serverless this is not an effective limit; see docs/runbook.md."
   );
 }

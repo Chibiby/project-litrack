@@ -19,15 +19,16 @@ import {
 } from "@/components/ui/table";
 import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
 
-/** "YYYY-MM-DD HH:MM:SS" in UTC — the audit log's shown timestamp. */
-function utcStamp(d: Date): string {
-  return d.toISOString().replace("T", " ").slice(0, 19);
+/** "YYYY-MM-DD HH:MM:SS" in Manila time — the audit log's shown timestamp. */
+function stamp(d: Date): string {
+  return formatSchoolTimestamp(d);
 }
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
 import { ScrollText } from "lucide-react";
 import { addDays, parseLocalDateKey } from "@/lib/date-keys";
+import { formatSchoolTimestamp } from "@/lib/format-datetime";
 import {
   parseAuditListParams,
   type AuditListParams,
@@ -196,7 +197,7 @@ async function SchoolAuditTable({
                       {logs.map((log) => (
                         <TableRow key={log.id}>
                           <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                            {utcStamp(log.timestamp)}
+                            {stamp(log.timestamp)}
                           </TableCell>
                           <TableCell className="font-medium">{log.action}</TableCell>
                           <TableCell>{log.resource}</TableCell>
@@ -215,7 +216,7 @@ async function SchoolAuditTable({
                         key={log.id}
                         title={log.action}
                         state={<span>{log.resource}</span>}
-                        meta={<span className="tabular-nums">{utcStamp(log.timestamp)}</span>}
+                        meta={<span className="tabular-nums">{stamp(log.timestamp)}</span>}
                         details={[
                           {
                             label: "Resource ID",

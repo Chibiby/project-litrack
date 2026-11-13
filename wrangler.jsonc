@@ -32,11 +32,29 @@
       "binding": "NEXT_TAG_CACHE_D1",
       "database_name": "litrack-tag-cache",
       "database_id": "5e44542a-ed74-48d2-9532-b33fa28e56fd"
+    },
+    // Shared login and action throttle (src/lib/rate-limit-d1.ts), table rl_hits.
+    {
+      "binding": "RATE_LIMIT_D1",
+      "database_name": "litrack-rate-limit",
+      "database_id": "e84d6fdb-bc4c-4f0c-8b7b-560a13637767"
     }
   ],
-  // No r2_buckets: R2 is not enabled on this Cloudflare account (pixelonhub,
-  // since 2026-11-08), so the AVATARS binding is left out and avatar uploads
-  // fail until a bucket exists. Add it back here when one does.
+  // Profile photos. Written only through src/lib/storage/avatar-objects.ts;
+  // read publicly at https://avatars.arallitrack.com (the bucket custom
+  // domain), which next.config.mjs inlines as NEXT_PUBLIC_AVATAR_BASE_URL.
+  "r2_buckets": [
+    {
+      "binding": "AVATARS",
+      "bucket_name": "litrack-avatars"
+    },
+    // Private database backups (src/lib/db/backup-store-r2.ts). No public
+    // domain: downloads go through /api/admin/backups/download.
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "litrack-backups"
+    }
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

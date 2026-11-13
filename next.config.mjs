@@ -24,6 +24,15 @@ const nextConfig = {
       : process.env.VERCEL === "1"
         ? "vercel"
         : "local",
+    // Public base of the avatar bucket (R2 custom domain). Not a secret; set
+    // here so a manual Cloudflare build cannot ship without it. An explicit
+    // env value still wins.
+    ...(process.env.NEXT_PUBLIC_AVATAR_BASE_URL || isCloudflareWorkersBuild
+      ? {
+          NEXT_PUBLIC_AVATAR_BASE_URL:
+            process.env.NEXT_PUBLIC_AVATAR_BASE_URL || "https://avatars.arallitrack.com",
+        }
+      : {}),
   },
   /**
    * Cloudflare only: `wrangler.jsonc` defines no `IMAGES` binding, so
