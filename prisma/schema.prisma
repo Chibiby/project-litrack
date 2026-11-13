@@ -906,7 +906,6 @@ model User {
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
-  @@index([authId])
   /// The global `/admin/archive` read: `deletedAt IS NOT NULL ORDER BY deletedAt
   /// DESC`, cross-tenant and uncached. `[schoolId, role, deletedAt]` cannot serve
   /// it — that query supplies no `schoolId`, so `deletedAt` is never a usable
@@ -1735,8 +1734,6 @@ model TermSubject {
   /// collide with each other or with a default — only the 8 seeded rows are
   /// ever compared here.
   @@unique([gradeLevelId, legacyArea])
-  /// The sheet read: one grade's rows, active first, in display order.
-  @@index([gradeLevelId, deletedAt, position])
   /// Lookup side of the `School` cascade — deleting a school must find its
   /// subject rows without a sequential scan.
   @@index([schoolId])
