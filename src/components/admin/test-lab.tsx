@@ -57,6 +57,7 @@ const START_BUTTONS: { persona: TestLabPersona; label: string }[] = [
   { persona: "teacher-floating", label: "Open as Floating Teacher" },
   { persona: "teacher-volunteer", label: "Open as Non-DepEd ARAL Volunteer" },
   { persona: "pending-teacher", label: "Open as Pending Teacher" },
+  { persona: "district", label: "Open as Demo District Admin" },
 ];
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
@@ -325,7 +326,7 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            The demo school belongs to no district, so this signs you in as a{" "}
+            For demo data only, use &ldquo;Open as Demo District Admin&rdquo; above. This signs you in as a{" "}
             <span className="font-medium text-foreground">real district admin</span>. You see
             their real schools and figures, and anything you change is saved for real and recorded
             against their account. &ldquo;Return to admin&rdquo; in the banner brings you back here.

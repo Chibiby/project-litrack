@@ -137,11 +137,12 @@ export const RELEASES: readonly Release[] = [
   {
     version: "2.62.0",
     date: "2026-11-13",
-    title: "A fuller demo school for Test Lab",
+    title: "A fuller demo school and a demo district for Test Lab",
     announce: false,
     fixes: [
       { text: "The demo school now has named learners and one teacher of each kind: single-advisory, multi-advisory, floating, and Non-DepEd ARAL Volunteer. Click Prepare test data in Test Lab to update it.", roles: ["SUPER_ADMIN"] },
-      { text: "This update only changes the practice school used for training. Nothing on your pages changed.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "Test Lab has a demo District Admin. Open as Demo District Admin shows the district portal with the demo school only, so recordings never show a real district. Click Prepare test data first.", roles: ["SUPER_ADMIN"] },
+      { text: "This update only changes the practice school used for training. Nothing on your pages changed.", roles: ["TEACHER", "SCHOOL_HEAD", "DISTRICT_ADMIN"] },
     ],
   },
   {

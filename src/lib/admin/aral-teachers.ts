@@ -49,6 +49,19 @@ export type AralTeachersScope =
 
 export { ARAL_TEACHER_SORTS, type AralTeacherSort };
 
+/**
+ * Whether demo schools may appear. A school scope is already one school. A
+ * district scope's WHERE (`schoolWhereForScope`) decides demo schools itself:
+ * none in a real district, only demo schools in the demo district, so the
+ * demo-session cookie must not narrow it further. The division follows the
+ * demo session, as everywhere else.
+ */
+async function aralDemoVisible(scope: AralTeachersScope): Promise<boolean> {
+  if (scope.kind === "school") return true;
+  if (scope.scope?.kind === "districts") return true;
+  return isDemoVisible();
+}
+
 export type AralTeachersSearchParams = {
   page?: string;
   q?: string;
@@ -225,7 +238,7 @@ export async function getAralTeachersSummary(
   if (scope.kind === "school" && !scope.schoolId) {
     throw new Error("getAralTeachersSummary: school scope requires a schoolId");
   }
-  const demoVisible = scope.kind === "admin" ? await isDemoVisible() : true;
+  const demoVisible = await aralDemoVisible(scope);
   const learnerWhere = aralLearnersWhere(scope, demoVisible);
   const [teachers, totalLearners, withoutTeacher] = await Promise.all([
     prisma.user.count({ where: aralTeachersWhere(scope, "", demoVisible) }),
@@ -259,7 +272,7 @@ export async function getAralTeachersPage(
   if (scope.kind === "school" && !scope.schoolId) {
     throw new Error("getAralTeachersPage: school scope requires a schoolId");
   }
-  const demoVisible = scope.kind === "admin" ? await isDemoVisible() : true;
+  const demoVisible = await aralDemoVisible(scope);
   const where = aralTeachersWhere(scope, params.q, demoVisible, params.grade);
   const byName = [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }] as const;
 

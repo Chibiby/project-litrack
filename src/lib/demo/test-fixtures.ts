@@ -5,6 +5,7 @@ import { createIdentity } from "@/lib/auth/identity";
 import { hashPassword } from "@/lib/auth/password-hash";
 import { assertTestableSchool } from "@/lib/auth/test-lab";
 import { findDemoSchools } from "@/lib/demo/provision";
+import { DEMO_DISTRICT_NAME } from "@/lib/demo/constants";
 import { testLabPersonaEmail, type TestLabPersona } from "@/lib/test-lab/personas";
 import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 import { buildFullName } from "@/lib/names";
@@ -92,6 +93,7 @@ const DEMO_TEACHERS: Record<TeacherKey, DemoTeacherSpec> = {
 
 const PENDING_TEACHER_NAME = { firstName: "Ramon", middleName: "Diaz", lastName: "Bautista" };
 const DEMO_HEAD_NAME = { firstName: "Rosario", middleName: "Castro", lastName: "Villanueva" };
+const DEMO_DISTRICT_ADMIN_NAME = { firstName: "Carmela", middleName: "Ramos", lastName: "Aquino" };
 
 type DemoLearnerSpec = {
   firstName: string;
@@ -164,6 +166,8 @@ export type TestLabFixtures = {
   floatingTeacherId: string | null;
   volunteerTeacherId: string | null;
   pendingTeacherId: string | null;
+  /** The demo district admin, assigned to `DEMO_DISTRICT_NAME` only. */
+  districtAdminId: string | null;
   /** Every learner rostered under the demo teacher, across both sections. */
   learnerIds: string[];
   /** Subset of `learnerIds` enrolled in ARAL, `aralTeacherId` = the demo teacher. */
@@ -185,6 +189,7 @@ const EMPTY_FIXTURES: TestLabFixtures = {
   floatingTeacherId: null,
   volunteerTeacherId: null,
   pendingTeacherId: null,
+  districtAdminId: null,
   learnerIds: [],
   aralLearnerIds: [],
 };
@@ -235,6 +240,7 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
   const floatingTeacher = await findTeacher("teacher-floating");
   const volunteerTeacher = await findTeacher("teacher-volunteer");
   const pendingTeacher = await findTeacher("pending-teacher");
+  const districtAdmin = await findDemoDistrictAdmin();
 
   const learners = teacher
     ? await prisma.learner.findMany({
@@ -256,6 +262,7 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
       floatingTeacher &&
       volunteerTeacher &&
       pendingTeacher &&
+      districtAdmin &&
       learners.length > 0
   );
 
@@ -274,6 +281,7 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
     floatingTeacherId: floatingTeacher?.id ?? null,
     volunteerTeacherId: volunteerTeacher?.id ?? null,
     pendingTeacherId: pendingTeacher?.id ?? null,
+    districtAdminId: districtAdmin?.id ?? null,
     learnerIds: learners.map((l) => l.id),
     aralLearnerIds: learners.filter((l) => l.isAralLearner).map((l) => l.id),
   };
@@ -527,6 +535,83 @@ async function ensurePendingTeacher(schoolId: string): Promise<string> {
   return created.id;
 }
 
+/** The demo district admin, only while it is assigned to the demo district alone. */
+function findDemoDistrictAdmin() {
+  return prisma.user.findFirst({
+    where: {
+      email: testLabPersonaEmail("district"),
+      role: "DISTRICT_ADMIN",
+      schoolId: null,
+      deletedAt: null,
+      districtAssignments: {
+        some: { district: DEMO_DISTRICT_NAME },
+        every: { district: DEMO_DISTRICT_NAME },
+      },
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * The demo district admin: a DISTRICT_ADMIN with no school, assigned to
+ * `DEMO_DISTRICT_NAME` and nothing else, so its scope is the demo schools and
+ * never a real one (`schoolWhereForScope`). Any other assignment this one
+ * test account somehow holds is removed. The account is not tied to a school,
+ * so "Reset test data" keeps it; it simply sees the rebuilt demo school.
+ */
+async function ensureDemoDistrictAdmin(createdById: string): Promise<string> {
+  const email = testLabPersonaEmail("district");
+  const existing = await prisma.user.findFirst({
+    where: { email, deletedAt: null },
+    select: { id: true, role: true, schoolId: true },
+  });
+  if (existing && (existing.role !== "DISTRICT_ADMIN" || existing.schoolId !== null)) {
+    throw new Error("The demo district admin's address belongs to another kind of account.");
+  }
+
+  let userId: string;
+  if (existing) {
+    userId = existing.id;
+  } else {
+    // Same as a demo teacher: nobody signs in with this password; Test Lab
+    // reaches the account only through the impersonation swap.
+    const hash = await hashPassword(generateActivationCredential());
+    const name = DEMO_DISTRICT_ADMIN_NAME;
+    userId = await prisma.$transaction(async (tx) => {
+      const { authId } = await createIdentity(
+        { email, password: { hash }, role: "DISTRICT_ADMIN", emailVerified: true },
+        tx
+      );
+      const user = await tx.user.create({
+        data: {
+          authId,
+          email,
+          role: "DISTRICT_ADMIN",
+          schoolId: null,
+          firstName: name.firstName,
+          middleName: name.middleName,
+          lastName: name.lastName,
+          fullName: buildFullName(name.firstName, name.middleName, name.lastName),
+          isActive: true,
+          mustChangePassword: false,
+          profileCompleted: true,
+        },
+      });
+      return user.id;
+    });
+  }
+
+  await prisma.districtAdminAssignment.deleteMany({
+    where: { userId, district: { not: DEMO_DISTRICT_NAME } },
+  });
+  await prisma.districtAdminAssignment.upsert({
+    where: { userId_district: { userId, district: DEMO_DISTRICT_NAME } },
+    create: { userId, district: DEMO_DISTRICT_NAME, createdById },
+    update: {},
+  });
+  return userId;
+}
+
 /**
  * The named roster of one section. Idempotent by full name: a learner already
  * there is left alone, a placeholder from an earlier release ("Learner 1") is
@@ -648,6 +733,7 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
   const floatingTeacherId = await teacherOf("floating", []);
   const volunteerTeacherId = await teacherOf("volunteer", []);
   const pendingTeacherId = await ensurePendingTeacher(school);
+  const districtAdminId = await ensureDemoDistrictAdmin(createdById);
 
   const teacherIds: Record<TeacherKey, string> = {
     multi: teacherId,
@@ -708,6 +794,7 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
       floatingTeacherId,
       volunteerTeacherId,
       pendingTeacherId,
+      districtAdminId,
       learnerCount: learnerIds.length + g2.learnerIds.length,
       aralLearnerCount: aralLearnerIds.length + g2.aralLearnerIds.length,
     },
@@ -728,6 +815,7 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
     floatingTeacherId,
     volunteerTeacherId,
     pendingTeacherId,
+    districtAdminId,
     learnerIds,
     aralLearnerIds,
   };

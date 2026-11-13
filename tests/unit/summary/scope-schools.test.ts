@@ -120,13 +120,14 @@ describe("resolveScopeSchools (T11)", () => {
 
 /**
  * A minimal evaluator for the `School` WHERE shapes `scopeSchoolWhere` and
- * `schoolWhereForScope` build: field equality, `{ in: [...] }`, and `AND`.
+ * `schoolWhereForScope` build: field equality, `{ in: [...] }`, `AND` and `OR`.
  * Throws on anything else, so a new WHERE shape fails this test loudly.
  */
 type Row = Record<string, unknown>;
 function matches(where: Prisma.SchoolWhereInput, row: Row): boolean {
   return Object.entries(where).every(([k, v]) => {
     if (k === "AND") return (v as Prisma.SchoolWhereInput[]).every((w) => matches(w, row));
+    if (k === "OR") return (v as Prisma.SchoolWhereInput[]).some((w) => matches(w, row));
     if (v !== null && typeof v === "object") {
       const keys = Object.keys(v);
       if (keys.length !== 1 || keys[0] !== "in") throw new Error(`unsupported filter on ${k}`);
@@ -141,6 +142,10 @@ const TABLE: Row[] = [
   ...DIVISION_SCHOOLS.map((s) => ({ ...s, deletedAt: null })),
   { id: "sch-gone", name: "Gone ES", schoolIdCode: "1", district: "Glan 1", division: null, region: null, isActive: true, isDemo: false, deletedAt: new Date() },
   { id: "sch-case", name: "Lowercase ES", schoolIdCode: "2", district: "glan 1", division: null, region: null, isActive: true, isDemo: false, deletedAt: null },
+  // The demo district: one demo school, and a REAL school that took the demo
+  // district's name, which no district scope may ever return.
+  { id: "sch-demo-d", name: "[demo school 1]", schoolIdCode: "123456", district: "[demo district]", division: null, region: null, isActive: true, isDemo: true, deletedAt: null },
+  { id: "sch-impostor", name: "Impostor ES", schoolIdCode: "3", district: "[demo district]", division: null, region: null, isActive: true, isDemo: false, deletedAt: null },
 ].sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
 const LIVE = TABLE.filter((r) => r.deletedAt === null) as unknown as typeof DIVISION_SCHOOLS;
@@ -152,6 +157,8 @@ const SCOPES: (AdminScope | SummaryScope)[] = [
   { kind: "districts", districts: ["Glan 1"] },
   { kind: "districts", districts: ["Alabel 1", "Glan 1"] },
   { kind: "districts", districts: [] },
+  { kind: "districts", districts: ["[demo district]"] },
+  { kind: "districts", districts: ["[demo district]", "Glan 1"] },
   { kind: "school", schoolId: "sch-glan-ces" },
   { kind: "school", schoolId: "sch-demo" },
   { kind: "school", schoolId: "sch-gone" },

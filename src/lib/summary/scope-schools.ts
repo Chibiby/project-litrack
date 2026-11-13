@@ -6,6 +6,7 @@ import { cachedQuery } from "@/lib/cache/unstable";
 import { divisionSummary, schoolsList } from "@/lib/cache/tags";
 import { demoSchoolFilter } from "@/lib/settings/system-settings";
 import {
+  schoolInDistrictScope,
   schoolWhereForScope,
   type AdminScope,
   type SummaryScope,
@@ -18,8 +19,9 @@ import type { ScopeSchool } from "@/lib/summary/types";
  * Every district page, picker and summary facet takes its school list from
  * here; the summary's raw rows are then fenced to these ids by `scopeRaw`.
  *
- * Demo exclusion (invariant I10): a district scope always carries
- * `isDemo: false` through `schoolWhereForScope`; the division follows
+ * Demo exclusion (invariant I10): a real district never yields a demo school
+ * through `schoolWhereForScope` (only the demo district `DEMO_DISTRICT_NAME`
+ * yields demo schools, and only those); the division follows
  * `demoSchoolFilter(demoVisible)`, exactly as `getAdminMetricCounts` does.
  *
  * A `school` scope must already have passed `loadSchoolInScope` (or the
@@ -106,11 +108,6 @@ function toScopeSchool(s: DivisionSchool): ScopeSchool {
   };
 }
 
-/** `district: { in: [...] }`: a school with no district is in no district scope. */
-function inDistricts(s: DivisionSchool, districts: readonly string[]): boolean {
-  return s.district !== null && districts.includes(s.district);
-}
-
 /**
  * `scopeSchoolWhere(scope, demoVisible)` applied in memory to the live
  * division list. Order is kept (name, then id).
@@ -128,8 +125,9 @@ export function schoolsForScope(
       kept = all.filter(demoOk);
       break;
     case "districts":
-      // A district scope never includes a demo school, demo session or not.
-      kept = all.filter((s) => s.isDemo !== true && inDistricts(s, scope.districts));
+      // Demo session or not: a real district never includes a demo school, and
+      // the demo district includes only demo schools (`schoolInDistrictScope`).
+      kept = all.filter((s) => schoolInDistrictScope(s, scope.districts));
       break;
     case "school":
       kept = all.filter((s) => s.id === scope.schoolId && demoOk(s));
@@ -149,7 +147,7 @@ export function schoolsForAdminScope(
 ): DivisionSchool[] {
   return adminScope.kind === "division"
     ? [...all]
-    : all.filter((s) => s.isDemo !== true && inDistricts(s, adminScope.districts));
+    : all.filter((s) => schoolInDistrictScope(s, adminScope.districts));
 }
 
 /**

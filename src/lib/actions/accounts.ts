@@ -43,6 +43,7 @@ import {
   testLabPersonaRole,
 } from "@/lib/test-lab/personas";
 import { assertTestableSchool, impersonationReturnPath } from "@/lib/auth/test-lab";
+import { DEMO_DISTRICT_NAME } from "@/lib/demo/constants";
 import type { AccountSignIn } from "@/lib/admin/accounts";
 
 /**
@@ -663,12 +664,26 @@ export const startTestLabSession = action(
       next: formData.get("next") ?? undefined,
     });
 
+    // The demo district admin has no school. It is found by its fixed email,
+    // the DISTRICT_ADMIN role, no school, and assignments that name the demo
+    // district and nothing else, so its scope can only ever be the demo
+    // schools (`schoolWhereForScope`). Every other persona is an account in
+    // the live demo school, re-checked by `assertTestableSchool`.
+    const isDistrict = persona === "district";
     const target = await prisma.user.findFirst({
       where: {
         email: testLabPersonaEmail(persona),
         role: testLabPersonaRole(persona),
         deletedAt: null,
-        school: { isDemo: true, deletedAt: null },
+        ...(isDistrict
+          ? {
+              schoolId: null,
+              districtAssignments: {
+                some: { district: DEMO_DISTRICT_NAME },
+                every: { district: DEMO_DISTRICT_NAME },
+              },
+            }
+          : { school: { isDemo: true, deletedAt: null } }),
       },
       select: IMPERSONATION_TARGET_SELECT,
     });
@@ -677,10 +692,13 @@ export const startTestLabSession = action(
         detail: `startTestLabSession: no demo account for persona ${persona}`,
       });
     }
-    await assertTestableSchool(target.schoolId);
+    if (!isDistrict) await assertTestableSchool(target.schoolId);
 
     return startImpersonation(admin, target, {
       redirectTo: resolveTestLabNext(persona, next),
+      // A schoolless account cannot point "Return to admin" back at Test Lab
+      // through its school's demo flag, so the district persona says so here.
+      ...(isDistrict ? { returnTo: "test-lab" as const } : {}),
       // Ids and the role only.
       auditMetadata: {
         schoolId: target.schoolId,

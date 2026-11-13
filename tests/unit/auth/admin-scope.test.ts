@@ -169,6 +169,56 @@ describe("assertSchoolInScope (T2, I7)", () => {
   });
 });
 
+describe("the demo district (Page Test Lab demo district admin)", () => {
+  const DEMO = { kind: "districts", districts: ["[demo district]"] } as const;
+  const DEMO_AND_REAL = { kind: "districts", districts: ["Alabel 1", "[demo district]"] } as const;
+
+  it("leaves a real admin's WHERE exactly as it was", () => {
+    expect(schoolWhereForScope(ALABEL)).toEqual({
+      deletedAt: null,
+      isDemo: false,
+      district: { in: ["Alabel 1", "Alabel 2"] },
+    });
+  });
+
+  it("matches demo schools in the demo district and real schools elsewhere", () => {
+    expect(schoolWhereForScope(DEMO_AND_REAL)).toEqual({
+      deletedAt: null,
+      OR: [
+        { isDemo: false, district: { in: ["Alabel 1"] } },
+        { isDemo: true, district: "[demo district]" },
+      ],
+    });
+  });
+
+  it("lets the demo admin open a demo school in the demo district", () => {
+    expect(() =>
+      assertSchoolInScope(DEMO, { district: "[demo district]", isDemo: true })
+    ).not.toThrow();
+  });
+
+  it("refuses the demo admin a real school, even one named into the demo district", async () => {
+    expectCrossTenantNotFound(
+      await thrown(() => assertSchoolInScope(DEMO, { district: "[demo district]", isDemo: false }))
+    );
+    expectCrossTenantNotFound(
+      await thrown(() => assertSchoolInScope(DEMO, { district: "Alabel 1", isDemo: false }))
+    );
+  });
+
+  it("refuses the demo admin a demo school outside the demo district", async () => {
+    expectCrossTenantNotFound(
+      await thrown(() => assertSchoolInScope(DEMO, { district: "Alabel 1", isDemo: true }))
+    );
+  });
+
+  it("still refuses every demo school to an admin not assigned the demo district", async () => {
+    expectCrossTenantNotFound(
+      await thrown(() => assertSchoolInScope(ALABEL, { district: "[demo district]", isDemo: true }))
+    );
+  });
+});
+
 describe("resolveSummaryScope (T2)", () => {
   it("refuses a district outside the admin's assignments as NOT_FOUND", async () => {
     expectCrossTenantNotFound(

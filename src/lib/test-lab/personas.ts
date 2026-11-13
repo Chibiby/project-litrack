@@ -1,11 +1,16 @@
 import { DEMO_SCHOOLS } from "@/lib/demo/constants";
-import { schoolHeadSyntheticEmail, teacherSyntheticEmail } from "@/lib/auth/synthetic-email";
+import {
+  adminSyntheticEmail,
+  schoolHeadSyntheticEmail,
+  teacherSyntheticEmail,
+} from "@/lib/auth/synthetic-email";
 
 /**
  * Page Test Lab personas (docs/test-lab-spec.md).
  *
- * Every persona is an account inside the one demo school, found by a fixed
- * synthetic email. The email alone is never trusted as proof of "demo": the
+ * Every persona but `district` is an account inside the one demo school, found
+ * by a fixed synthetic email. `district` is the demo district admin: no school,
+ * assigned to `DEMO_DISTRICT_NAME` only, so its scope is the demo schools. The email alone is never trusted as proof of "demo": the
  * lookup in `startTestLabSession` also requires `school.isDemo`, and
  * `assertTestableSchool` re-checks the school — so a real account that somehow
  * held one of these addresses still could not be started from Test Lab.
@@ -17,7 +22,7 @@ import { schoolHeadSyntheticEmail, teacherSyntheticEmail } from "@/lib/auth/synt
 /**
  * `teacher` is the multi-advisory teacher (two sections). The other teacher
  * personas cover the remaining kinds: one advisory section, floating (none),
- * and the Non-DepEd ARAL Volunteer.
+ * and the Non-DepEd ARAL Volunteer. `district` is the demo district admin.
  */
 export const TEST_LAB_PERSONAS = [
   "head",
@@ -26,6 +31,7 @@ export const TEST_LAB_PERSONAS = [
   "teacher-floating",
   "teacher-volunteer",
   "pending-teacher",
+  "district",
 ] as const;
 export type TestLabPersona = (typeof TEST_LAB_PERSONAS)[number];
 
@@ -55,15 +61,23 @@ export function testLabPersonaEmail(persona: TestLabPersona): string {
       return teacherSyntheticEmail(`testlab.volunteer.${code}`);
     case "pending-teacher":
       return teacherSyntheticEmail(`testlab.pending.${code}`);
+    case "district":
+      return adminSyntheticEmail(`testlab.district.${code}`);
   }
 }
 
-export function testLabPersonaRole(persona: TestLabPersona): "SCHOOL_HEAD" | "TEACHER" {
-  return persona === "head" ? "SCHOOL_HEAD" : "TEACHER";
+export function testLabPersonaRole(
+  persona: TestLabPersona
+): "SCHOOL_HEAD" | "TEACHER" | "DISTRICT_ADMIN" {
+  if (persona === "head") return "SCHOOL_HEAD";
+  if (persona === "district") return "DISTRICT_ADMIN";
+  return "TEACHER";
 }
 
-export function testLabRoleHome(persona: TestLabPersona): "/school-head" | "/teacher" {
-  return persona === "head" ? "/school-head" : "/teacher";
+export function testLabRoleHome(persona: TestLabPersona): "/school-head" | "/teacher" | "/district" {
+  if (persona === "head") return "/school-head";
+  if (persona === "district") return "/district";
+  return "/teacher";
 }
 
 /**

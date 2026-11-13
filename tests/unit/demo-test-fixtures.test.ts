@@ -78,6 +78,7 @@ let users: Usr[];
 let profiles: Profile[];
 let learners: LearnerRow[];
 let enrollments: EnrollmentRow[];
+let assignments: { userId: string; district: string }[] = [];
 let idCounter = 0;
 
 function nextId(prefix: string): string {
@@ -161,7 +162,21 @@ const prismaMock = {
   },
   user: {
     findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
-      return users.find((u) => matches(u, where)) ?? null;
+      // `districtAssignments: { some, every }` on the demo district admin.
+      const { districtAssignments, ...rest } = where as {
+        districtAssignments?: { some: { district: string }; every: { district: string } };
+      };
+      return (
+        users.find((u) => {
+          if (!matches(u, rest)) return false;
+          if (!districtAssignments) return true;
+          const mine = assignments.filter((a) => a.userId === u.id);
+          return (
+            mine.some((a) => a.district === districtAssignments.some.district) &&
+            mine.every((a) => a.district === districtAssignments.every.district)
+          );
+        }) ?? null
+      );
     }),
     create: vi.fn(async ({ data }: { data: Partial<Usr> & { authId: string; email: string; role: string } }) => {
       const row: Usr = {
@@ -217,6 +232,24 @@ const prismaMock = {
       enrollments.push(row);
       return row;
     }),
+  },
+  districtAdminAssignment: {
+    deleteMany: vi.fn(async ({ where }: { where: { userId: string; district: { not: string } } }) => {
+      const before = assignments.length;
+      assignments = assignments.filter(
+        (a) => !(a.userId === where.userId && a.district !== where.district.not)
+      );
+      return { count: before - assignments.length };
+    }),
+    upsert: vi.fn(
+      async ({ create }: { create: { userId: string; district: string; createdById?: string } }) => {
+        const found = assignments.find((a) => a.userId === create.userId && a.district === create.district);
+        if (found) return found;
+        const row = { userId: create.userId, district: create.district };
+        assignments.push(row);
+        return row;
+      }
+    ),
   },
   $transaction: vi.fn(async (cb: (tx: typeof prismaMock) => unknown) => cb(prismaMock)),
 };
@@ -314,6 +347,7 @@ beforeEach(() => {
   profiles = [];
   learners = [];
   enrollments = [];
+  assignments = [];
   findDemoSchoolsMock.mockResolvedValue([]);
 });
 
@@ -371,9 +405,10 @@ describe("prepareTestLabFixtures — idempotency", () => {
     // Kinder, Grade 1 and Grade 2, one section each.
     expect(grades).toHaveLength(3);
     expect(sections).toHaveLength(3);
-    // Five new auth users: the four kinds of teacher and the pending teacher.
-    expect(users).toHaveLength(6);
-    expect(createUserMock).toHaveBeenCalledTimes(5);
+    // Six new auth users: the four kinds of teacher, the pending teacher and
+    // the demo district admin.
+    expect(users).toHaveLength(7);
+    expect(createUserMock).toHaveBeenCalledTimes(6);
     expect(learners.length).toBeGreaterThan(0);
     expect(enrollments).toHaveLength(learners.length);
     // Every learner's Enrollment points at the same grade/section/teacher as
@@ -407,7 +442,7 @@ describe("prepareTestLabFixtures — idempotency", () => {
     expect(users).toHaveLength(counts.users);
     expect(learners).toHaveLength(counts.learners);
     expect(enrollments).toHaveLength(counts.enrollments);
-    expect(createUserMock).toHaveBeenCalledTimes(5); // no new auth users
+    expect(createUserMock).toHaveBeenCalledTimes(6); // no new auth users
     expect(second).toEqual(first);
   });
 });
@@ -458,9 +493,44 @@ describe("prepareTestLabFixtures — partial failure", () => {
     const inputs = createUserMock.mock.calls.map(
       (c) => c[0] as { email: string; password: { hash: string } }
     );
-    expect(inputs).toHaveLength(5);
-    expect(new Set(inputs.map((i) => i.email)).size).toBe(5);
-    expect(new Set(inputs.map((i) => i.password.hash)).size).toBe(5);
+    expect(inputs).toHaveLength(6);
+    expect(new Set(inputs.map((i) => i.email)).size).toBe(6);
+    expect(new Set(inputs.map((i) => i.password.hash)).size).toBe(6);
+  });
+});
+
+describe("prepareTestLabFixtures — demo district admin", () => {
+  it("creates a schoolless DISTRICT_ADMIN assigned to the demo district only, once", async () => {
+    seedLiveDemoSchool();
+    const first = await prepareTestLabFixtures(ADMIN_ID);
+
+    const admin = users.find((u) => u.id === first.districtAdminId)!;
+    expect(admin).toMatchObject({
+      role: "DISTRICT_ADMIN",
+      schoolId: null,
+      email: testLabPersonaEmail("district"),
+      fullName: "Carmela Ramos Aquino",
+      isActive: true,
+      mustChangePassword: false,
+    });
+    expect(assignments).toEqual([{ userId: admin.id, district: "[demo district]" }]);
+
+    await prepareTestLabFixtures(ADMIN_ID);
+    expect(users.filter((u) => u.role === "DISTRICT_ADMIN")).toHaveLength(1);
+    expect(assignments).toHaveLength(1);
+  });
+
+  it("drops any other district from the demo admin, so its scope stays demo-only", async () => {
+    seedLiveDemoSchool();
+    const first = await prepareTestLabFixtures(ADMIN_ID);
+    assignments.push({ userId: first.districtAdminId!, district: "Alabel 1" });
+
+    const findFirst = await findTestLabFixtures();
+    expect(findFirst.districtAdminId).toBeNull();
+
+    await prepareTestLabFixtures(ADMIN_ID);
+    expect(assignments).toEqual([{ userId: first.districtAdminId, district: "[demo district]" }]);
+    expect((await findTestLabFixtures()).districtAdminId).toBe(first.districtAdminId);
   });
 });
 

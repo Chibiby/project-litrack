@@ -9,6 +9,9 @@
  * - A SUPER_ADMIN sees the whole division.
  * - A DISTRICT_ADMIN sees the non-demo, live schools whose `School.district`
  *   exactly equals one of their assigned districts. No assignments, no schools.
+ *   The one exception is `DEMO_DISTRICT_NAME`: an admin assigned to it (the
+ *   Page Test Lab demo district admin) sees the demo schools there, and only
+ *   demo schools there. A real district never yields a demo school.
  * - Every other role has no admin scope at all.
  *
  * An out-of-scope school is reported with the same NOT_FOUND a missing row
@@ -17,6 +20,7 @@
  */
 import type { Prisma, UserRole } from "@prisma/client";
 import { resourceNotFound } from "@/lib/errors/app-error";
+import { DEMO_DISTRICT_NAME } from "@/lib/demo/constants";
 
 export type AdminScope =
   /** SUPER_ADMIN only. */
@@ -68,9 +72,36 @@ export function schoolWhereForScope(scope: AdminScope): Prisma.SchoolWhereInput 
   switch (scope.kind) {
     case "division":
       return { deletedAt: null };
-    case "districts":
-      return { deletedAt: null, isDemo: false, district: { in: [...scope.districts] } };
+    case "districts": {
+      if (!scope.districts.includes(DEMO_DISTRICT_NAME)) {
+        return { deletedAt: null, isDemo: false, district: { in: [...scope.districts] } };
+      }
+      // The demo district admin (Page Test Lab). Its demo district holds demo
+      // schools only, and its other districts, if any, real schools only.
+      const real = scope.districts.filter((d) => d !== DEMO_DISTRICT_NAME);
+      return {
+        deletedAt: null,
+        OR: [
+          { isDemo: false, district: { in: real } },
+          { isDemo: true, district: DEMO_DISTRICT_NAME },
+        ],
+      };
+    }
   }
+}
+
+/**
+ * The district half of `schoolWhereForScope`, in memory: the school's district
+ * is assigned, and the school is a demo school exactly when that district is
+ * `DEMO_DISTRICT_NAME`. So a real district never yields a demo school, and the
+ * demo district never yields a real school, even one that took its name.
+ */
+export function schoolInDistrictScope(
+  school: { district: string | null; isDemo: boolean },
+  districts: readonly string[]
+): boolean {
+  if (school.district === null || !districts.includes(school.district)) return false;
+  return (school.isDemo === true) === (school.district === DEMO_DISTRICT_NAME);
 }
 
 /**
@@ -87,13 +118,13 @@ export function assertSchoolInScope(
   if (!school) throw resourceNotFound("School");
   if (scope.kind === "division") return;
 
-  if (school.isDemo) {
+  if (school.isDemo && !scope.districts.includes(DEMO_DISTRICT_NAME)) {
     throw resourceNotFound("School", {
       crossTenant: true,
       detail: `Demo school requested by a district admin scoped to ${describeDistricts(scope.districts)}`,
     });
   }
-  if (school.district === null || !scope.districts.includes(school.district)) {
+  if (!schoolInDistrictScope(school, scope.districts)) {
     throw resourceNotFound("School", {
       crossTenant: true,
       detail: `School in district ${JSON.stringify(school.district)} is outside ${describeDistricts(scope.districts)}`,

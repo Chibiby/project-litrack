@@ -177,6 +177,22 @@ describe("Test Lab personas", () => {
     expect(personas.testLabPersonaRole("pending-teacher")).toBe("TEACHER");
     expect(personas.testLabRoleHome("head")).toBe("/school-head");
     expect(personas.testLabRoleHome("pending-teacher")).toBe("/teacher");
+    expect(personas.testLabPersonaRole("district")).toBe("DISTRICT_ADMIN");
+    expect(personas.testLabRoleHome("district")).toBe("/district");
+  });
+
+  it("gives the demo district admin a synthetic address no mailbox or teacher can hold", () => {
+    const email = personas.testLabPersonaEmail("district");
+    expect(email.startsWith("testlab.district.demo-1-123456@")).toBe(true);
+    expect(isSyntheticEmail(email)).toBe(true);
+    expect(email.endsWith("@school.local")).toBe(false);
+  });
+
+  it("keeps the demo district admin inside /district", () => {
+    expect(personas.isAllowedTestLabNext("district", "/district/summary")).toBe(true);
+    expect(personas.isAllowedTestLabNext("district", "/admin")).toBe(false);
+    expect(personas.isAllowedTestLabNext("district", "/district/../admin")).toBe(false);
+    expect(personas.resolveTestLabNext("district", "/teacher")).toBe("/district");
   });
 
   it.each([

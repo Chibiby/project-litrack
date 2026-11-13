@@ -6,6 +6,7 @@ import { demoStatus } from "@/lib/demo/provision";
 import { readDemoSession } from "@/lib/demo/session";
 import { findTestLabFixtures } from "@/lib/demo/test-fixtures";
 import { buildTestLabChecklist, type TestLabChecklistItem } from "@/lib/test-lab/checklist";
+import { testLabPersonaEmail } from "@/lib/test-lab/personas";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,17 @@ export default async function AdminTestLabPage() {
     readDemoSession(),
     demoStatus(),
     findTestLabFixtures(),
-    // The demo school is outside every district scope, so the district portal
-    // is opened as a REAL district admin, through the same `impersonateUser`
-    // path as User Accounts "Sign in as". Only accounts that action would
-    // accept: live and active (it refuses anything else as inactive).
+    // REAL district admins, opened through the same `impersonateUser` path as
+    // User Accounts "Sign in as". Only accounts that action would accept: live
+    // and active (it refuses anything else as inactive). The demo district
+    // admin is left out: it has its own persona button above.
     prisma.user.findMany({
-      where: { role: "DISTRICT_ADMIN", deletedAt: null, isActive: true },
+      where: {
+        role: "DISTRICT_ADMIN",
+        deletedAt: null,
+        isActive: true,
+        email: { not: testLabPersonaEmail("district") },
+      },
       orderBy: { username: "asc" },
       select: {
         id: true,

@@ -31,6 +31,12 @@ export function teacherSyntheticEmail(username: string): string {
   return `${safe}@${TEACHER_EMAIL_DOMAIN}`;
 }
 
+/** An admin account with no mailbox: `<username>@<DOMAIN>`. */
+export function adminSyntheticEmail(username: string): string {
+  const safe = username.trim().toLowerCase().replace(/[^a-z0-9.-]/g, "-");
+  return `${safe}@${DOMAIN}`;
+}
+
 export function usernameFromTeacherEmail(email: string): string | null {
   const suffix = `@${TEACHER_EMAIL_DOMAIN}`;
   if (!email.toLowerCase().endsWith(suffix)) return null;
