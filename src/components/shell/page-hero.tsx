@@ -88,7 +88,7 @@ export function PageHero({
       <div
         aria-hidden
         className={cn(
-          "absolute inset-0 -z-10 overflow-hidden rounded-xl bg-gradient-to-br from-violet-50 via-sky-50 to-violet-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 lg:[&>img]:bottom-auto lg:[&>img]:top-[-8.83%] lg:[&>img]:h-[136.04%] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80",
+          "absolute inset-0 -z-10 overflow-hidden rounded-xl bg-gradient-to-br from-aral-50 via-info-50 to-aral-100/60 dark:from-card dark:via-card dark:to-card [&>img]:bottom-0 lg:[&>img]:bottom-auto lg:[&>img]:top-[-8.83%] lg:[&>img]:h-[136.04%] lg:[&>img]:[mask-image:linear-gradient(to_right,transparent,black_22%)] dark:[&>img]:opacity-80",
           phoneMaskClassName
         )}
       >
@@ -114,7 +114,7 @@ export function PageHero({
       </div>
       {topRight ? (
         <div className="absolute right-3 top-3 z-20 sm:right-4 sm:top-4 lg:right-6 lg:top-6">
-          <div className="rounded-lg border border-border/70 bg-card/95 p-1 shadow-card backdrop-blur-sm">
+          <div className="rounded-lg border border-border/70 bg-card/90 p-1 shadow-card backdrop-blur-md">
             {topRight}
           </div>
         </div>

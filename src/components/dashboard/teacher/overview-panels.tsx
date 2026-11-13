@@ -26,7 +26,7 @@ import type { TeacherOverview } from "@/lib/dashboard/teacher-overview";
 type Segment = {
   label: string;
   value: number;
-  /** SVG stroke colour class, e.g. `stroke-emerald-500`. */
+  /** SVG stroke colour class, e.g. `stroke-success-500`. */
   stroke: string;
   dot: string;
   /** Hidden in the phone legend (image 4 drops Excused). */
@@ -124,7 +124,7 @@ function PanelShell({
         <span className="hidden shrink-0 rounded-md border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground 2xl:inline-block">
           {period}
         </span>
-        <ChevronRight aria-hidden className="size-4 shrink-0 text-violet-600 lg:hidden" />
+        <ChevronRight aria-hidden className="size-4 shrink-0 text-aral-600 lg:hidden" />
       </div>
 
       <div className="flex flex-1 flex-col justify-center px-3 pt-4 sm:px-5">{children}</div>
@@ -133,7 +133,7 @@ function PanelShell({
         <PrefetchLink
           href={action.href}
           prefetch
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-violet-100 px-3 py-2.5 text-center text-xs font-medium text-violet-700 transition-colors hover:bg-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm lg:w-auto lg:rounded-full lg:px-4 lg:py-2 dark:bg-violet-900/40 dark:text-violet-200"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-aral-100 px-3 py-2.5 text-center text-xs font-medium text-aral-strong transition-colors hover:bg-aral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm lg:w-auto lg:rounded-full lg:px-4 lg:py-2 dark:bg-aral-900/40"
         >
           {action.label}
           <ArrowRight aria-hidden className="size-4 shrink-0" />
@@ -192,10 +192,10 @@ export function AttendanceOverviewPanel({
   // LITRACK records LATE as its own status, so the ring carries four states.
   // Only recorded marks count: a day nobody marked is not in the total.
   const segments: Segment[] = [
-    { label: "Present", value: a.present, stroke: "stroke-emerald-500", dot: "bg-emerald-500" },
-    { label: "Late", value: a.late, stroke: "stroke-amber-500", dot: "bg-amber-500" },
-    { label: "Absent", value: a.absent, stroke: "stroke-rose-500", dot: "bg-rose-500" },
-    { label: "Excused", value: a.excused, stroke: "stroke-sky-500", dot: "bg-sky-500", desktopOnly: true },
+    { label: "Present", value: a.present, stroke: "stroke-success-500", dot: "bg-success-500" },
+    { label: "Late", value: a.late, stroke: "stroke-warning-500", dot: "bg-warning-500" },
+    { label: "Absent", value: a.absent, stroke: "stroke-danger-500", dot: "bg-danger-500" },
+    { label: "Excused", value: a.excused, stroke: "stroke-info-500", dot: "bg-info-500", desktopOnly: true },
   ];
   const total = segments.reduce((acc, s) => acc + s.value, 0);
 
@@ -205,7 +205,7 @@ export function AttendanceOverviewPanel({
       period="This Week"
       subtitle="Total attendance marks across all learners"
       icon={Users}
-      iconTile="icon-glass text-violet-700 dark:text-violet-200"
+      iconTile="icon-glass text-aral-strong"
       action={{ label: "View weekly attendance", href }}
     >
       <div className="lg:flex lg:flex-col lg:items-center lg:gap-6">
@@ -236,8 +236,8 @@ export function ReadingOverviewPanel({
 }) {
   const r = data.reading;
   const segments: Segment[] = [
-    { label: "Completed", value: r.completed, stroke: "stroke-emerald-500", dot: "bg-emerald-500" },
-    { label: "Pending", value: r.pending, stroke: "stroke-amber-400", dot: "bg-amber-400" },
+    { label: "Completed", value: r.completed, stroke: "stroke-success-500", dot: "bg-success-500" },
+    { label: "Pending", value: r.pending, stroke: "stroke-warning-400", dot: "bg-warning-400" },
   ];
   const total = data.aralLearners;
 
@@ -256,7 +256,7 @@ export function ReadingOverviewPanel({
           total={total}
           rate={r.completionRate}
           caption="Completion rate"
-          track="stroke-amber-100 dark:stroke-amber-950/60"
+          track="stroke-warning-100 dark:stroke-warning-950/60"
         />
         <Legend segments={segments} total={total} />
       </div>

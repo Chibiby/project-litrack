@@ -450,7 +450,7 @@ function CollapsibleSectionRow({
         >
           <ChevronDown
             aria-hidden
-            className={cn("size-4 transition-transform duration-200", open && "rotate-180")}
+            className={cn("size-4 transition-transform duration-base", open && "rotate-180")}
           />
         </button>
       </div>

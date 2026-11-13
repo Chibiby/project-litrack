@@ -88,7 +88,7 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="min-w-[12rem] max-lg:basis-full flex-1 space-y-1">
+      <div className="min-w-48 max-lg:basis-full flex-1 space-y-1">
         <SearchInput
           id="audit-search"
           label="Search actor or action"

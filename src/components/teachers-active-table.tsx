@@ -326,7 +326,7 @@ function AdvisoryPicker({
       </Label>
       <select
         id={selectId}
-        className="mt-1.5 h-8 w-full min-w-[12rem] rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 max-lg:h-11"
+        className="mt-1.5 h-8 w-full min-w-48 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 max-lg:h-11"
         value=""
         disabled={disabled || atCap}
         onChange={(e) => {
@@ -406,14 +406,14 @@ function TeacherStatusBadges({ row }: { row: ActiveTeacherRow }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {row.aralLearnerCount > 0 ? (
-        <Badge variant="outline" className="border-violet-200 text-violet-800 dark:text-violet-200">
+        <Badge variant="outline" className="border-aral-200 text-aral-800 dark:text-aral-200">
           {row.aralLearnerCount} ARAL learner{row.aralLearnerCount === 1 ? "" : "s"}
         </Badge>
       ) : null}
       {row.profileCompleted ? (
         <Badge variant="secondary">Profiled</Badge>
       ) : (
-        <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-300">
+        <Badge variant="outline" className="border-warning-300 text-warning-800 dark:text-warning-300">
           Awaiting profiling
         </Badge>
       )}
@@ -1059,7 +1059,7 @@ function TeachersManagedTable({
               rowsWithBusy.map(({ row, rowBusy }) => {
                 return (
                 <TableRow key={row.id}>
-                  <TableCell className="max-w-[16rem] font-medium">
+                  <TableCell className="max-w-64 font-medium">
                     <div className="flex min-w-0 items-center gap-2">
                       <UserAvatar
                         name={row.fullName}
@@ -1070,7 +1070,7 @@ function TeachersManagedTable({
                       <CellText>{row.listingName}</CellText>
                     </div>
                   </TableCell>
-                  <TableCell className="max-w-[16rem] text-sm">
+                  <TableCell className="max-w-64 text-sm">
                     <CellText>{row.email}</CellText>
                   </TableCell>
                   <TableCell className="text-sm">
@@ -1125,7 +1125,7 @@ function TeachersManagedTable({
                     {row.aralLearnerCount > 0 ? (
                       <Badge
                         variant="outline"
-                        className="border-violet-200 text-violet-800 dark:text-violet-200"
+                        className="border-aral-200 text-aral-800 dark:text-aral-200"
                       >
                         {row.aralLearnerCount}
                       </Badge>
@@ -1137,7 +1137,7 @@ function TeachersManagedTable({
                     {row.profileCompleted ? (
                       <Badge variant="secondary">Profiled</Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-300">
+                      <Badge variant="outline" className="border-warning-300 text-warning-800 dark:text-warning-300">
                         Awaiting profiling
                       </Badge>
                     )}
@@ -1370,10 +1370,10 @@ export function TeachersRemovedTable({ rows }: { rows: RemovedTeacherRow[] }) {
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="max-w-[16rem] font-medium">
+                    <TableCell className="max-w-64 font-medium">
                       <CellText>{row.fullName}</CellText>
                     </TableCell>
-                    <TableCell className="max-w-[18rem] text-sm">
+                    <TableCell className="max-w-72 text-sm">
                       {row.email ? <CellText>{row.email}</CellText> : <NoValue />}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
@@ -1462,10 +1462,10 @@ export function TeachersDeclinedTable({
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="max-w-[16rem] font-medium">
+                    <TableCell className="max-w-64 font-medium">
                       <CellText>{row.fullName}</CellText>
                     </TableCell>
-                    <TableCell className="max-w-[18rem] text-sm">
+                    <TableCell className="max-w-72 text-sm">
                       <CellText>{row.email}</CellText>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">

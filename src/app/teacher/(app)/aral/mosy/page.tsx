@@ -115,7 +115,7 @@ async function MosyStatusTabs({
           className={cn(
             "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors max-lg:min-h-10",
             s === status
-              ? "border-violet bg-violet-soft text-violet"
+              ? "border-aral bg-aral-soft text-aral"
               : "border-border text-muted-foreground hover:bg-muted"
           )}
         >

@@ -113,7 +113,7 @@ export function ReadingPanel({ learner }: { learner: LearnerProfileData }) {
                         <TableCell className="text-xs">{w.filipino}</TableCell>
                         <TableCell className="text-xs">{w.word}</TableCell>
                         <TableCell className="text-xs">{w.comprehension}</TableCell>
-                        <TableCell className="max-w-[14rem] text-xs text-muted-foreground">
+                        <TableCell className="max-w-56 text-xs text-muted-foreground">
                           {w.notes ? <CellText>{w.notes}</CellText> : <NoValue />}
                         </TableCell>
                       </TableRow>

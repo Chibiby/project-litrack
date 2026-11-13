@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { EASE, MOTION_MS } from "@/lib/ui/motion";
 
 /**
  * One glass pill behind the sidebar's active row. It slides up or down
@@ -40,7 +41,7 @@ export function NavGlassIndicator({
       const listBox = list.getBoundingClientRect();
       const rowBox = row.getBoundingClientRect();
       pill.style.transition = animate
-        ? "transform 380ms cubic-bezier(0.65, 0, 0.35, 1), height 380ms cubic-bezier(0.65, 0, 0.35, 1), opacity 200ms ease-in-out"
+        ? `transform ${MOTION_MS.slow}ms ${EASE.standard}, height ${MOTION_MS.slow}ms ${EASE.standard}, opacity ${MOTION_MS.base}ms ${EASE.standard}`
         : "none";
       pill.style.height = `${rowBox.height}px`;
       pill.style.left = `${rowBox.left - listBox.left}px`;
@@ -95,8 +96,8 @@ export function NavGlassIndicator({
         // white fill, a bright border and a top-edge highlight, so the pill
         // stands out on the frosted rail instead of vanishing into it. Still
         // no accent colour.
-        "border border-white/80 bg-glass/60 shadow-[0_4px_14px_rgb(15_23_42/0.10),inset_0_1px_0_rgb(255_255_255/0.9)] backdrop-blur-md",
-        "dark:border-white/15 dark:bg-glass/[0.12] dark:shadow-[0_4px_14px_rgb(0_0_0/0.35),inset_0_1px_0_rgb(255_255_255/0.08)]",
+        "border border-white/80 bg-glass/60 shadow-indicator backdrop-blur-md",
+        "dark:border-white/15 dark:bg-glass/[0.12]",
         className
       )}
     />

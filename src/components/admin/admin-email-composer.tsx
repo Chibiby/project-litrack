@@ -67,16 +67,16 @@ export function AdminEmailComposer({ recipients, configured }: { recipients: Adm
   return (
     <div className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
       <div className="mb-5 flex items-start gap-3">
-        <span className="flex size-10 items-center justify-center rounded-lg icon-glass text-violet-700 dark:text-violet-200"><Mail className="size-5" /></span>
+        <span className="flex size-10 items-center justify-center rounded-lg icon-glass text-aral-strong"><Mail className="size-5" /></span>
         <div><h2 className="font-semibold">Send email</h2><p className="text-sm text-muted-foreground">Each recipient receives a separate private copy.</p></div>
       </div>
-      {!configured && <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Outbound email is not configured. Add the Resend API key and support sender in deployment settings.</p>}
+      {!configured && <p className="mb-4 rounded-lg border border-warning-300 bg-warning-50 p-3 text-sm text-warning-900 dark:border-warning-800 dark:bg-warning-950/40 dark:text-warning-100">Outbound email is not configured. Add the Resend API key and support sender in deployment settings.</p>}
       <div className="space-y-4">
         <div className="relative">
           <p className="mb-1.5 text-sm font-medium">Recipients</p>
           <SearchInput id="email-recipient-search" label="Search teachers and school heads" value={query} onValueChange={setQuery} placeholder="Search teachers and school heads" />
           {matches.length > 0 && <div className="absolute z-10 mt-1 w-full rounded-lg border bg-background p-1 shadow-lg">{matches.map((person) => <Button key={person.id} type="button" variant="ghost" className="h-auto w-full justify-start py-2 text-left" onClick={() => add(person.email, person.name)}>{person.name} · {person.role} · {person.schoolName}</Button>)}</div>}
-          <div className="mt-2 flex flex-wrap gap-2">{[...selected].map(([email, label]) => <span key={email} className="inline-flex items-center gap-1 rounded-full bg-violet-soft py-1 pl-3 pr-1 text-xs text-violet-soft-foreground">{label}<Button type="button" variant="ghost" size="icon" className="size-5 rounded-full" aria-label={`Remove ${email}`} onClick={() => setSelected((current) => { const next = new Map(current); next.delete(email); return next; })}><X className="size-3" /></Button></span>)}</div>
+          <div className="mt-2 flex flex-wrap gap-2">{[...selected].map(([email, label]) => <span key={email} className="inline-flex items-center gap-1 rounded-full bg-aral-soft py-1 pl-3 pr-1 text-xs text-aral-soft-foreground">{label}<Button type="button" variant="ghost" size="icon" className="size-5 rounded-full" aria-label={`Remove ${email}`} onClick={() => setSelected((current) => { const next = new Map(current); next.delete(email); return next; })}><X className="size-3" /></Button></span>)}</div>
         </div>
         <div><label htmlFor="manual-email" className="mb-1.5 block text-sm font-medium">Add another recipient</label><div className="flex gap-2"><Input id="manual-email" aria-label="New email address" value={manual} onChange={(event) => setManual(event.target.value)} placeholder="name@example.com" /><Button type="button" variant="outline" onClick={() => add(manual)}><Plus className="size-4" />Add address</Button></div></div>
         <div><label htmlFor="email-subject" className="mb-1.5 block text-sm font-medium">Subject</label><Input id="email-subject" value={subject} onChange={(event) => setSubject(event.target.value)} maxLength={160} /></div>

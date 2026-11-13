@@ -54,24 +54,24 @@ const ICONS: Record<ReleaseHighlightIcon, LucideIcon> = {
 /** Card wash and icon chip per tone — the dashboard stat-card families. */
 const TONES: Record<ReleaseHighlightTone, { card: string; chip: string }> = {
   violet: {
-    card: "bg-violet-50/80 dark:bg-violet-950/30",
-    chip: "icon-glass text-violet-700 dark:text-violet-200",
+    card: "bg-aral-50/80 dark:bg-aral-950/30",
+    chip: "icon-glass text-aral-strong",
   },
   emerald: {
-    card: "bg-emerald-50/80 dark:bg-emerald-950/30",
-    chip: "icon-glass text-emerald-700 dark:text-emerald-200",
+    card: "bg-success-50/80 dark:bg-success-950/30",
+    chip: "icon-glass text-success-strong",
   },
   blue: {
     card: "bg-blue-50/80 dark:bg-blue-950/30",
     chip: "icon-glass text-blue-700 dark:text-blue-200",
   },
   amber: {
-    card: "bg-amber-50/80 dark:bg-amber-950/30",
-    chip: "icon-glass text-amber-700 dark:text-amber-200",
+    card: "bg-warning-50/80 dark:bg-warning-950/30",
+    chip: "icon-glass text-warning-strong",
   },
   rose: {
-    card: "bg-rose-50/80 dark:bg-rose-950/30",
-    chip: "icon-glass text-rose-700 dark:text-rose-200",
+    card: "bg-danger-50/80 dark:bg-danger-950/30",
+    chip: "icon-glass text-danger-strong",
   },
   purple: {
     card: "bg-purple-50/80 dark:bg-purple-950/30",
@@ -79,7 +79,7 @@ const TONES: Record<ReleaseHighlightTone, { card: string; chip: string }> = {
   },
 };
 
-const VIOLET_BUTTON = "bg-violet text-violet-foreground hover:bg-violet/90";
+const VIOLET_BUTTON = "bg-aral text-aral-foreground hover:bg-aral/90";
 
 type UiCopy = {
   viewChangelog: string;
@@ -253,7 +253,7 @@ export function ReleaseWelcome({
               <Link
                 href="/releases"
                 onClick={onDismiss}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-violet hover:underline sm:mt-2"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-aral hover:underline sm:mt-2"
               >
                 {ui.viewChangelog}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -290,7 +290,7 @@ export function ReleaseWelcome({
               id={`${baseId}-dont`}
               checked={dontShowAgain}
               onCheckedChange={(v) => onDontShowAgainChange(v === true)}
-              className="data-[state=checked]:border-violet data-[state=checked]:bg-violet data-[state=checked]:text-violet-foreground"
+              className="data-[state=checked]:border-aral data-[state=checked]:bg-aral data-[state=checked]:text-aral-foreground"
             />
             {ui.dontShowAgain}
           </label>
@@ -352,7 +352,7 @@ function LanguageSwitch({
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex rounded-full border border-border bg-card/90 p-0.5 text-xs font-semibold shadow-sm backdrop-blur"
+      className="inline-flex rounded-full border border-border bg-card/90 p-0.5 text-xs font-semibold shadow-sm backdrop-blur-md"
     >
       {options.map((o) => (
         <Button
@@ -365,7 +365,7 @@ function LanguageSwitch({
           className={cn(
             "h-auto min-h-11 rounded-full px-3 lg:min-h-8",
             locale === o.value
-              ? "bg-violet text-violet-foreground hover:bg-violet hover:text-violet-foreground"
+              ? "bg-aral text-aral-foreground hover:bg-aral hover:text-aral-foreground"
               : "text-muted-foreground hover:bg-transparent hover:text-foreground"
           )}
         >
@@ -394,7 +394,7 @@ function WelcomeBanner({
   return (
     <header
       className={cn(
-        "relative isolate overflow-hidden bg-gradient-to-br from-violet-soft via-background to-violet-soft/60 px-4 sm:px-8",
+        "relative isolate overflow-hidden bg-gradient-to-br from-aral-soft via-background to-aral-soft/60 px-4 sm:px-8",
         compact ? "pb-4 pt-5" : "pb-5 pt-6 sm:pb-7 sm:pt-8 [@media(max-height:800px)]:sm:pb-5 [@media(max-height:800px)]:sm:pt-6"
       )}
     >
@@ -424,8 +424,8 @@ function WelcomeBanner({
         <Image src="/logo.webp" alt="ARAL Program logo" width={36} height={48} className="h-11 w-auto shrink-0 sm:h-14" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xl font-extrabold tracking-tight text-violet sm:text-2xl">LITRACK</span>
-            <span className="rounded-full bg-violet px-2.5 py-0.5 text-xs font-semibold text-violet-foreground sm:text-sm">
+            <span className="text-xl font-extrabold tracking-tight text-aral sm:text-2xl">LITRACK</span>
+            <span className="rounded-full bg-aral px-2.5 py-0.5 text-xs font-semibold text-aral-foreground sm:text-sm">
               v{shortVersion}
             </span>
           </div>
@@ -436,7 +436,7 @@ function WelcomeBanner({
       {compact ? (
         <>
           <DialogTitle className="mt-3 flex items-center gap-2 text-lg font-bold tracking-tight text-foreground sm:text-xl">
-            <Sparkles className="h-5 w-5 text-violet" aria-hidden="true" />
+            <Sparkles className="h-5 w-5 text-aral" aria-hidden="true" />
             {ui.quickTour}
           </DialogTitle>
           <DialogDescription className="sr-only">{ui.quickTourDescription}</DialogDescription>
@@ -498,7 +498,7 @@ function GuideStep({
           <li
             key={`${s.title.en}-${i}`}
             aria-current={i === index ? "step" : undefined}
-            className={cn("h-1.5 rounded-full transition-all", i === index ? "w-6 bg-violet" : "w-1.5 bg-border")}
+            className={cn("h-1.5 rounded-full transition-[width,background-color] duration-base", i === index ? "w-6 bg-aral" : "w-1.5 bg-border")}
           >
             <span className="sr-only">
               {ui.step(i + 1, steps.length)}: {s.title[locale]}

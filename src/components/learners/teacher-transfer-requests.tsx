@@ -54,7 +54,7 @@ export function CancelTransferRequestConfirm({
 }
 
 const STATUS_STYLE: Record<TeacherTransferRequestRow["status"], { icon: typeof Clock; className: string }> = {
-  PENDING: { icon: Clock, className: "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200" },
+  PENDING: { icon: Clock, className: "bg-warning-100 text-warning-900 dark:bg-warning-900/30 dark:text-warning-200" },
   APPROVED: { icon: CheckCircle2, className: "bg-primary/10 text-primary" },
   REJECTED: { icon: XCircle, className: "bg-destructive/10 text-destructive" },
   CANCELLED: { icon: Undo2, className: "bg-muted text-muted-foreground" },

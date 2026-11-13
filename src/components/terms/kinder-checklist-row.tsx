@@ -154,7 +154,7 @@ export function KinderChecklistRow({
   return (
     <TableRow>
       <TableCell numeric className="w-10 text-muted-foreground">{rowNumber}</TableCell>
-      <TableCell className="min-w-[16rem] text-sm">{competencyText}</TableCell>
+      <TableCell className="min-w-64 text-sm">{competencyText}</TableCell>
       {TERM_ORDER.map((term) => (
         <TableCell key={term} className="w-32">
           <TermRatingSelect
@@ -165,7 +165,7 @@ export function KinderChecklistRow({
           />
         </TableCell>
       ))}
-      <TableCell className="min-w-[10rem]">
+      <TableCell className="min-w-40">
         <Input
           value={state.remark ?? ""}
           onChange={(e) => onRemarkChange(competencyKey, e.target.value)}

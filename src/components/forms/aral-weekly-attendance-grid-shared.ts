@@ -14,23 +14,23 @@ export const CELL_LETTER: Record<CellStatus, string> = {
 export const CELL_TONE: Record<CellStatus, string> = {
   "": "border-input bg-background text-muted-foreground",
   PRESENT:
-    "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
+    "border-success-300 bg-success-50 text-success-700 dark:border-success-900 dark:bg-success-950 dark:text-success-300",
   ABSENT:
     "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
   EXCUSED:
-    "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
+    "border-warning-300 bg-warning-50 text-warning-700 dark:border-warning-900 dark:bg-warning-950 dark:text-warning-300",
   // Legacy only: nothing in the app writes LATE any more, but a stored row must
   // still read back correctly rather than silently displaying as No Class.
-  LATE: "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300",
+  LATE: "border-info-300 bg-info-50 text-info-700 dark:border-info-900 dark:bg-info-950 dark:text-info-300",
 };
 
 /** The dot beside each option in the picker. */
 export const CELL_DOT: Record<CellStatus, string> = {
   "": "bg-muted-foreground/40 text-white",
-  PRESENT: "bg-emerald-500 text-white",
+  PRESENT: "bg-success-500 text-white",
   ABSENT: "bg-red-500 text-white",
-  EXCUSED: "bg-amber-500 text-white",
-  LATE: "bg-sky-500 text-white",
+  EXCUSED: "bg-warning-500 text-white",
+  LATE: "bg-info-500 text-white",
 };
 
 /** The statuses a teacher can pick. LATE is deliberately absent. */

@@ -177,7 +177,7 @@ export function FormProgressBar({
         className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
       >
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300 motion-reduce:transition-none"
+          className="h-full rounded-full bg-primary transition-[width] duration-base motion-reduce:transition-none"
           style={{ width: `${percent}%` }}
         />
       </div>

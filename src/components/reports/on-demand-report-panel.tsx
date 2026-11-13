@@ -113,7 +113,7 @@ export function OnDemandReportPanel({
           />
         </div>
       ) : (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border bg-card/50 p-8 print:hidden">
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border bg-card/55 p-8 print:hidden">
           <p className="text-sm text-muted-foreground">
             Printable summary is loaded on demand so this page stays light. Use
             Download Excel anytime, or load the summary before Print / Save PDF.

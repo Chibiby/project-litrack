@@ -184,7 +184,7 @@ export function UnlockGrantAlerts() {
         <DialogHeader>
           <span
             aria-hidden
-            className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-violet-soft text-violet-soft-foreground"
+            className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-aral-soft text-aral-soft-foreground"
           >
             <LockOpen className="h-4 w-4" />
           </span>

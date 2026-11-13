@@ -109,14 +109,14 @@ function StatusCell({ row }: { row: AccountRow }) {
         variant="outline"
         className={
           row.isActive
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+            ? "border-success-200 bg-success-50 text-success-700 dark:border-success-800 dark:bg-success-950/30 dark:text-success-300"
             : "border-border bg-muted text-muted-foreground"
         }
       >
         <span
           className={
             row.isActive
-              ? "mr-1 size-1.5 rounded-full bg-emerald-500"
+              ? "mr-1 size-1.5 rounded-full bg-success-500"
               : "mr-1 size-1.5 rounded-full bg-muted-foreground"
           }
         />
@@ -125,7 +125,7 @@ function StatusCell({ row }: { row: AccountRow }) {
       {row.approvalStatus === "PENDING" ? (
         <Badge
           variant="outline"
-          className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+          className="border-warning-200 bg-warning-50 text-warning-800 dark:border-warning-800 dark:bg-warning-950/30 dark:text-warning-300"
         >
           Pending
         </Badge>
@@ -270,7 +270,7 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell className="max-w-[18rem] pl-4">
+                        <TableCell className="max-w-72 pl-4">
                           <div className="flex min-w-0 items-center gap-2">
                             <UserAvatar
                               name={row.fullName}
@@ -282,7 +282,7 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
                           </div>
                         </TableCell>
                         {place === "school" ? (
-                          <TableCell className="max-w-[16rem] text-muted-foreground">
+                          <TableCell className="max-w-64 text-muted-foreground">
                             {row.school ? (
                               <div className="flex min-w-0 flex-col">
                                 <CellText>{row.school.name}</CellText>
@@ -293,7 +293,7 @@ function AccountsTableInner({ rows, list, role, basePath, filters }: AccountsTab
                             )}
                           </TableCell>
                         ) : place === "districts" ? (
-                          <TableCell className="max-w-[16rem] text-muted-foreground">
+                          <TableCell className="max-w-64 text-muted-foreground">
                             <CellText>{placeText(row, place)}</CellText>
                           </TableCell>
                         ) : null}

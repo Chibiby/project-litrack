@@ -59,7 +59,7 @@ export function AralToggleButton({
           <Button
             size="sm"
             variant="default"
-            className="bg-violet hover:bg-violet/90"
+            className="bg-aral hover:bg-aral/90"
             loading={pending}
             loadingText="Updating…"
           >

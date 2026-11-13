@@ -16,6 +16,7 @@ import {
   type LearnersSummary,
 } from "@/lib/admin/management";
 import { AdminPage } from "@/components/admin/admin-page";
+import { PageSlide } from "@/components/ui/page-slide";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
 import { Surface, SurfaceHeader, SurfaceBody } from "@/components/ui/surface";
@@ -224,34 +225,36 @@ export default async function AdminLearnersPage({
   const summaryKey = listKey(raw, LEARNERS_SUMMARY_KEYS);
 
   return (
-    <AdminPage
-      title="Learners"
-      role={user.role}
-      userName={user.fullName || user.email}
-      hero={
-        <SchoolHeadHero
-          eyebrow="Management"
-          eyebrowIcon={GraduationCap}
-          title="Learners"
-          subtitle="Every learner in the division. Find a learner, or see how they break down by grade and ARAL."
-        />
-      }
-    >
-      <Suspense key={`cards-${summaryKey}`} fallback={<MetricsGridSkeleton className="mb-0" count={6} />}>
-        <LearnersCards params={params} />
-      </Suspense>
-
-      <Suspense
-        key={listKey(raw, LEARNERS_LIST_KEYS)}
-        fallback={<TableSectionSkeleton rows={10} columns={6} />}
+    <PageSlide side="parent">
+      <AdminPage
+        title="Learners"
+        role={user.role}
+        userName={user.fullName || user.email}
+        hero={
+          <SchoolHeadHero
+            eyebrow="Management"
+            eyebrowIcon={GraduationCap}
+            title="Learners"
+            subtitle="Every learner in the division. Find a learner, or see how they break down by grade and ARAL."
+          />
+        }
       >
-        <LearnersDirectoryBody params={params} />
-      </Suspense>
+        <Suspense key={`cards-${summaryKey}`} fallback={<MetricsGridSkeleton className="mb-0" count={6} />}>
+          <LearnersCards params={params} />
+        </Suspense>
 
-      <Suspense key={`breakdowns-${summaryKey}`} fallback={<ListCardSkeleton />}>
-        <LearnersBreakdowns params={params} />
-      </Suspense>
+        <Suspense
+          key={listKey(raw, LEARNERS_LIST_KEYS)}
+          fallback={<TableSectionSkeleton rows={10} columns={6} />}
+        >
+          <LearnersDirectoryBody params={params} />
+        </Suspense>
 
-    </AdminPage>
+        <Suspense key={`breakdowns-${summaryKey}`} fallback={<ListCardSkeleton />}>
+          <LearnersBreakdowns params={params} />
+        </Suspense>
+
+      </AdminPage>
+    </PageSlide>
   );
 }

@@ -306,7 +306,7 @@ export function AralWeeklyAttendancePanel({
       </div>
 
       <section
-        className="mb-4 rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30"
+        className="mb-4 rounded-lg border border-aral-200 bg-aral-50/70 p-4 dark:border-aral-900/60 dark:bg-aral-950/30"
         aria-label="Week status"
       >
         <div
@@ -323,10 +323,10 @@ export function AralWeeklyAttendancePanel({
                 className={cn(
                   "mt-1 size-2.5 shrink-0 rounded-full",
                   picked.granted
-                    ? "bg-violet-500"
+                    ? "bg-aral-500"
                     : picked.locked
                       ? "bg-muted-foreground"
-                      : "bg-emerald-500"
+                      : "bg-success-500"
                 )}
                 aria-hidden
               />
@@ -459,7 +459,7 @@ export function AralWeeklyAttendancePanel({
         <CardContent className="relative p-0">
           <div
             className={cn(
-              "transition-opacity duration-150",
+              "transition-opacity duration-fast",
               loading && "pointer-events-none opacity-60"
             )}
             aria-busy={loading}
@@ -524,12 +524,12 @@ function BannerItem({
 }) {
   return (
     <div className="flex gap-2.5">
-      <span className="text-violet-700 dark:text-violet-200">{icon}</span>
+      <span className="text-aral-strong">{icon}</span>
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-violet-900 dark:text-violet-100 sm:text-sm">
+        <p className="text-xs font-semibold text-aral-900 dark:text-aral-100 sm:text-sm">
           {title}
         </p>
-        <p className="mt-0.5 text-xs leading-snug text-violet-900/75 dark:text-violet-100/75 sm:text-sm sm:leading-relaxed">
+        <p className="mt-0.5 text-xs leading-snug text-aral-900/75 dark:text-aral-100/75 sm:text-sm sm:leading-relaxed">
           {body}
         </p>
       </div>
@@ -547,18 +547,18 @@ function InfoCard({
   body: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30">
+    <div className="flex gap-3 rounded-lg border border-aral-200 bg-aral-50/70 p-4 dark:border-aral-900/60 dark:bg-aral-950/30">
       <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
+        className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-aral-strong"
         aria-hidden
       >
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+        <p className="text-sm font-semibold text-aral-900 dark:text-aral-100">
           {title}
         </p>
-        <p className="mt-0.5 text-sm leading-relaxed text-violet-900/75 dark:text-violet-100/75">
+        <p className="mt-0.5 text-sm leading-relaxed text-aral-900/75 dark:text-aral-100/75">
           {body}
         </p>
       </div>

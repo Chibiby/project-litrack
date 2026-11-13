@@ -225,7 +225,7 @@ export async function AdminLearnerMixSection() {
                   <TableBody>
                     {busiest.map((s) => (
                       <TableRow key={s.schoolId}>
-                        <TableCell className="max-w-[14rem] font-medium">
+                        <TableCell className="max-w-56 font-medium">
                           <CellText>{s.name}</CellText>
                         </TableCell>
                         <TableCell numeric>{s.activeTeachers.toLocaleString()}</TableCell>

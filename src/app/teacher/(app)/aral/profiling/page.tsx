@@ -262,7 +262,7 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
                 className={cn(
                   "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors max-lg:min-h-10",
                   s === status
-                    ? "border-violet bg-violet-soft text-violet"
+                    ? "border-aral bg-aral-soft text-aral"
                     : "border-border text-muted-foreground hover:bg-muted"
                 )}
               >
@@ -297,7 +297,7 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
 
       <Surface as="section" className="mt-4 flex flex-col gap-2 rounded-lg p-4 sm:p-5">
         <div className="flex items-center gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl icon-glass text-violet-700 dark:text-violet-200">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl icon-glass text-aral-strong">
             <BookOpen className="size-4" aria-hidden />
           </span>
           <h2 className="text-sm font-semibold text-foreground sm:text-base">
@@ -309,7 +309,7 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
           interventions for every ARAL learner. Absences are not asked here —
           Weekly Attendance already records them.
         </p>
-        <p className="flex items-center gap-1 text-xs font-medium text-violet-700 dark:text-violet-300">
+        <p className="flex items-center gap-1 text-xs font-medium text-aral-700 dark:text-aral-300">
           Same Learners, Brighter Tomorrows
           <Heart className="size-3 shrink-0 fill-current" aria-hidden />
         </p>

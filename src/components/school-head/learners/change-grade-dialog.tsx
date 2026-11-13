@@ -270,7 +270,7 @@ export function ChangeGradeDialog({
                   })}
                 </select>
                 {gradeId && teachers.length === 0 ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                  <p className="text-xs text-warning-700 dark:text-warning-300">
                     No teacher advises a section in this grade yet. Assign an advisory section on the Teachers page
                     first.
                   </p>

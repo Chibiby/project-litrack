@@ -224,10 +224,10 @@ function NavLink({
         collapsed ? (
           <span
             aria-hidden
-            className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-violet"
+            className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-aral"
           />
         ) : (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 bg-violet text-xs font-medium text-violet-foreground">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 bg-aral text-xs font-medium text-aral-foreground">
             {item.badge}
           </span>
         )
@@ -366,7 +366,7 @@ export function AppSidebar({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="mt-3 h-auto w-full justify-center rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                    className="mt-3 h-auto w-full justify-center rounded-lg border border-warning-200 bg-warning-50 p-2 text-warning-700 hover:bg-warning-100 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-300 dark:hover:bg-warning-900/40"
                     aria-label={`Viewing: ${viewedSchoolName}`}
                   >
                     <Shield className="h-3.5 w-3.5 shrink-0" />
@@ -375,7 +375,7 @@ export function AppSidebar({
                 <TooltipContent side="right">Viewing: {viewedSchoolName}</TooltipContent>
               </Tooltip>
             ) : (
-              <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+              <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-warning-200 bg-warning-50 px-2.5 py-1.5 text-xs text-warning-700 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-300">
                 <Shield className="h-3 w-3 shrink-0" />
                 <span className="truncate">Viewing: {viewedSchoolName}</span>
               </div>
@@ -512,11 +512,11 @@ export function AppSidebar({
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 hidden flex-col py-2 pl-3 lg:flex",
-          transitionsEnabled && "transition-[width] duration-200 ease-out will-change-[width]",
+          transitionsEnabled && "transition-[width] duration-base ease-out will-change-[width]",
           collapsed ? SIDEBAR_WIDTH_CLASS.collapsed : SIDEBAR_WIDTH_CLASS.expanded
         )}
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border glass-panel">
           {renderSidebarContent(undefined, { collapsed })}
         </div>
       </aside>
@@ -539,8 +539,8 @@ export function AppSidebar({
           // Glass that stays readable: the backdrop is a light dim plus a blur
           // (not 80% black, which turned translucent glass a murky grey), and
           // the drawer keeps enough tint for its links to read over any page.
-          overlayClassName="bg-black/30 backdrop-blur-sm dark:bg-black/50"
-          className="w-72 max-w-[85vw] border-r border-white/40 bg-[hsl(var(--surface)/0.8)] p-0 shadow-2xl backdrop-blur-xl backdrop-saturate-150 data-[state=closed]:duration-150 data-[state=open]:duration-200 dark:border-white/10 dark:bg-[hsl(var(--surface)/0.75)]"
+          overlayClassName="bg-black/30 backdrop-blur-md dark:bg-black/50"
+          className="w-72 max-w-[85vw] border-r border-white/40 bg-[hsl(var(--surface)/0.8)] p-0 shadow-2xl backdrop-blur-xl backdrop-saturate-150 data-[state=closed]:duration-fast data-[state=open]:duration-base dark:border-white/10 dark:bg-[hsl(var(--surface)/0.75)]"
           // Start focus on the current page's link rather than the close
           // button, so opening the menu doesn't ring the X in the corner.
           onOpenAutoFocus={(event) => {

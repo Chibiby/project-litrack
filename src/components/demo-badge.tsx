@@ -9,7 +9,7 @@ export function DemoBadge({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300",
+        "rounded-full border border-aral-300 bg-aral-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-aral-700 dark:border-aral-800 dark:bg-aral-950 dark:text-aral-300",
         className
       )}
       title="Training data from a demo school."

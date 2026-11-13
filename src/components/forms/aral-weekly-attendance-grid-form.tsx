@@ -623,7 +623,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
         />
         <span>
           Total Present:{" "}
-          <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+          <span className="font-semibold tabular-nums text-success-700 dark:text-success-400">
             {totals.present}
           </span>
         </span>
@@ -635,13 +635,13 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
         </span>
         <span>
           Total Excused:{" "}
-          <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
+          <span className="font-semibold tabular-nums text-warning-700 dark:text-warning-400">
             {totals.excused}
           </span>
         </span>
         <span>
           Average Attendance:{" "}
-          <span className="font-semibold tabular-nums text-violet-700 dark:text-violet-300">
+          <span className="font-semibold tabular-nums text-aral-700 dark:text-aral-300">
             {averagePercent} %
           </span>
         </span>

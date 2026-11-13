@@ -99,15 +99,15 @@ export function TeacherProfileSummary({
         <SummaryTile
           label="Account Status"
           icon={ShieldCheck}
-          className="bg-emerald-50 dark:bg-emerald-950/30"
-          iconClassName="icon-glass text-emerald-700 dark:text-emerald-200"
+          className="bg-success-50 dark:bg-success-950/30"
+          iconClassName="icon-glass text-success-strong"
         >
           <p className="flex items-center gap-2 text-sm font-bold text-foreground sm:text-base">
             <span
               aria-hidden
               className={cn(
                 "size-2.5 shrink-0 rounded-full",
-                isActive ? "bg-emerald-500" : "bg-muted-foreground"
+                isActive ? "bg-success-500" : "bg-muted-foreground"
               )}
             />
             {isActive ? "Active" : "Inactive"}
@@ -120,8 +120,8 @@ export function TeacherProfileSummary({
         <SummaryTile
           label="School"
           icon={School}
-          className="bg-amber-50 dark:bg-amber-950/30"
-          iconClassName="icon-glass text-amber-700 dark:text-amber-200"
+          className="bg-warning-50 dark:bg-warning-950/30"
+          iconClassName="icon-glass text-warning-strong"
         >
           <p className="break-words text-sm font-bold text-foreground sm:text-base">
             {schoolName ?? "—"}

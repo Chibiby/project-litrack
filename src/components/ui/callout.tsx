@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  *
  * Replaces four hand-rolled amber banners that had drifted to three different
  * radius/border combinations and, more importantly, carried zero `dark:`
- * coverage — `bg-amber-50` renders as a near-white slab against a dark page.
+ * coverage — `bg-warning-50` renders as a near-white slab against a dark page.
  *
  * `warning` and `aral` spell out their dark variants because there is no
  * `--warning` token; that follows the stat card's violet tone rather than
@@ -30,9 +30,9 @@ const calloutVariants = cva(
     variants: {
       variant: {
         warning:
-          "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200",
+          "border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-200",
         info: "border-border/80 bg-muted/40 text-muted-foreground",
-        aral: "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-200",
+        aral: "border-aral-200 bg-aral-50 text-aral-900 dark:border-aral-900/60 dark:bg-aral-950/40 dark:text-aral-200",
       },
     },
     defaultVariants: { variant: "warning" },

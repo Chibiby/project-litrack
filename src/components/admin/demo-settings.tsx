@@ -206,11 +206,11 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
           </p>
 
           {active ? (
-            <div className="space-y-3 rounded-lg border border-violet-300/70 bg-violet-50 p-4 dark:border-violet-800 dark:bg-violet-950/40">
-              <p className="text-sm font-medium text-violet-900 dark:text-violet-100">
+            <div className="space-y-3 rounded-lg border border-aral-300/70 bg-aral-50 p-4 dark:border-aral-800 dark:bg-aral-950/40">
+              <p className="text-sm font-medium text-aral-900 dark:text-aral-100">
                 Demo session active{endsAt ? ` — ends at ${endsAt}` : ""}
               </p>
-              <p className="text-sm text-violet-900/80 dark:text-violet-200/80">
+              <p className="text-sm text-aral-900/80 dark:text-aral-200/80">
                 Signing out of any account in this browser ends it, and so does closing the
                 browser. Until then the demo schools appear on the login page for you.
               </p>
@@ -242,11 +242,11 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
           )}
 
           {!data.any ? (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <p className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-800 dark:bg-warning-950/40 dark:text-warning-200">
               There is no demo data to open a session on yet. Create it below first.
             </p>
           ) : !data.complete ? (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <p className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-800 dark:bg-warning-950/40 dark:text-warning-200">
               Some demo schools are missing. Create the rest below.
             </p>
           ) : null}
@@ -278,7 +278,7 @@ export function DemoSettings({ data }: { data: DemoSettingsData }) {
                         Ready
                       </span>
                     ) : (
-                      <span className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-300">
+                      <span className="shrink-0 text-xs font-medium text-warning-700 dark:text-warning-300">
                         Not created
                       </span>
                     )}

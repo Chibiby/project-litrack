@@ -43,9 +43,9 @@ const HEAD_CLASS =
 const STATUS_CHIP: Record<MosyRowStatus, string> = {
   not_updated: "border-border text-muted-foreground",
   for_decision:
-    "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200",
+    "border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-200",
   moved_out: "border-transparent bg-muted text-foreground",
-  stay: "border-violet-200 bg-violet-soft text-violet dark:border-violet-900/60",
+  stay: "border-aral-200 bg-aral-soft text-aral dark:border-aral-900/60",
 };
 
 function StatusChip({ status }: { status: MosyRowStatus }) {
@@ -190,7 +190,7 @@ export function MosyTable({
                       <TableCell numeric className="text-muted-foreground">
                         {rowNumber(i)}
                       </TableCell>
-                      <TableCell className="max-w-[18rem] font-medium">
+                      <TableCell className="max-w-72 font-medium">
                         <CellText>{r.fullName}</CellText>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
@@ -199,7 +199,7 @@ export function MosyTable({
                       <TableCell>
                         <BosyLevelCell row={r} />
                       </TableCell>
-                      <TableCell className="min-w-[13rem]">
+                      <TableCell className="min-w-52">
                         {r.mosyLevelLabel ? (
                           <span className="text-sm">
                             <LanguageTag language={r.mosyLanguage} />
@@ -212,14 +212,14 @@ export function MosyTable({
                       <TableCell>
                         <StatusChip status={r.status} />
                       </TableCell>
-                      <TableCell className="min-w-[12rem] max-w-[16rem] text-sm">
+                      <TableCell className="min-w-48 max-w-64 text-sm">
                         {r.reasonLabel ? (
                           r.reasonLabel
                         ) : (
                           <NoValue />
                         )}
                       </TableCell>
-                      <TableCell className="min-w-[10rem] max-w-[16rem] text-sm">
+                      <TableCell className="min-w-40 max-w-64 text-sm">
                         {/* Wrapped in full rather than truncated behind a hover
                             title, which keyboard and touch users cannot open.
                             Remarks are capped at MOSY_REMARKS_MAX characters. */}

@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 export interface BarSegment {
   label: string;
   value: number;
-  /** Fill class for the bar slice, e.g. "bg-emerald-500". */
+  /** Fill class for the bar slice, e.g. "bg-success-500". */
   className: string;
   /** Dot class for the legend swatch (usually the same color). */
   dotClassName: string;

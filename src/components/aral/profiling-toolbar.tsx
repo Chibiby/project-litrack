@@ -84,7 +84,7 @@ export function ProfilingToolbar({
         onDebouncedChange={pushSearch}
         label="Search learners by name"
         placeholder="Search learner name…"
-        className="min-w-[12rem] flex-1 sm:max-w-xs"
+        className="min-w-48 flex-1 sm:max-w-xs"
         inputClassName="rounded-md lg:h-9"
       />
 

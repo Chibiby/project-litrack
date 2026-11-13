@@ -413,7 +413,7 @@ export default async function LearnerDetailPage({
                             {GRADE_LEVEL_LABELS[e.gradeLevel.type]}
                           </TableCell>
                           <TableCell>{e.section?.name ?? <NoValue />}</TableCell>
-                          <TableCell className="max-w-[14rem]">
+                          <TableCell className="max-w-56">
                             {e.teacher?.fullName ? <CellText>{e.teacher.fullName}</CellText> : <NoValue />}
                           </TableCell>
                           <TableCell>{ENROLLMENT_STATUS_LABELS[e.status] ?? e.status}</TableCell>
@@ -618,7 +618,7 @@ export default async function LearnerDetailPage({
                           <TableCell>
                             {ATTENDANCE_STATUS_LABELS[a.status]}
                           </TableCell>
-                          <TableCell className="max-w-[20rem] text-xs text-muted-foreground">
+                          <TableCell className="max-w-80 text-xs text-muted-foreground">
                             {a.notes ? <CellText>{a.notes}</CellText> : <NoValue />}
                           </TableCell>
                         </TableRow>
@@ -669,7 +669,7 @@ export default async function LearnerDetailPage({
                           <TableCell className="text-xs">{w.filipino ?? <NoValue />}</TableCell>
                           <TableCell className="text-xs">{w.word ?? <NoValue />}</TableCell>
                           <TableCell className="text-xs">{w.comprehension ?? <NoValue />}</TableCell>
-                          <TableCell className="max-w-[16rem] text-xs text-muted-foreground">
+                          <TableCell className="max-w-64 text-xs text-muted-foreground">
                             {w.notes ? <CellText>{w.notes}</CellText> : <NoValue />}
                           </TableCell>
                         </TableRow>

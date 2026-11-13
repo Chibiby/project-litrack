@@ -235,7 +235,7 @@ function AralTeacherTablePanel({
             onValueChange={setSearchValue}
             onDebouncedChange={searchNow}
             placeholder="Learner name…"
-            className="min-w-[12rem] max-w-sm flex-1"
+            className="min-w-48 max-w-sm flex-1"
           />
           {list.q ? (
             <Button
@@ -288,7 +288,7 @@ function AralTeacherTablePanel({
                 <span className="flex flex-wrap items-center gap-1.5">
                   <Badge
                     variant="outline"
-                    className="border-violet-200 text-violet-800 dark:text-violet-200"
+                    className="border-aral-200 text-aral-800 dark:text-aral-200"
                   >
                     {assigned ? describeTeacher(assigned) : "Assigned"}
                   </Badge>
@@ -333,20 +333,20 @@ function AralTeacherTablePanel({
                       <TableHead>Grade</TableHead>
                       <TableHead>Section</TableHead>
                       <TableHead>Adviser</TableHead>
-                      <TableHead className="min-w-[16rem]">ARAL teacher</TableHead>
+                      <TableHead className="min-w-64">ARAL teacher</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {rowsWithValue.map(({ row, value, assigned }) => (
                       <TableRow key={row.id}>
-                        <TableCell className="max-w-[16rem] font-medium">
+                        <TableCell className="max-w-64 font-medium">
                           <CellText>{row.fullName}</CellText>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm">{row.gradeLabel}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {row.sectionName ?? <NoValue />}
                         </TableCell>
-                        <TableCell className="max-w-[14rem] text-sm text-muted-foreground">
+                        <TableCell className="max-w-56 text-sm text-muted-foreground">
                           {row.adviserName ? <CellText>{row.adviserName}</CellText> : <NoValue />}
                         </TableCell>
                         <TableCell>

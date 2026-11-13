@@ -91,7 +91,7 @@ export function MonthCalendar({
               aria-current={c.isToday ? "date" : undefined}
               className={cn(
                 "mx-auto flex size-7 items-center justify-center rounded-full tabular-nums text-foreground",
-                c.isToday && "bg-violet-600 font-semibold text-white"
+                c.isToday && "bg-aral-600 font-semibold text-white"
               )}
             >
               {c.day}

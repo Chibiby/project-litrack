@@ -213,7 +213,7 @@ function RegenButton({
 function DemoChip() {
   return (
     <span
-      className="shrink-0 rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+      className="shrink-0 rounded-full border border-aral-300 bg-aral-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-aral-700 dark:border-aral-800 dark:bg-aral-950 dark:text-aral-300"
       title="Training data. Hidden from the login page except inside a demo session."
     >
       Demo
@@ -543,13 +543,13 @@ function SchoolsTableInner({
   return (
     <div className="space-y-4">
       {credential ? (
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/40">
+        <Card className="border-warning-200 bg-warning-50 dark:border-warning-900/60 dark:bg-warning-950/40">
           <CardContent className="space-y-3 pt-4">
-            <div className="flex items-start gap-2 text-amber-950 dark:text-amber-100">
+            <div className="flex items-start gap-2 text-warning-950 dark:text-warning-100">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
                 <p className="font-semibold">Password reset to the School ID</p>
-                <p className="text-sm text-amber-900/90 dark:text-amber-100/90">
+                <p className="text-sm text-warning-900/90 dark:text-warning-100/90">
                   The School Head can sign in now with their School ID below, and choose a private
                   password afterwards.
                 </p>

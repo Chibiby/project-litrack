@@ -3,6 +3,7 @@
 import { ChevronRight, GraduationCap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
+import { isPlainClick, markPageSlide } from "@/components/ui/page-slide";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -129,7 +130,7 @@ function ProgramBadges({ row }: { row: LearnerHubRow }) {
       {row.isAral ? (
         <Badge
           variant="outline"
-          className="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300"
+          className="border-aral-200 bg-aral-50 text-aral-700 dark:border-aral-800 dark:bg-aral-950/30 dark:text-aral-300"
         >
           ARAL
         </Badge>
@@ -137,7 +138,7 @@ function ProgramBadges({ row }: { row: LearnerHubRow }) {
       {row.isIp ? (
         <Badge
           variant="outline"
-          className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+          className="border-warning-200 bg-warning-50 text-warning-800 dark:border-warning-800 dark:bg-warning-950/30 dark:text-warning-300"
         >
           IP
         </Badge>
@@ -179,7 +180,16 @@ function LearnersDirectoryInner({
     rowHrefBase ? `${rowHrefBase}/${encodeURIComponent(row.id)}` : undefined;
 
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4"
+      // Any link to a learner (table name, phone row) slides the profile in.
+      onClickCapture={(e) => {
+        const a = (e.target as Element).closest?.("a[href]");
+        if (rowHrefBase && a?.getAttribute("href")?.startsWith(`${rowHrefBase}/`) && isPlainClick(e)) {
+          markPageSlide("forward");
+        }
+      }}
+    >
       <Surface as="section" aria-label="Find learners" className="rounded-lg p-3 sm:p-4">
         <ListFilterBar
           basePath={basePath}
@@ -281,6 +291,7 @@ function LearnersDirectoryInner({
                           hrefFor(row)
                             ? (e) => {
                                 if (isInteractiveTarget(e.target)) return;
+                                markPageSlide("forward");
                                 router.push(hrefFor(row)!);
                               }
                             : undefined
@@ -291,7 +302,7 @@ function LearnersDirectoryInner({
                             <SelectOne row={row} selection={selection} />
                           </TableCell>
                         ) : null}
-                        <TableCell className="max-w-[18rem] pl-4 font-medium">
+                        <TableCell className="max-w-72 pl-4 font-medium">
                           {hrefFor(row) ? (
                             <PrefetchLink
                               href={hrefFor(row)!}
@@ -306,11 +317,11 @@ function LearnersDirectoryInner({
                         </TableCell>
                         <TableCell>{GENDER_LABELS[row.gender]}</TableCell>
                         <TableCell className="whitespace-nowrap">{row.gradeLabel}</TableCell>
-                        <TableCell className="max-w-[10rem]">
+                        <TableCell className="max-w-40">
                           {row.sectionName ? <CellText>{row.sectionName}</CellText> : <NoValue />}
                         </TableCell>
                         {hideSchool ? null : (
-                          <TableCell className="max-w-[16rem] text-muted-foreground">
+                          <TableCell className="max-w-64 text-muted-foreground">
                             <CellText>{row.school.name}</CellText>
                           </TableCell>
                         )}

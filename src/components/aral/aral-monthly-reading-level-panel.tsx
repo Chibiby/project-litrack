@@ -566,7 +566,7 @@ export function AralMonthlyReadingLevelPanel({
                 disabled={busy}
                 loading={savePending}
                 loadingText="Saving…"
-                className="h-11 bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-400 lg:h-9"
+                className="h-11 bg-aral-600 text-white hover:bg-aral-700 dark:bg-aral-500 dark:hover:bg-aral-400 lg:h-9"
               >
                 <Save className="h-4 w-4" aria-hidden />
                 Save reading levels
@@ -579,7 +579,7 @@ export function AralMonthlyReadingLevelPanel({
         <CardContent className="relative p-0">
           <div
             className={cn(
-              "transition-opacity duration-150",
+              "transition-opacity duration-fast",
               loading && "pointer-events-none opacity-60"
             )}
             aria-busy={loading}
@@ -643,7 +643,7 @@ export function AralMonthlyReadingLevelPanel({
           footer={
             <Link
               href="/teacher/reports"
-              className="inline-flex items-center gap-1 font-medium text-violet-800 underline-offset-4 hover:underline dark:text-violet-200"
+              className="inline-flex items-center gap-1 font-medium text-aral-800 underline-offset-4 hover:underline dark:text-aral-200"
             >
               View summary report
               <ArrowUpRight className="size-3.5" aria-hidden />
@@ -730,18 +730,18 @@ function InfoCard({
   footer?: ReactNode;
 }) {
   return (
-    <div className="flex gap-3 rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30">
+    <div className="flex gap-3 rounded-lg border border-aral-200 bg-aral-50/70 p-4 dark:border-aral-900/60 dark:bg-aral-950/30">
       <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
+        className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-aral-strong"
         aria-hidden
       >
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+        <p className="text-sm font-semibold text-aral-900 dark:text-aral-100">
           {title}
         </p>
-        <p className="mt-0.5 text-sm leading-relaxed text-violet-900/75 dark:text-violet-100/75">
+        <p className="mt-0.5 text-sm leading-relaxed text-aral-900/75 dark:text-aral-100/75">
           {body}
         </p>
         {footer != null && <p className="mt-2 text-sm">{footer}</p>}

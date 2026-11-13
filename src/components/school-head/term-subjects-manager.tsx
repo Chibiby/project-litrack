@@ -233,7 +233,7 @@ export function TermSubjectsManager({
               void create().catch(swallow);
             }}
           >
-            <div className="min-w-[10rem] flex-1 space-y-1.5">
+            <div className="min-w-40 flex-1 space-y-1.5">
               <Label htmlFor={`new-subject-${gradeLevelId}`} className="text-xs">
                 Add a subject
               </Label>
@@ -389,7 +389,7 @@ function TermSubjectRow({
           maxLength={60}
           disabled={pending}
           aria-label="Subject name"
-          className="min-w-[10rem] flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-10"
+          className="min-w-40 flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-10"
         />
         <Button type="submit" size="sm" variant="outline" disabled={pending} className="lg:h-9">
           Rename subject

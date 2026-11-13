@@ -80,10 +80,10 @@ export function GreetingHero({
       <h1 className="mt-0.5 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl text-slate-950 dark:text-white lg:text-5xl">
         {firstName}!&nbsp;<span aria-hidden>👋</span>
       </h1>
-      <p className="mt-2 line-clamp-2 max-w-[13rem] text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800 lg:max-xl:max-w-[20rem]">
+      <p className="mt-2 line-clamp-2 max-w-52 text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800 lg:max-xl:max-w-80">
         {subtitle ?? "Here's what's happening with your class today."}
       </p>
-      <blockquote className="mt-4 hidden max-w-lg text-sm italic leading-relaxed lg:max-xl:max-w-[20rem] text-slate-600 dark:text-slate-300 lg:block">
+      <blockquote className="mt-4 hidden max-w-lg text-sm italic leading-relaxed lg:max-xl:max-w-80 text-slate-600 dark:text-slate-300 lg:block">
         &ldquo;{quote.text}&rdquo;
         <footer className="not-italic">— {quote.author}</footer>
       </blockquote>

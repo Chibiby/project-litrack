@@ -66,11 +66,11 @@ export function RouteLoadingOverlay({
           // backdrop blur, so the page background and the glass skeleton show
           // through rather than a white wash. The books sit on their own small
           // pane of the same plain glass as the header.
-          className="pointer-events-none absolute inset-0 z-10 animate-in fade-in backdrop-blur-[3px] duration-300"
+          className="pointer-events-none absolute inset-0 z-10 animate-in fade-in backdrop-blur-md duration-base"
           aria-hidden="true"
         >
           <div className="sticky top-0 flex h-[min(100svh,100%)] min-h-64 items-center justify-center">
-            <div className="rounded-2xl border border-white/40 bg-glass/[0.08] px-6 py-5 shadow-[0_8px_32px_rgb(15_23_42/0.10),inset_0_1px_0_rgb(255_255_255/0.5)] backdrop-blur-lg dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]">
+            <div className="rounded-2xl border border-white/40 bg-glass/[0.08] px-6 py-5 shadow-glass-lit backdrop-blur-md dark:border-white/10 dark:bg-glass/[0.06]">
               <BookLoader decorative />
             </div>
           </div>

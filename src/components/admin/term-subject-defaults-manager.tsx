@@ -239,7 +239,7 @@ export function TermSubjectDefaultsManager({
               void create().catch(swallow);
             }}
           >
-            <div className="min-w-[10rem] flex-1 space-y-1.5">
+            <div className="min-w-40 flex-1 space-y-1.5">
               <Label htmlFor={`new-subject-default-${gradeLevelType}`} className="text-xs">
                 Add a default subject
               </Label>
@@ -395,7 +395,7 @@ function TermSubjectDefaultRow({
           maxLength={60}
           disabled={pending}
           aria-label="Subject name"
-          className="h-11 min-w-[10rem] flex-1 lg:h-8"
+          className="h-11 min-w-40 flex-1 lg:h-8"
         />
         <Button type="submit" size="sm" className="lg:h-9" variant="outline" disabled={pending}>
           Save subject

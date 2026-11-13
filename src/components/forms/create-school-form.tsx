@@ -22,13 +22,13 @@ export function CreateSchoolForm() {
 
   if (initialPassword) {
     return (
-      <Card className="rounded-lg border border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40">
+      <Card className="rounded-lg border border-warning-200 bg-warning-50 shadow-sm dark:border-warning-900/60 dark:bg-warning-950/40">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-start gap-2 text-amber-950 dark:text-amber-100">
+          <div className="flex items-start gap-2 text-warning-950 dark:text-warning-100">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <h2 className="font-semibold">School created</h2>
-              <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
+              <p className="mt-1 text-sm text-warning-900/90 dark:text-warning-100/90">
                 The School Head signs in with this School ID as their password, then chooses
                 their own on first login.
               </p>

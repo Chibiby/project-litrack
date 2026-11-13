@@ -130,7 +130,7 @@ export function MosyToolbar({
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-      <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
+      <div className="relative min-w-48 flex-1 sm:max-w-xs">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden

@@ -51,7 +51,7 @@ export function SchoolHeadReset({
       </p>
 
       {credential ? (
-        <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+        <div className="space-y-3 rounded-lg border border-warning-200 bg-warning-50 p-4 text-warning-950 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-200">
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <p className="text-sm font-medium">The School Head can sign in now with:</p>

@@ -68,12 +68,12 @@ export function AralGradeSelect({
       <SelectTrigger
         aria-label="Grade"
         className={cn(
-          "h-11 gap-2 rounded-md border-violet-300 bg-violet-50 font-semibold text-violet-800 shadow-sm hover:bg-violet-100 focus:ring-violet-400 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-950/60 [&>svg]:text-violet-600 dark:[&>svg]:text-violet-300",
+          "h-11 gap-2 rounded-md border-aral-300 bg-aral-50 font-semibold text-aral-800 shadow-sm hover:bg-aral-100 focus:ring-aral-400 dark:border-aral-800 dark:bg-aral-950/40 dark:text-aral-200 dark:hover:bg-aral-950/60 [&>svg]:text-aral-600 dark:[&>svg]:text-aral-300",
           className
         )}
       >
         <GraduationCap
-          className="size-4 shrink-0 text-violet-600 dark:text-violet-300"
+          className="size-4 shrink-0 text-aral-600 dark:text-aral-300"
           aria-hidden
         />
         <span className="min-w-0 flex-1 truncate text-left">

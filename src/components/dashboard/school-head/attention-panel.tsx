@@ -22,7 +22,7 @@ import type { AttentionItem } from "@/lib/dashboard/school-head-overview";
  */
 
 const BADGE: Record<AttentionItem["tone"], string> = {
-  amber: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+  amber: "bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-200",
   primary: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200",
   muted: "bg-muted text-muted-foreground",
 };
@@ -33,7 +33,7 @@ export function SchoolAttentionPanel({ items }: { items: AttentionItem[] }) {
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-aral-strong"
         >
           <ClipboardCheck className="size-5" />
         </span>
@@ -112,14 +112,14 @@ export function SchoolQuickActionsPanel({
       label: "Post an announcement",
       icon: Megaphone,
       href: announcementsHref,
-      tone: "bg-violet-50 text-violet-700 hover:bg-violet-100 dark:bg-violet-950/40 dark:text-violet-200",
+      tone: "bg-aral-50 text-aral-strong hover:bg-aral-100 dark:bg-aral-950/40",
     },
     {
       id: "transfer",
       label: "Transfer learners",
       icon: ArrowRightLeft,
       href: transferHref,
-      tone: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200",
+      tone: "bg-success-50 text-success-strong hover:bg-success-100 dark:bg-success-950/40",
     },
     {
       id: "teachers",
@@ -133,7 +133,7 @@ export function SchoolQuickActionsPanel({
       label: "Generate a report",
       icon: FileBarChart,
       href: reportsHref,
-      tone: "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200",
+      tone: "bg-warning-50 text-warning-strong hover:bg-warning-100 dark:bg-warning-950/40",
     },
   ];
 
@@ -142,7 +142,7 @@ export function SchoolQuickActionsPanel({
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
         <span
           aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
+          className="flex size-10 shrink-0 items-center justify-center rounded-md icon-glass text-aral-strong"
         >
           <Zap className="size-5" />
         </span>

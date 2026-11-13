@@ -31,7 +31,7 @@ import {
 type Segment = {
   label: string;
   value: number;
-  /** SVG stroke colour class, e.g. `stroke-emerald-500`. */
+  /** SVG stroke colour class, e.g. `stroke-success-500`. */
   stroke: string;
   dot: string;
   /** Hidden in the phone legend. */
@@ -131,7 +131,7 @@ function PanelShell({
         <span className="hidden shrink-0 rounded-md border border-border/80 px-3 py-1.5 text-xs font-medium text-foreground lg:inline-block">
           {period}
         </span>
-        <ChevronRight aria-hidden className="size-4 shrink-0 text-violet-600 lg:hidden" />
+        <ChevronRight aria-hidden className="size-4 shrink-0 text-aral-600 lg:hidden" />
       </div>
 
       <div className="flex flex-1 flex-col justify-center px-3 pt-4 sm:px-5">{children}</div>
@@ -140,7 +140,7 @@ function PanelShell({
         <PrefetchLink
           href={action.href}
           prefetch
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-violet-100 px-3 py-2.5 text-center text-xs font-medium text-violet-700 transition-colors hover:bg-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm lg:w-auto lg:rounded-full lg:px-4 lg:py-2 dark:bg-violet-900/40 dark:text-violet-200"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-aral-100 px-3 py-2.5 text-center text-xs font-medium text-aral-strong transition-colors hover:bg-aral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm lg:w-auto lg:rounded-full lg:px-4 lg:py-2 dark:bg-aral-900/40"
         >
           {action.label}
           <ArrowRight aria-hidden className="size-4 shrink-0" />
@@ -191,7 +191,7 @@ export function AralCoveragePanel({
   href: string;
 }) {
   const segments: Segment[] = [
-    { label: "In ARAL", value: aralCount, stroke: "stroke-emerald-500", dot: "bg-emerald-500" },
+    { label: "In ARAL", value: aralCount, stroke: "stroke-success-500", dot: "bg-success-500" },
     {
       label: "Not enrolled",
       value: Math.max(learnerCount - aralCount, 0),
@@ -207,7 +207,7 @@ export function AralCoveragePanel({
       period="This school year"
       subtitle="Learners currently in the ARAL program"
       icon={Sparkles}
-      iconTile="icon-glass text-violet-700 dark:text-violet-200"
+      iconTile="icon-glass text-aral-strong"
       action={{ label: "Designate ARAL teachers", href }}
     >
       <div className="lg:flex lg:items-center lg:gap-6">
@@ -216,7 +216,7 @@ export function AralCoveragePanel({
           total={learnerCount}
           rateLabel={`${rate}%`}
           caption="ARAL coverage"
-          track="stroke-violet-100 dark:stroke-violet-950/60"
+          track="stroke-aral-100 dark:stroke-aral-950/60"
         />
         <Legend segments={segments} total={learnerCount} />
       </div>
@@ -241,7 +241,7 @@ export function IpCoveragePanel({
   href: string;
 }) {
   const segments: Segment[] = [
-    { label: "IP", value: ipLearners, stroke: "stroke-amber-500", dot: "bg-amber-500" },
+    { label: "IP", value: ipLearners, stroke: "stroke-warning-500", dot: "bg-warning-500" },
     {
       label: "Non-IP",
       value: Math.max(totalLearners - ipLearners, 0),
@@ -265,7 +265,7 @@ export function IpCoveragePanel({
           total={totalLearners}
           rateLabel={ipPercent}
           caption="of enrolled"
-          track="stroke-amber-100 dark:stroke-amber-950/60"
+          track="stroke-warning-100 dark:stroke-warning-950/60"
         />
         <Legend segments={segments} total={totalLearners} />
       </div>
@@ -307,10 +307,10 @@ export function SchoolAttendancePanel({
   className?: string;
 }) {
   const segments: Segment[] = [
-    { label: "Present", value: mix.present, stroke: "stroke-emerald-500", dot: "bg-emerald-500" },
-    { label: "Late", value: mix.late, stroke: "stroke-amber-500", dot: "bg-amber-500" },
-    { label: "Absent", value: mix.absent, stroke: "stroke-rose-500", dot: "bg-rose-500" },
-    { label: "Excused", value: mix.excused, stroke: "stroke-sky-500", dot: "bg-sky-500", desktopOnly: true },
+    { label: "Present", value: mix.present, stroke: "stroke-success-500", dot: "bg-success-500" },
+    { label: "Late", value: mix.late, stroke: "stroke-warning-500", dot: "bg-warning-500" },
+    { label: "Absent", value: mix.absent, stroke: "stroke-danger-500", dot: "bg-danger-500" },
+    { label: "Excused", value: mix.excused, stroke: "stroke-info-500", dot: "bg-info-500", desktopOnly: true },
   ];
   const rate = percentOf(mix.present, mix.denominator);
 
@@ -320,7 +320,7 @@ export function SchoolAttendancePanel({
       period="This week"
       subtitle="ARAL attendance marks across every section"
       icon={CalendarCheck}
-      iconTile="icon-glass text-violet-700 dark:text-violet-200"
+      iconTile="icon-glass text-aral-strong"
       action={{ label: "View ARAL program", href }}
       className={className}
     >

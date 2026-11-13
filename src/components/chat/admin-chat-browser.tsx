@@ -195,7 +195,7 @@ export function AdminChatBrowser({
                   className={cn(
                     "h-11 whitespace-nowrap rounded-full px-3 text-xs font-medium lg:h-7",
                     filter === value
-                      ? "bg-violet-soft text-violet-soft-foreground hover:bg-violet-soft"
+                      ? "bg-aral-soft text-aral-soft-foreground hover:bg-aral-soft"
                       : "bg-muted text-muted-foreground hover:bg-accent"
                   )}
                 >
@@ -243,7 +243,7 @@ export function AdminChatBrowser({
                 >
                   <ChevronLeft className="size-5" aria-hidden />
                 </Button>
-                <span className="flex size-10 items-center justify-center rounded-full bg-violet-soft text-violet-soft-foreground">
+                <span className="flex size-10 items-center justify-center rounded-full bg-aral-soft text-aral-soft-foreground">
                   {selected.kind === "SCHOOL" ? <Users className="size-5" aria-hidden /> : <Bell className="size-5" aria-hidden />}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -305,7 +305,7 @@ export function AdminChatBrowser({
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-              <span className="flex size-14 items-center justify-center rounded-full bg-violet-soft text-violet">
+              <span className="flex size-14 items-center justify-center rounded-full bg-aral-soft text-aral">
                 <MessageCircle className="size-6" aria-hidden />
               </span>
               <p className="font-medium">Select a conversation</p>
@@ -334,7 +334,7 @@ function ConversationButton({
       onClick={onClick}
       className={cn(
         "h-auto w-full justify-start gap-3 rounded-lg px-3 py-2.5 text-left",
-        active ? "bg-violet-soft hover:bg-violet-soft" : "hover:bg-accent"
+        active ? "bg-aral-soft hover:bg-aral-soft" : "hover:bg-accent"
       )}
     >
       <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">

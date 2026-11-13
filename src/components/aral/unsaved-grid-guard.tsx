@@ -206,7 +206,7 @@ export function UnsavedChangesBadge({
       {dirty ? (
         <Badge
           variant="outline"
-          className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          className="border-warning-300 bg-warning-50 text-warning-900 dark:border-warning-800 dark:bg-warning-950/40 dark:text-warning-200"
         >
           Unsaved changes
         </Badge>

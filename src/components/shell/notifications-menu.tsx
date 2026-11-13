@@ -21,8 +21,8 @@ export interface ShellNotification {
 }
 
 const toneDot: Record<ShellNotification["tone"], string> = {
-  violet: "bg-violet",
-  amber: "bg-amber-500",
+  violet: "bg-aral",
+  amber: "bg-warning-500",
   muted: "bg-muted-foreground/50",
 };
 
@@ -96,7 +96,7 @@ export function NotificationsMenu({
         >
           <Bell className="h-5 w-5" aria-hidden />
           {count > 0 ? (
-            <span className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-violet px-1 text-xs font-semibold text-violet-foreground">
+            <span className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-aral px-1 text-xs font-semibold text-aral-foreground">
               {count > 9 ? "9+" : count}
             </span>
           ) : null}

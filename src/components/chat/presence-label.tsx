@@ -20,7 +20,7 @@ export function PresenceLabel({ lastOnlineAt }: { lastOnlineAt: Date | null }) {
       <span
         className={cn(
           "size-1.5 rounded-full",
-          status.online ? "bg-emerald-500" : "bg-muted-foreground/45"
+          status.online ? "bg-success-500" : "bg-muted-foreground/45"
         )}
         aria-hidden
       />

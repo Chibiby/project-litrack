@@ -64,9 +64,9 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
           "w-full caption-bottom text-sm",
           DENSITY[density],
           stickyHeader &&
-            "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-20 [&_thead_th]:bg-card [&_thead_th]:shadow-[inset_0_-1px_0_hsl(var(--border))]",
+            "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-20 [&_thead_th]:bg-card [&_thead_th]:shadow-rule-b",
           stickyFirstColumn &&
-            "[&_tr>*:first-child]:sticky [&_tr>*:first-child]:left-0 [&_tr>*:first-child]:z-10 [&_tr>*:first-child]:bg-card [&_tr>*:first-child]:shadow-[inset_-1px_0_0_hsl(var(--border))] [&_thead_tr>*:first-child]:z-30",
+            "[&_tr>*:first-child]:sticky [&_tr>*:first-child]:left-0 [&_tr>*:first-child]:z-10 [&_tr>*:first-child]:bg-card [&_tr>*:first-child]:shadow-rule-r [&_thead_tr>*:first-child]:z-30",
           className
         )}
         {...props}
@@ -189,7 +189,7 @@ function RowActions({ children, className }: { children: React.ReactNode; classN
   return (
     <div
       className={cn(
-        "flex items-center justify-end gap-1 transition-opacity duration-150",
+        "flex items-center justify-end gap-1 transition-opacity duration-fast",
         "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/row:opacity-100 [@media(hover:hover)]:group-focus-within/row:opacity-100 [@media(hover:hover)]:has-[[data-state=open]]:opacity-100",
         className
       )}

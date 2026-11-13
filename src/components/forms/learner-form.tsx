@@ -737,7 +737,7 @@ export function LearnerForm({
           <div>
             <p className="mb-2 text-sm font-medium">Reading Level (English) *</p>
             {englishIsLegacy && englishProfile === "" ? (
-              <p role="status" className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <p role="status" className="mb-2 text-xs font-medium text-warning-700 dark:text-warning-300">
                 {LEGACY_READING_VALUE_MESSAGE}
               </p>
             ) : null}
@@ -766,7 +766,7 @@ export function LearnerForm({
         <div className={includesEnglish ? "border-t border-border/60 pt-4" : undefined}>
           <p className="mb-2 text-sm font-medium">Reading Level (Filipino) *</p>
           {filipinoIsLegacy && filipinoProfile === "" ? (
-            <p role="status" className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+            <p role="status" className="mb-2 text-xs font-medium text-warning-700 dark:text-warning-300">
               {LEGACY_READING_VALUE_MESSAGE}
             </p>
           ) : null}
@@ -929,12 +929,12 @@ export function LearnerForm({
         {duplicatePending && !isEdit && (
           <div
             role="alert"
-            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100"
+            className="rounded-md border border-warning-300 bg-warning-50 px-3 py-2 text-sm text-warning-950 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-100"
           >
             <p className="font-medium">
               A learner with the same name and age already exists in this school.
             </p>
-            <p className="mt-1 text-amber-900/80 dark:text-amber-100/80">
+            <p className="mt-1 text-warning-900/80 dark:text-warning-100/80">
               Review the list before continuing. Click &quot;Create anyway&quot; to
               confirm this is a different learner.
             </p>

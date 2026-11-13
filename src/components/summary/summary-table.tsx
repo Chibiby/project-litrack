@@ -93,7 +93,7 @@ function Cell({
         <span className="mt-0.5 block text-xs italic text-muted-foreground">{gradeLabel}</span>
       ) : null}
       {notes && notes.length > 0 ? (
-        <ul className="ml-auto mt-1 max-w-[14rem] space-y-0.5 text-left text-xs text-foreground/80">
+        <ul className="ml-auto mt-1 max-w-56 space-y-0.5 text-left text-xs text-foreground/80">
           {notes.map((note) => (
             <li key={note}>{note}</li>
           ))}
@@ -125,7 +125,7 @@ function Row({
       <th
         scope="row"
         className={cn(
-          "sticky left-0 z-10 min-w-[10rem] max-w-[16rem] border-b border-r border-border/60 px-3 py-2.5 text-left align-top text-sm font-normal",
+          "sticky left-0 z-10 min-w-40 max-w-64 border-b border-r border-border/60 px-3 py-2.5 text-left align-top text-sm font-normal",
           isTotalOfGrades ? "bg-muted" : "bg-card group-hover/row:bg-muted/60",
           indent && "pl-7"
         )}
@@ -269,7 +269,7 @@ export function SummaryTable({ section, rowHeader = "Group", paging }: SummaryTa
                 sectionId={section.id}
                 column={bucket.id}
                 align="right"
-                className="min-w-[7rem] max-w-[11rem]"
+                className="min-w-[7rem] max-w-44"
               >
                 {bucket.label}
               </HeaderCell>

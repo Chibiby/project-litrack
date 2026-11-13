@@ -204,7 +204,7 @@ export function bandWithLegacyValue(
  * text under the cell, so the flag does not rest on colour alone.
  */
 const TONE_NEEDS_UPDATE =
-  "border-amber-500 bg-amber-100 text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200";
+  "border-warning-500 bg-warning-100 text-warning-900 dark:border-warning-600 dark:bg-warning-950 dark:text-warning-200";
 
 function legacyOptionFor(value: string, gradeType: string): BandOption | null {
   if (!isLegacyReadingValue(value, gradeType)) return null;
@@ -719,13 +719,13 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
         </span>
         <span>
           Completed:{" "}
-          <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+          <span className="font-semibold tabular-nums text-success-600 dark:text-success-400">
             {progress.completed}
           </span>
         </span>
         <span>
           Partial:{" "}
-          <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+          <span className="font-semibold tabular-nums text-warning-600 dark:text-warning-400">
             {progress.partial}
           </span>
         </span>
@@ -939,7 +939,7 @@ export function BandSelect({
     {legacy ? (
       <p
         id={hintId}
-        className="mt-1 text-center text-xs font-medium leading-tight text-amber-800 dark:text-amber-300"
+        className="mt-1 text-center text-xs font-medium leading-tight text-warning-800 dark:text-warning-300"
       >
         Needs update
         <span className="block font-normal">Choose Developing or Transitioning</span>
@@ -984,7 +984,7 @@ function RemarksCell({
           className={cn(
             "mx-auto size-11 lg:size-8",
             filled &&
-              "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+              "border-aral-300 bg-aral-50 text-aral-700 hover:bg-aral-100 dark:border-aral-800 dark:bg-aral-950 dark:text-aral-300"
           )}
         >
           <MessageSquare className="size-4" aria-hidden />

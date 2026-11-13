@@ -5,7 +5,7 @@ import { BandSelect } from "@/components/forms/aral-monthly-reading-level-grid-f
 
 const options = [
   { value: "FRUSTRATION", code: "F", label: "Frustration", tone: "bg-red-50" },
-  { value: "INSTRUCTIONAL", code: "I", label: "Instructional", tone: "bg-amber-50" },
+  { value: "INSTRUCTIONAL", code: "I", label: "Instructional", tone: "bg-warning-50" },
 ];
 
 describe("BandSelect accessibility", () => {

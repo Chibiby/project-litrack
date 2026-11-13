@@ -196,7 +196,7 @@ export function AssistantTicketForm({
                 onChange={(event) => pickWeek(event.target.value)}
                 className="h-11 text-sm lg:h-9"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 {weekKey
                   ? `Week of ${formatWeekRange(weekKey)}.`
                   : "Pick any day in the week you need reopened."}
@@ -264,7 +264,7 @@ export function AssistantTicketForm({
 
       <Button
         type="submit"
-        className="w-full bg-violet text-violet-foreground hover:bg-violet/90"
+        className="w-full bg-aral text-aral-foreground hover:bg-aral/90"
         loading={pending}
         loadingText="Sending"
       >

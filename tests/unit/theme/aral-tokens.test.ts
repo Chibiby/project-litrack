@@ -11,15 +11,16 @@ function block(name: ":root" | ".dark"): string {
   return css.slice(start, css.indexOf("\n  }", start));
 }
 
-describe("violet accent tokens", () => {
+describe("ARAL accent tokens", () => {
   const VARS = [
-    "--violet",
-    "--violet-foreground",
-    "--violet-soft",
-    "--violet-soft-foreground",
+    "--aral",
+    "--aral-foreground",
+    "--aral-soft",
+    "--aral-soft-foreground",
+    "--aral-strong",
   ];
 
-  it("defines every violet var in both themes", () => {
+  it("defines every aral var in both themes", () => {
     for (const name of VARS) {
       expect(block(":root")).toContain(`${name}:`);
       expect(block(".dark")).toContain(`${name}:`);
@@ -27,14 +28,14 @@ describe("violet accent tokens", () => {
   });
 
   it("uses the mock's blue-leaning hue 255, not the old 262", () => {
-    expect(block(":root")).toMatch(/--violet:\s*255 /);
+    expect(block(":root")).toMatch(/--aral:\s*255 /);
     expect(tw).not.toMatch(/hsl\(262 /);
   });
 
-  it("wires the vars into the Tailwind violet color", () => {
-    expect(tw).toContain('DEFAULT: "hsl(var(--violet))"');
-    expect(tw).toContain('soft: "hsl(var(--violet-soft))"');
-    expect(tw).toContain('"soft-foreground": "hsl(var(--violet-soft-foreground))"');
+  it("wires the vars into the Tailwind aral colour", () => {
+    expect(tw).toContain('DEFAULT: "hsl(var(--aral) / <alpha-value>)"');
+    expect(tw).toContain('soft: "hsl(var(--aral-soft) / <alpha-value>)"');
+    expect(tw).toContain('"soft-foreground": "hsl(var(--aral-soft-foreground) / <alpha-value>)"');
   });
 
   it("keeps the numbered scale so existing ARAL utilities still resolve", () => {

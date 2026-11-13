@@ -39,7 +39,7 @@ function SettingsNavCard({ active }: { active: TeacherSettingsSection }) {
                     <span className="flex-1 truncate">{row.label}</span>
                     <span
                       aria-hidden
-                      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       Soon
                     </span>
@@ -109,10 +109,10 @@ export function TeacherSettingsShell({
         phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_68%)]"
         contentClassName="lg:min-h-[15rem]"
       >
-        <h1 className="max-w-[11rem] text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:max-w-none sm:text-3xl lg:text-5xl">
+        <h1 className="max-w-44 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:max-w-none sm:text-3xl lg:text-5xl">
           Profile Settings
         </h1>
-        <p className="mt-2 max-w-[11rem] text-sm leading-snug text-slate-600 dark:text-slate-300 sm:max-w-sm sm:text-base lg:max-w-md lg:text-lg lg:text-slate-800">
+        <p className="mt-2 max-w-44 text-sm leading-snug text-slate-600 dark:text-slate-300 sm:max-w-sm sm:text-base lg:max-w-md lg:text-lg lg:text-slate-800">
           Manage your account, professional information, and security preferences.
         </p>
       </PageHero>

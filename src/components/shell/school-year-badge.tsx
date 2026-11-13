@@ -64,7 +64,7 @@ function ClosedBadge({ gate, isDivisionAdmin }: { gate: HeaderSchoolYearGate; is
         <Button
           type="button"
           variant="outline"
-          className={`${BADGE_CLASS} border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20`}
+          className={`${BADGE_CLASS} border-warning-300 bg-warning-50 text-warning-900 hover:bg-warning-100 dark:border-warning-500/40 dark:bg-warning-500/10 dark:text-warning-200 dark:hover:bg-warning-500/20`}
           aria-label="No active school year. What does this mean?"
         >
           <CalendarX2 className="size-4 sm:size-3.5" aria-hidden />
@@ -76,7 +76,7 @@ function ClosedBadge({ gate, isDivisionAdmin }: { gate: HeaderSchoolYearGate; is
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarX2 className="size-5 text-amber-600 dark:text-amber-400" aria-hidden />
+            <CalendarX2 className="size-5 text-warning-600 dark:text-warning-400" aria-hidden />
             No active school year
           </DialogTitle>
           <DialogDescription>

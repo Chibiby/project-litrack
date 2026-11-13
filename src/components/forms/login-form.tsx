@@ -110,7 +110,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 type NavDir = "forward" | "back" | null;
 
-/** Length of the step slide; keep in step with [animation-duration:…] below. */
+/** Length of the step slide: `duration-slow` below (--motion-slow). */
 const STEP_SLIDE_MS = 420;
 
 /**
@@ -124,9 +124,9 @@ const STEP_SLIDE_MS = 420;
 function stepSlide(dir: NavDir): string {
   if (!dir) return "";
   return cn(
-    // tailwindcss-animate ignores arbitrary duration-[…]/ease-[…] (they only set
-    // transitions), so the animation's own properties are set directly.
-    "animate-in fade-in-50 [animation-duration:420ms] [animation-timing-function:cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none",
+    // tailwindcss-animate reads the named duration-slow / ease-slide tokens for
+    // the animation itself (it ignores arbitrary duration-[…] / ease-[…]).
+    "animate-in fade-in-50 duration-slow ease-slide motion-reduce:animate-none",
     dir === "forward" ? "slide-in-from-right-full" : "slide-in-from-left-full",
   );
 }
@@ -156,9 +156,9 @@ function focusStepField(step: HTMLElement | null) {
  * md (8px), so the corners stay concentric (docs/design-radius.md).
  */
 const ROLE_SWITCH =
-  "grid grid-cols-2 gap-1 rounded-lg border border-white/60 bg-card/25 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]";
+  "grid grid-cols-2 gap-1 rounded-lg border border-white/60 bg-card/45 p-1 shadow-highlight-soft";
 const ROLE_OPTION =
-  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base 2xl:h-12 [&_svg]:size-4 sm:[&_svg]:size-5";
+  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aral-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base 2xl:h-12 [&_svg]:size-4 sm:[&_svg]:size-5";
 const ROLE_PICKED = AUTH_PILL;
 const ROLE_UNPICKED = "text-slate-700 hover:bg-card/45 hover:text-indigo-950";
 
@@ -430,7 +430,7 @@ export function LoginForm({
         <AuthCardHeader title="Sign In" subtitle="Choose your district and school" />
         <div className="mt-4 2xl:mt-5">
           {notice ? (
-            <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 2xl:mb-6">
+            <p className="mb-5 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-center text-sm text-warning-900 2xl:mb-6">
               {notice}
             </p>
           ) : null}

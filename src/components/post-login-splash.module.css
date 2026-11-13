@@ -79,7 +79,7 @@
   transform: translate(-50%, -50%) scale(0.75) translateY(14px);
   opacity: 0;
   animation:
-    pls-pop-in 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards,
+    pls-pop-in 0.6s var(--ease-bounce) forwards,
     pls-breathe 2.6s ease-in-out 0.6s infinite;
 }
 
@@ -111,7 +111,7 @@
      post-login-splash.tsx, >= 1800ms): pop in, then a slow swell that peaks
      as the fade-out starts, so the logo never sits dead-static. */
   animation:
-    pls-reveal-pop 0.58s cubic-bezier(0.2, 1.4, 0.4, 1) 0.06s forwards,
+    pls-reveal-pop 0.58s var(--ease-bounce) 0.06s forwards,
     pls-aral-breathe 2.4s ease-in-out 0.64s infinite;
 }
 
@@ -138,7 +138,7 @@
   box-shadow: 0 2px 4px rgba(18, 50, 85, 0.14);
   transition:
     background 0.4s ease,
-    transform 0.35s cubic-bezier(0.34, 1.4, 0.4, 1);
+    transform 0.35s var(--ease-bounce);
 }
 
 .book::before {

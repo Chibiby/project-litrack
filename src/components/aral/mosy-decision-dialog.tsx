@@ -63,7 +63,7 @@ const TRANSITION_TOAST: Record<MosyTransition, string> = {
 };
 
 const CHOICE_CARD =
-  "flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[[data-state=checked]]:border-violet has-[[data-state=checked]]:bg-violet-soft";
+  "flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[[data-state=checked]]:border-aral has-[[data-state=checked]]:bg-aral-soft";
 
 function MosyDecisionForm({
   state,
@@ -270,7 +270,7 @@ function MosyDecisionForm({
                     <RadioGroupItem
                       id={`mosy-decision-${value}`}
                       value={value}
-                      className="mt-0.5 shrink-0 border-violet text-violet"
+                      className="mt-0.5 shrink-0 border-aral text-aral"
                     />
                     <span className="min-w-0 space-y-0.5">
                       <span className="block text-sm font-medium text-foreground">

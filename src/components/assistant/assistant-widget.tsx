@@ -135,7 +135,7 @@ export function AssistantWidget({ role, userName, aiEnabled, userId }: Props) {
           onFocus={loadPanel}
           aria-expanded={open}
           aria-label={open ? "Minimize the LITRACK Assistant" : "Open the LITRACK Assistant"}
-          className="relative size-14 rounded-full bg-violet text-violet-foreground shadow-lg outline-none transition-transform hover:scale-105 hover:bg-violet focus-visible:ring-offset-background active:scale-95"
+          className="relative size-14 rounded-full bg-aral text-aral-foreground shadow-lg outline-none transition-transform hover:scale-105 hover:bg-aral focus-visible:ring-offset-background active:scale-95"
         >
           <Bot className="size-6" aria-hidden />
           <Sparkles className="absolute right-3 top-3 size-3" aria-hidden />
@@ -147,7 +147,7 @@ export function AssistantWidget({ role, userName, aiEnabled, userId }: Props) {
           type="button"
           onClick={show}
           aria-label="Show the LITRACK Assistant"
-          className="fixed bottom-4 right-0 z-40 h-12 w-8 rounded-l-full bg-violet p-0 text-violet-foreground shadow-lg hover:bg-violet/90 md:hidden print:hidden"
+          className="fixed bottom-4 right-0 z-40 h-12 w-8 rounded-l-full bg-aral p-0 text-aral-foreground shadow-lg hover:bg-aral/90 md:hidden print:hidden"
         >
           <ChevronLeft className="size-5" aria-hidden />
         </Button>

@@ -41,8 +41,8 @@ const SCHOOL_SELECT = {
 
 const TILE = {
   primary: "icon-glass text-blue-700 dark:text-blue-200",
-  emerald: "icon-glass text-emerald-700 dark:text-emerald-200",
-  amber: "icon-glass text-amber-700 dark:text-amber-200",
+  emerald: "icon-glass text-success-strong",
+  amber: "icon-glass text-warning-strong",
   neutral: "icon-glass text-muted-foreground",
 } as const;
 

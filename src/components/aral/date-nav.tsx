@@ -131,7 +131,7 @@ export function AralDateNav({
           // it holds a width the longest label fits, so the box does not resize
           // as the teacher moves between periods.
           "h-11 w-full gap-2 bg-background text-sm font-medium sm:w-auto xl:h-9",
-          snapToMonth ? "sm:min-w-[13rem]" : "sm:min-w-[21rem]"
+          snapToMonth ? "sm:min-w-52" : "sm:min-w-[21rem]"
         )}
       >
         <SelectValue />

@@ -32,7 +32,7 @@ export function PageTip({
             variant="outline"
             size="icon"
             className={cn(
-              "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40",
+              "border-warning-300 text-warning-700 hover:bg-warning-50 dark:border-warning-800 dark:text-warning-300 dark:hover:bg-warning-950/40",
               className
             )}
             aria-label={`Show tip: ${title}`}
@@ -52,20 +52,20 @@ export function PageTip({
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100",
+        "flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-950 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-100",
         className
       )}
     >
       <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="font-semibold">{title}</p>
-        <div className="mt-1 text-amber-900/90 dark:text-amber-100/90">{children}</div>
+        <div className="mt-1 text-warning-900/90 dark:text-warning-100/90">{children}</div>
       </div>
       <Button
         type="button"
         variant="ghost"
         size="icon"
-        className="-mr-2 -mt-2 shrink-0 text-amber-800 hover:bg-amber-100 hover:text-amber-950 dark:text-amber-100 dark:hover:bg-amber-900/60"
+        className="-mr-2 -mt-2 shrink-0 text-warning-800 hover:bg-warning-100 hover:text-warning-950 dark:text-warning-100 dark:hover:bg-warning-900/60"
         aria-label="Hide tip"
         title="Hide tip"
         onClick={() => setExpanded(false)}

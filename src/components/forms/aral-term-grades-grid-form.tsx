@@ -50,7 +50,7 @@ const PASSING_SCORE = 75;
 
 /** Borrowed from the reading-level grid's ramp so the ARAL grids read as one system. */
 const TONE_FAILING =
-  "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300";
+  "border-danger-300 bg-danger-50 text-danger-700 dark:border-danger-900 dark:bg-danger-950 dark:text-danger-300";
 
 export type TermKey = "FIRST" | "SECOND" | "THIRD";
 
@@ -487,7 +487,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
     }
 
     const heading = groupLabel ? (
-      <p className="border-b border-border/60 bg-violet-50/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+      <p className="border-b border-border/60 bg-aral-50/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-aral-700 dark:bg-aral-950/30 dark:text-aral-300">
         {groupLabel}
       </p>
     ) : null;
@@ -515,7 +515,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                 <TableHead rowSpan={2} className="w-12 text-center">
                   #
                 </TableHead>
-                <TableHead rowSpan={2} className="sticky left-0 z-20 min-w-[12rem] bg-card">
+                <TableHead rowSpan={2} className="sticky left-0 z-20 min-w-48 bg-card">
                   Complete Name
                 </TableHead>
                 <TableHead rowSpan={2} className="min-w-[7rem]">
@@ -536,7 +536,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                   <TableHead
                     rowSpan={2}
                     scope="col"
-                    className="w-28 border-l border-border/60 bg-violet-50/70 text-center text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
+                    className="w-28 border-l border-border/60 bg-aral-50/70 text-center text-aral-700 dark:bg-aral-950/30 dark:text-aral-300"
                   >
                     <span className="block">General</span>
                     <span className="block">Average</span>
@@ -580,7 +580,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                       </TableCell>
                     ))}
                     {showGeneralAverage && (
-                      <TableCell className="border-l border-border/60 bg-violet-50/70 text-center text-base font-bold tabular-nums text-violet-700 dark:bg-violet-950/30 dark:text-violet-300">
+                      <TableCell className="border-l border-border/60 bg-aral-50/70 text-center text-base font-bold tabular-nums text-aral-700 dark:bg-aral-950/30 dark:text-aral-300">
                         {average === null ? "—" : average.toFixed(2)}
                       </TableCell>
                     )}
@@ -623,7 +623,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                   {phoneSubjects.map((subject, subjectIndex) => {
                     const abbreviation = (
                       <span
-                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-tighter text-muted-foreground"
+                        className="whitespace-nowrap text-2xs font-medium uppercase tracking-tighter text-muted-foreground"
                         aria-hidden
                       >
                         {subjectAbbreviation(subject.name)}
@@ -632,7 +632,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
                     const control = scoreInput(
                       learner,
                       subject,
-                      "h-11 w-full min-w-0 px-0 text-[13px] sm:text-sm lg:h-9",
+                      "h-11 w-full min-w-0 px-0 text-caption sm:text-sm lg:h-9",
                       { row: index, col: subjectIndex, cols: phoneSubjects.length },
                       "—"
                     );

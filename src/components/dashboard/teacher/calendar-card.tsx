@@ -31,7 +31,7 @@ export function CalendarCard({
     <Surface
       as="section"
       aria-label="Calendar"
-      className="overflow-hidden rounded-2xl border-white/50 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
+      className="overflow-hidden rounded-2xl glass-panel"
     >
       <svg
         viewBox="0 0 280 64"
@@ -51,7 +51,7 @@ export function CalendarCard({
         <path d="M0 64 L0 52 Q64 36 124 50 T280 44 L280 64 Z" fill="#818cf8" opacity=".55" />
       </svg>
       <div className="px-4 pb-4 pt-3">
-        <p className="border-l-2 border-violet-500 pl-2 text-sm font-semibold text-foreground">
+        <p className="border-l-2 border-aral-500 pl-2 text-sm font-semibold text-foreground">
           {dateLabel}
         </p>
         <MonthCalendar todayKey={todayKey} className="mt-3" />

@@ -345,7 +345,7 @@ export function TermsReportPanel({
       onClick={handleSave}
       loading={savePending}
       loadingText="Saving…"
-      className="h-11 shrink-0 rounded-md bg-violet-600 px-4 text-white hover:bg-violet-700 lg:h-10 xl:h-11 xl:px-5 dark:bg-violet-500 dark:hover:bg-violet-400"
+      className="h-11 shrink-0 rounded-md bg-aral-600 px-4 text-white hover:bg-aral-700 lg:h-10 xl:h-11 xl:px-5 dark:bg-aral-500 dark:hover:bg-aral-400"
     >
       <Save className="size-5" aria-hidden />
       Save grades

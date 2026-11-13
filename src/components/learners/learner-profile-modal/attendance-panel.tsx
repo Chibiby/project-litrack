@@ -68,7 +68,7 @@ export function AttendancePanel({ learner }: { learner: LearnerProfileData }) {
                     <TableCell>
                       {labelOf(ATTENDANCE_STATUS_LABELS, a.status)}
                     </TableCell>
-                    <TableCell className="max-w-[16rem] text-xs text-muted-foreground">
+                    <TableCell className="max-w-64 text-xs text-muted-foreground">
                       {a.notes ? <CellText>{a.notes}</CellText> : <NoValue />}
                     </TableCell>
                   </TableRow>

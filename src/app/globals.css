@@ -2,12 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
-/* The icon tile: every icon that sits in its own container (stat cards,
-   panel and card headers, summary links, dialog headers) uses this plain,
-   uncoloured glass. The icon carries the tone through its text colour
-   (text-violet-700 dark:text-violet-200 and so on); the tile never does.
-   In the components layer, so a utility on the same element still wins. */
+/* Glass, in three shared classes. In the components layer, so a utility on
+   the same element still wins. Blur comes in two strengths only: md (12px)
+   for panels and controls, xl (24px) for page-level cards.
+
+   .icon-glass  the icon tile: every icon that sits in its own container
+                (stat cards, panel and card headers, summary links, dialog
+                headers). Plain and uncoloured; the icon carries the tone
+                through its text colour (text-aral-strong and so on).
+   .glass-card  a page-level card (Card, Surface, summary cards): card fill
+                at the "mid" see-through level, xl blur.
+   .glass-panel app chrome and large panels (header, sidebar, calendar):
+                a faint white tint, md blur, the glass shadow.
+
+   Card see-through levels are three: 45 (low, dark glass), 55 (mid, light
+   glass) and 90 (high, nearly solid). Use bg-card/45, /55 or /90 only. */
 @layer components {
+  .glass-card {
+    border-color: rgb(255 255 255 / 0.6);
+    background-color: hsl(var(--card) / 0.55);
+    @apply backdrop-blur-xl;
+  }
+  .dark .glass-card {
+    border-color: rgb(255 255 255 / 0.1);
+    background-color: hsl(var(--card) / 0.45);
+  }
+  .glass-panel {
+    border-color: rgb(255 255 255 / 0.4);
+    background-color: rgb(255 255 255 / 0.25);
+    box-shadow: var(--shadow-glass);
+    @apply backdrop-blur-md;
+  }
+  .dark .glass-panel {
+    border-color: rgb(255 255 255 / 0.1);
+    background-color: rgb(255 255 255 / 0.06);
+  }
   .icon-glass {
     border: 1px solid rgb(255 255 255 / 0.6);
     background-color: rgb(255 255 255 / 0.4);
@@ -62,11 +91,39 @@
     --input: 214 32% 56%;
     --ring: 217 91% 53%;
     --radius: 0.75rem;
-    /* ARAL violet accent (design mock #6D4AE0 — blue-leaning, hue 255). */
-    --violet: 255 75% 60%;
-    --violet-foreground: 0 0% 100%;
-    --violet-soft: 255 100% 97%;
-    --violet-soft-foreground: 255 60% 40%;
+    /* ARAL accent (design mock #6D4AE0 — blue-leaning, hue 255). */
+    --aral: 255 75% 60%;
+    --aral-foreground: 0 0% 100%;
+    --aral-soft: 255 100% 97%;
+    --aral-soft-foreground: 255 60% 40%;
+    /* Colours by meaning: "strong" is the text shade (700 light, 200 dark),
+       so text-aral-strong needs no dark: class. aral is HSL, the rest RGB. */
+    --aral-strong: 255 62% 45%;
+    --warning-strong: 180 83 9;
+    --success-strong: 4 120 87;
+    --danger-strong: 190 18 60;
+    --info-strong: 3 105 161;
+
+    /* Named shadows (tailwind shadow-glass, shadow-raised, ...). */
+    --shadow-glass: 0 8px 32px rgb(15 23 42 / 0.1);
+    --shadow-raised: 0 8px 24px -12px rgb(15 23 42 / 0.18);
+    --shadow-lift: 0 16px 32px -12px rgb(15 23 42 / 0.25);
+    --shadow-float: 0 12px 40px rgb(15 23 42 / 0.14), inset 0 1px 0 rgb(255 255 255 / 0.6);
+    --shadow-control: 0 2px 8px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(255 255 255 / 0.7);
+    --shadow-indicator: 0 4px 14px rgb(15 23 42 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.9);
+
+    /* Motion: three durations and three curves. tailwind duration-fast/base/
+       slow and ease-standard/slide/bounce read these; src/lib/ui/motion.ts
+       mirrors them for the Web Animations API, which cannot read CSS vars.
+       standard  most UI changes (decelerates, no overshoot)
+       slide     page and step slides (the sign-in step slide)
+       bounce    a small overshoot for a success pop */
+    --motion-fast: 150ms;
+    --motion-base: 220ms;
+    --motion-slow: 420ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-slide: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
     /* Shared header + sidebar brand height (toolbar h-16; logo h-10) */
     --app-chrome-header-height: 4rem;
   }
@@ -103,10 +160,22 @@
     /* Input boundary: 3.25:1 vs --card, 3.51:1 vs --background (was 1.24:1 / 1.34:1, below AA 3:1) */
     --input: 217 33% 45%;
     --ring: 217 91% 60%;
-    --violet: 255 80% 70%;
-    --violet-foreground: 255 60% 12%;
-    --violet-soft: 255 45% 17%;
-    --violet-soft-foreground: 255 85% 88%;
+    --aral: 255 80% 70%;
+    --aral-foreground: 255 60% 12%;
+    --aral-soft: 255 45% 17%;
+    --aral-soft-foreground: 255 85% 88%;
+    --aral-strong: 255 92% 89%;
+    --warning-strong: 253 230 138;
+    --success-strong: 167 243 208;
+    --danger-strong: 254 205 211;
+    --info-strong: 186 230 253;
+
+    --shadow-glass: 0 8px 32px rgb(0 0 0 / 0.35);
+    --shadow-raised: 0 8px 24px -12px rgb(0 0 0 / 0.5);
+    --shadow-lift: 0 16px 32px -12px rgb(0 0 0 / 0.6);
+    --shadow-float: 0 12px 40px rgb(0 0 0 / 0.45);
+    --shadow-control: inset 0 1px 0 rgb(255 255 255 / 0.06);
+    --shadow-indicator: 0 4px 14px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.08);
   }
 }
 
@@ -252,10 +321,10 @@
   }
 }
 
-/* Custom: violet section highlight (ARAL Update Data) — keep for ARAL profiling */
-.violet-section {
-  background: hsl(var(--violet-soft));
-  border-left: 4px solid hsl(var(--violet));
+/* Custom: ARAL section highlight (ARAL Update Data) — keep for ARAL profiling */
+.aral-section {
+  background: hsl(var(--aral-soft));
+  border-left: 4px solid hsl(var(--aral));
 }
 
 /* Dashboard glassmorphism (every role's dashboard). Scoped to .dashboard-glass
@@ -354,7 +423,7 @@
   gap: 0.5rem;
   color: var(--press-saved-color, currentColor);
   pointer-events: none;
-  animation: press-saved-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+  animation: press-saved-pop 520ms var(--ease-bounce) both,
     press-saved-out 220ms ease-in 1380ms forwards;
 }
 .press-saved-icon {
@@ -374,12 +443,12 @@
   transform: rotate(-90deg);
   transform-box: fill-box;
   transform-origin: center;
-  animation: press-saved-draw 420ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation: press-saved-draw var(--motion-slow) var(--ease-standard) forwards;
 }
 .press-saved-tick {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: press-saved-draw 320ms cubic-bezier(0.22, 1, 0.36, 1) 340ms forwards;
+  animation: press-saved-draw 320ms var(--ease-slide) 340ms forwards;
 }
 .press-saved-text {
   animation: press-saved-text 260ms ease-out 380ms both;
@@ -518,10 +587,39 @@ html {
     transform: translateX(-50%) rotate(var(--ray-rotate-from));
   }
   .backdrop-blur-xl,
+  .glass-card,
   .dashboard-glass .shadow-card {
     --tw-backdrop-blur: blur(12px);
   }
-  .backdrop-blur-lg {
-    --tw-backdrop-blur: blur(10px);
+}
+
+/*
+ * Blur off where it costs most on a touch phone (no hover,
+ * narrower than 768px). Blur is the
+ * most expensive thing these pages draw, and a phone page holds a dozen or
+ * more glass cards. Cards and tiles become solid fills instead; the header,
+ * sidebar and dialog overlays keep their blur (one layer each, and text
+ * scrolls under the header).
+ */
+@media (hover: none) and (max-width: 767px) {
+  .glass-card,
+  .icon-glass,
+  .skeleton-shimmer,
+  .dashboard-glass .shadow-card,
+  [class*="bg-card/"][class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    --tw-backdrop-blur: ;
+  }
+  .glass-card,
+  .dashboard-glass .shadow-card,
+  [class*="bg-card/"][class*="backdrop-blur"] {
+    background-color: hsl(var(--card) / 0.96) !important;
+  }
+  .icon-glass {
+    background-color: hsl(var(--card));
+  }
+  .dashboard-glass .via-card {
+    --tw-gradient-stops: var(--tw-gradient-from), hsl(var(--card) / 0.96) 60%, hsl(var(--card) / 0.96);
   }
 }

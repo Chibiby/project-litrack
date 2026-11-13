@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { SUMMARY_FACET_META, isSummaryFacetId } from "@/lib/summary/facet-meta";
 import { AppShell } from "@/components/app-shell";
-import { SummarySlide } from "@/components/summary/summary-slide";
+import { PageSlide } from "@/components/ui/page-slide";
 import { SummaryFacetView } from "@/components/summary/summary-facet-view";
 import { SummaryPageHero } from "@/components/summary/summary-page-hero";
 import { describeScope } from "@/components/district/scope-label";
@@ -29,7 +29,7 @@ export default async function DistrictSummaryFacetPage({
       userName={user.fullName || user.email}
       hideTitle
     >
-      <SummarySlide side="summary">
+      <PageSlide side="child">
         <div className="mb-6">
           <SummaryPageHero
             facetId={facet}
@@ -44,7 +44,7 @@ export default async function DistrictSummaryFacetPage({
           basePath="/district/summary"
           userId={user.id}
         />
-      </SummarySlide>
+      </PageSlide>
     </AppShell>
   );
 }

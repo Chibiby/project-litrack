@@ -10,10 +10,10 @@
 export const TONE_EMPTY = "border-input bg-background text-muted-foreground";
 
 export const TONE_RAMP = [
-  "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
-  "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
-  "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300",
-  "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
+  "border-danger-300 bg-danger-50 text-danger-700 dark:border-danger-900 dark:bg-danger-950 dark:text-danger-300",
+  "border-warning-300 bg-warning-50 text-warning-700 dark:border-warning-900 dark:bg-warning-950 dark:text-warning-300",
+  "border-info-300 bg-info-50 text-info-700 dark:border-info-900 dark:bg-info-950 dark:text-info-300",
+  "border-success-300 bg-success-50 text-success-700 dark:border-success-900 dark:bg-success-950 dark:text-success-300",
 ];
 
 /**

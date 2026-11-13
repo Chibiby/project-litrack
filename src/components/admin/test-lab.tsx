@@ -315,7 +315,7 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">
             District portal
-            <Badge variant="outline" className="border-amber-400 text-amber-900 dark:text-amber-300">
+            <Badge variant="outline" className="border-warning-400 text-warning-900 dark:text-warning-300">
               Real district data
             </Badge>
           </CardTitle>

@@ -76,7 +76,7 @@ async function AdminAuditTable() {
                       {when(log.timestamp)}
                     </TableCell>
                     <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell className="max-w-[14rem] text-muted-foreground">
+                    <TableCell className="max-w-56 text-muted-foreground">
                       <CellText>{schoolLabel(log.schoolId)}</CellText>
                     </TableCell>
                     <TableCell>{log.resource}</TableCell>

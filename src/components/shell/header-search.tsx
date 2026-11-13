@@ -234,7 +234,7 @@ export function HeaderSearch({
         // with its own blur and a bright hairline border, so it reads as a
         // lighter pane of the same glass rather than a solid white slab.
         // Focus firms the fill up so typed text stays crisp.
-        inputClassName="h-11 rounded-full border-white/70 bg-glass/45 text-sm shadow-[0_1px_2px_rgb(15_23_42/0.06),inset_0_1px_0_rgb(255_255_255/0.6)] backdrop-blur-md placeholder:text-slate-500 focus-visible:border-primary/40 focus-visible:bg-glass/70 dark:border-white/15 dark:bg-glass/[0.06] dark:shadow-none dark:placeholder:text-slate-400 dark:focus-visible:bg-glass/10 lg:h-9"
+        inputClassName="h-11 rounded-full border-white/70 bg-glass/45 text-sm shadow-field backdrop-blur-md placeholder:text-slate-500 focus-visible:border-primary/40 focus-visible:bg-glass/70 dark:border-white/15 dark:bg-glass/[0.06] dark:shadow-none dark:placeholder:text-slate-400 dark:focus-visible:bg-glass/10 lg:h-9"
       />
 
       {showList && (

@@ -161,18 +161,18 @@ function AralTeachersTableInner({
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell className="max-w-[16rem] pl-4 font-medium">
+                        <TableCell className="max-w-64 pl-4 font-medium">
                           <CellText>{row.listingName}</CellText>
                         </TableCell>
                         <TableCell>
                           <EmploymentCell row={row} dash />
                         </TableCell>
-                        <TableCell className="max-w-[16rem] text-muted-foreground">
+                        <TableCell className="max-w-64 text-muted-foreground">
                           <CellText>{row.advisorySummary ?? "No advisory"}</CellText>
                         </TableCell>
                         <TableCell
                           numeric
-                          className="font-semibold text-violet-700 dark:text-violet-300"
+                          className="font-semibold text-aral-700 dark:text-aral-300"
                         >
                           {row.aralLearnerCount.toLocaleString()}
                         </TableCell>
@@ -180,7 +180,7 @@ function AralTeachersTableInner({
                           {formatTeacherGrades(row.grades) || <NoValue />}
                         </TableCell>
                         {showSchool ? (
-                          <TableCell className="max-w-[16rem] pr-4 text-muted-foreground">
+                          <TableCell className="max-w-64 pr-4 text-muted-foreground">
                             <CellText>{row.school.name}</CellText>
                           </TableCell>
                         ) : null}
@@ -196,7 +196,7 @@ function AralTeachersTableInner({
                       key={row.id}
                       title={row.listingName}
                       value={
-                        <span className="text-violet-700 dark:text-violet-300">
+                        <span className="text-aral-700 dark:text-aral-300">
                           {row.aralLearnerCount.toLocaleString()}
                           <span className="ml-1 text-xs font-normal text-muted-foreground">
                             {row.aralLearnerCount === 1 ? "learner" : "learners"}

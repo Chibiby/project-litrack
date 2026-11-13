@@ -46,7 +46,7 @@ function AvatarImage({ url, size, eager }: AvatarImageProps) {
       onLoad={() => setStatus("loaded")}
       onError={() => setStatus("error")}
       className={cn(
-        "absolute inset-0 h-full w-full rounded-full object-cover transition-opacity duration-200",
+        "absolute inset-0 h-full w-full rounded-full object-cover transition-opacity duration-base",
         status === "loaded" ? "opacity-100" : "opacity-0"
       )}
     />
@@ -94,8 +94,8 @@ export function UserAvatar({
       className={cn(
         "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full",
         fallback === "icon"
-          ? "bg-amber-100 text-amber-700"
-          : "bg-violet-200 text-sm font-semibold text-violet-800 dark:bg-violet-900/60 dark:text-violet-100",
+          ? "bg-warning-100 text-warning-700"
+          : "bg-aral-200 text-sm font-semibold text-aral-800 dark:bg-aral-900/60 dark:text-aral-100",
         className
       )}
       style={{ width: size, height: size }}

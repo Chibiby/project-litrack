@@ -53,10 +53,10 @@ export function DeletedTeachersTable({ rows }: { rows: ArchivedTeacherRow[] }) {
           <TableBody>
             {rows.map((teacher) => (
               <TableRow key={teacher.id}>
-                <TableCell className="max-w-[13rem] font-medium">
+                <TableCell className="max-w-52 font-medium">
                   <CellText>{teacher.listingName}</CellText>
                 </TableCell>
-                <TableCell className="max-w-[13rem] text-sm text-muted-foreground">
+                <TableCell className="max-w-52 text-sm text-muted-foreground">
                   <CellText>
                     <SchoolCell name={teacher.schoolName} deleted={teacher.schoolDeleted} />
                   </CellText>
@@ -64,7 +64,7 @@ export function DeletedTeachersTable({ rows }: { rows: ArchivedTeacherRow[] }) {
                 <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
                   {formatRecordDate(teacher.deletedAt)}
                 </TableCell>
-                <TableCell className="max-w-[14rem] text-sm text-muted-foreground">
+                <TableCell className="max-w-56 text-sm text-muted-foreground">
                   {teacher.originalEmail ? <CellText>{teacher.originalEmail}</CellText> : "Not recoverable"}
                 </TableCell>
                 <TableCell>
@@ -163,7 +163,7 @@ export function DeletedLearnersTable({
           <TableBody>
             {rows.map((row) => (
               <TableRow key={row.id}>
-                <TableCell className="max-w-[12rem] font-medium">
+                <TableCell className="max-w-48 font-medium">
                   <CellText>{row.name}</CellText>
                   {row.removalReason ? (
                     <span className="block truncate text-xs font-normal text-muted-foreground">
@@ -171,7 +171,7 @@ export function DeletedLearnersTable({
                     </span>
                   ) : null}
                 </TableCell>
-                <TableCell className="max-w-[12rem] text-muted-foreground">
+                <TableCell className="max-w-48 text-muted-foreground">
                   <CellText>{row.schoolName}</CellText>
                   {showDistrict && row.district ? (
                     <span className="block truncate text-xs">{row.district}</span>

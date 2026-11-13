@@ -12,7 +12,7 @@ export function TransferRequestedBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/30 dark:text-amber-200",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-warning-100 px-2 py-0.5 text-xs font-medium text-warning-900 dark:bg-warning-900/30 dark:text-warning-200",
         className
       )}
     >

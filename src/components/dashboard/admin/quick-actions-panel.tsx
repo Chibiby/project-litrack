@@ -22,14 +22,14 @@ const BASE_ACTIONS = [
     label: "Manage teachers",
     icon: KeyRound,
     href: ADMIN_ROUTES.teachers,
-    tone: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200",
+    tone: "bg-success-50 text-success-strong hover:bg-success-100 dark:bg-success-950/40",
   },
   {
     id: "support",
     label: "Open support inbox",
     icon: LifeBuoy,
     href: ADMIN_ROUTES.support,
-    tone: "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200",
+    tone: "bg-warning-50 text-warning-strong hover:bg-warning-100 dark:bg-warning-950/40",
   },
 ] as const;
 

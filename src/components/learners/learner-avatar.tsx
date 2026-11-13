@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
  */
 const TONES = [
   "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
-  "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200",
-  "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
-  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
-  "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200",
+  "bg-aral-100 text-aral-strong dark:bg-aral-900/40",
+  "bg-success-100 text-success-strong dark:bg-success-900/30",
+  "bg-warning-100 text-warning-strong dark:bg-warning-900/30",
+  "bg-danger-100 text-danger-strong dark:bg-danger-900/30",
 ] as const;
 
 /** Stable non-negative hash — same id always lands on the same tone. */

@@ -188,7 +188,7 @@ function gradeAndSection(l: LearnerListRow): string {
 }
 
 const ARAL_CHIP =
-  "inline-flex items-center rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200";
+  "inline-flex items-center rounded-full bg-aral-100 px-2.5 py-1 text-xs font-semibold text-aral-strong dark:bg-aral-900/40";
 
 /** Stable passthrough: a new Set per render would re-run the optimistic reducer. */
 const NO_LEAVING_IDS: ReadonlySet<string> = new Set();
@@ -510,7 +510,7 @@ function LearnerListPanel({
           {canEnroll ? (
             <DropdownMenuItem
               onSelect={() => openEnrollOne(l)}
-              className="text-violet-700 focus:text-violet-700 dark:text-violet-300 dark:focus:text-violet-300"
+              className="text-aral-700 focus:text-aral-700 dark:text-aral-300 dark:focus:text-aral-300"
             >
               <Sparkles className="size-4" aria-hidden />
               Enroll as ARAL
@@ -590,7 +590,7 @@ function LearnerListPanel({
             type="button"
             size="sm"
             variant="outline"
-            className="rounded-md border-violet-300 text-violet-700 hover:text-violet-800 dark:border-violet-700 dark:text-violet-300"
+            className="rounded-md border-aral-300 text-aral-700 hover:text-aral-800 dark:border-aral-700 dark:text-aral-300"
             disabled={pending}
             onClick={() => openEnrollOne(l)}
           >

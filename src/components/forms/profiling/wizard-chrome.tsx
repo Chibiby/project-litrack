@@ -71,7 +71,7 @@ export function ProfileWizardChrome({
           aria-label={`Profile progress, step ${stepNumber} of ${total}`}
         >
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+            className="h-full rounded-full bg-primary transition-[width] duration-base ease-out"
             style={{ width: `${progressPct}%` }}
           />
         </div>

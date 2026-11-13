@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 
 /** The violet banner shell both grid sheets open with. */
 const BANNER_SHELL =
-  "mb-4 rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30";
+  "mb-4 rounded-xl border border-aral-200 bg-aral-50/70 p-4 dark:border-aral-900/60 dark:bg-aral-950/30";
 
 /** Matches `AralDateNav`'s own container and the term sheet's plain toolbar. */
 const CARD_HEADER =
@@ -85,7 +85,7 @@ export interface AralGridSkeletonProps {
 function InfoCardSkeleton() {
   return (
     <div
-      className="flex gap-3 rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/60 dark:bg-violet-950/30"
+      className="flex gap-3 rounded-xl border border-aral-200 bg-aral-50/70 p-4 dark:border-aral-900/60 dark:bg-aral-950/30"
       data-slot="info-card-skeleton"
     >
       <Skeleton className="size-9 shrink-0 rounded-lg" />

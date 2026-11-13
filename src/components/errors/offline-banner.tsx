@@ -46,7 +46,7 @@ export function OfflineBanner() {
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       {online ? null : (
-        <p className="pointer-events-auto flex min-h-11 w-full max-w-xl items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 shadow-md dark:border-amber-900/60 dark:bg-amber-950 dark:text-amber-200">
+        <p className="pointer-events-auto flex min-h-11 w-full max-w-xl items-center gap-3 rounded-xl border border-warning-200 bg-warning-50 px-4 py-2 text-sm font-medium text-warning-900 shadow-md dark:border-warning-900/60 dark:bg-warning-950 dark:text-warning-200">
           <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
           <span>You&apos;re offline. Changes won&apos;t save until your connection is back.</span>
         </p>

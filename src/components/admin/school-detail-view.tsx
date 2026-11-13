@@ -312,7 +312,7 @@ function TeacherStatusBadge({ teacher }: { teacher: TeacherRow }) {
 
 function AralBadge() {
   return (
-    <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950 dark:text-violet-300">
+    <Badge className="bg-aral-100 text-aral-700 hover:bg-aral-100 dark:bg-aral-950 dark:text-aral-300">
       ARAL
     </Badge>
   );
@@ -418,7 +418,7 @@ export function SchoolDetailView({
                   {school.isActive ? "Active" : "Inactive"}
                 </Badge>
                 {school.isDemo ? (
-                  <Badge className="border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
+                  <Badge className="border-aral-300 bg-aral-50 text-aral-700 hover:bg-aral-50 dark:border-aral-800 dark:bg-aral-950 dark:text-aral-300">
                     Demo
                   </Badge>
                 ) : null}
@@ -532,10 +532,10 @@ export function SchoolDetailView({
                             }
                           />
                         </TableCell>
-                        <TableCell className="max-w-[16rem] font-medium">
+                        <TableCell className="max-w-64 font-medium">
                           <CellText>{teacher.listingName}</CellText>
                         </TableCell>
-                        <TableCell className="max-w-[18rem] text-sm text-muted-foreground">
+                        <TableCell className="max-w-72 text-sm text-muted-foreground">
                           <CellText>{teacher.email}</CellText>
                         </TableCell>
                         <TableCell>
@@ -818,7 +818,7 @@ function SchoolLearnersPanelBody({
                             }
                           />
                         </TableCell>
-                        <TableCell className="max-w-[18rem] font-medium">
+                        <TableCell className="max-w-72 font-medium">
                           <CellText>{learner.listingName}</CellText>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm text-muted-foreground">

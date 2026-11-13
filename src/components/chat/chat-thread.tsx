@@ -272,11 +272,11 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
         )}
 
         {channel?.messages.length === 0 && (
-          <p className="text-[13px] leading-relaxed text-muted-foreground">{emptyHint}</p>
+          <p className="text-caption leading-relaxed text-muted-foreground">{emptyHint}</p>
         )}
 
         {channel && channel.messages.length > 0 && visibleMessages?.length === 0 && (
-          <p className="text-[13px] leading-relaxed text-muted-foreground">No messages match your search.</p>
+          <p className="text-caption leading-relaxed text-muted-foreground">No messages match your search.</p>
         )}
 
         {visibleMessages?.map((message, index) => {
@@ -290,7 +290,7 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
           return (
             <div key={message.id} className="space-y-1.5">
               {showDay && (
-                <p className="pt-1 text-center text-[11px] font-medium text-muted-foreground">
+                <p className="pt-1 text-center text-2xs font-medium text-muted-foreground">
                   {dayLabel(new Date(message.createdAt))}
                 </p>
               )}
@@ -335,10 +335,10 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
                   type="button"
                   variant="ghost"
                   onClick={() => applyMention(target)}
-                  className="h-auto w-full justify-between gap-2 rounded-none px-3 py-2 text-left text-[13px] font-normal"
+                  className="h-auto w-full justify-between gap-2 rounded-none px-3 py-2 text-left text-caption font-normal"
                 >
                   <span className="font-medium">{target.displayName}</span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     {target.roleLabel} · @{target.username}
                   </span>
                 </Button>
@@ -360,7 +360,7 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
             onChange={(event) => handleDraftChange(event.target.value)}
             placeholder="Write a message. Use @ to mention someone."
             aria-label="Message"
-            className="h-11 text-[13px] lg:h-9"
+            className="h-11 text-caption lg:h-9"
             disabled={!channel}
           />
           <Button
@@ -394,7 +394,7 @@ function ChatBubble({
       <span
         className={cn(
           "mt-auto flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-          showAuthor ? "bg-violet-soft text-violet-soft-foreground" : "invisible"
+          showAuthor ? "bg-aral-soft text-aral-soft-foreground" : "invisible"
         )}
         aria-hidden
       >
@@ -403,7 +403,7 @@ function ChatBubble({
 
       <div className={cn("min-w-0 max-w-[78%] space-y-0.5", mine && "items-end text-right")}>
         {showAuthor && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             <span className="font-medium text-foreground">{message.author.displayName}</span>
             {" · "}
             {message.author.roleLabel}
@@ -411,9 +411,9 @@ function ChatBubble({
         )}
         <div
           className={cn(
-            "inline-block whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-left text-[13px] leading-relaxed",
+            "inline-block whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-left text-caption leading-relaxed",
             mine
-              ? "rounded-br-sm bg-violet text-violet-foreground"
+              ? "rounded-br-sm bg-aral text-aral-foreground"
               : "rounded-bl-sm bg-muted text-foreground"
           )}
         >
@@ -427,8 +427,8 @@ function ChatBubble({
                   // off the same hue, so it tints with the bubble's own
                   // foreground rather than introducing a second colour.
                   mine
-                    ? "bg-violet-foreground/20"
-                    : "bg-violet-soft text-violet-soft-foreground"
+                    ? "bg-aral-foreground/20"
+                    : "bg-aral-soft text-aral-soft-foreground"
                 )}
               >
                 {segment.text}

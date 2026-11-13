@@ -336,7 +336,7 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
   return (
     <div className="space-y-6">
       {!data.storeReady ? (
-        <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-950/40 flex gap-3 text-sm text-amber-950 dark:text-amber-100">
+        <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 border-warning-300 bg-warning-50 dark:border-warning-500/40 dark:bg-warning-950/40 flex gap-3 text-sm text-warning-950 dark:text-warning-100">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
             <div>
               <p className="font-semibold">Backup storage is not connected</p>

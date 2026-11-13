@@ -99,16 +99,16 @@ const CARD_ICON: Record<ReportKind, typeof CalendarDays> = {
 };
 
 const CARD_TONE: Record<ReportKind, string> = {
-  ATTENDANCE: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+  ATTENDANCE: "bg-aral-100 text-aral-700 dark:bg-aral-950 dark:text-aral-300",
   READING_LEVEL:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  TERM_GRADES: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+    "bg-success-100 text-success-700 dark:bg-success-950 dark:text-success-300",
+  TERM_GRADES: "bg-info-100 text-info-700 dark:bg-info-950 dark:text-info-300",
   TEACHER_SUMMARY:
-    "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  CLASS_ROSTER: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+    "bg-warning-100 text-warning-700 dark:bg-warning-950 dark:text-warning-300",
+  CLASS_ROSTER: "bg-info-100 text-info-700 dark:bg-info-950 dark:text-info-300",
   // Violet is the ARAL accent (tailwind.config.ts); MOSY carries ARAL profiling data.
-  MOSY: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-  CUSTOM: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+  MOSY: "bg-aral-100 text-aral-700 dark:bg-aral-950 dark:text-aral-300",
+  CUSTOM: "bg-aral-100 text-aral-700 dark:bg-aral-950 dark:text-aral-300",
 };
 
 const TABS: { id: "ALL" | ReportKind; label: string; icon: typeof LayoutGrid }[] = [
@@ -151,7 +151,7 @@ function ReportFormatChip({ format }: { format: keyof typeof REPORT_FORMAT_LABEL
         "rounded-full px-2 py-0.5 text-xs font-medium",
         format === "PDF"
           ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+          : "bg-success-100 text-success-700 dark:bg-success-950 dark:text-success-300"
       )}
     >
       {REPORT_FORMAT_LABELS[format]}
@@ -506,7 +506,7 @@ export function ReportsHub({
               <ul className="mt-4 space-y-1.5 text-xs">
                 {card.bullets.map((b) => (
                   <li key={b} className="flex items-start gap-1.5">
-                    <span aria-hidden className="text-emerald-600 dark:text-emerald-400">
+                    <span aria-hidden className="text-success-600 dark:text-success-400">
                       ✓
                     </span>
                     <span className="text-muted-foreground">{b}</span>
@@ -525,7 +525,7 @@ export function ReportsHub({
                 <div className="mt-4 flex items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
                   <PencilRuler className="h-3.5 w-3.5" aria-hidden />
                   Create Custom
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-2xs font-semibold">
                     Soon
                   </span>
                 </div>
@@ -616,7 +616,7 @@ export function ReportsHub({
                     <TableBody>
                       {rows.map((row) => (
                         <TableRow key={row.id}>
-                          <TableCell className="max-w-[16rem] font-medium">
+                          <TableCell className="max-w-64 font-medium">
                             <CellText>{row.name}</CellText>
                           </TableCell>
                           <TableCell className="text-muted-foreground">
@@ -628,7 +628,7 @@ export function ReportsHub({
                           <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                             {formatSchoolDateTime(row.createdAt)}
                           </TableCell>
-                          <TableCell className="max-w-[12rem] text-muted-foreground">
+                          <TableCell className="max-w-48 text-muted-foreground">
                             <CellText>{row.createdByName}</CellText>
                           </TableCell>
                           <TableCell>
@@ -672,8 +672,8 @@ export function ReportsHub({
 
         {/* Right rail */}
         <div className="space-y-4">
-          <div className="rounded-lg border border-border bg-violet-50/60 p-4 dark:bg-violet-950/20">
-            <p className="flex items-center gap-2 font-semibold text-violet-700 dark:text-violet-300">
+          <div className="rounded-lg border border-border bg-aral-50/60 p-4 dark:bg-aral-950/20">
+            <p className="flex items-center gap-2 font-semibold text-aral-700 dark:text-aral-300">
               <Lightbulb className="h-4 w-4" aria-hidden />
               Report Tips
             </p>

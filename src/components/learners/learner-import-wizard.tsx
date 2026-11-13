@@ -326,7 +326,7 @@ export function LearnerImportWizard({ gradeLevelId, gradeLabel }: Props) {
                             {r.data.firstName} {r.data.lastName}, age {r.data.age}
                             {r.data.sectionName ? ` · ${r.data.sectionName}` : ""}
                             {r.sectionWarning ? (
-                              <span className="mt-0.5 block text-xs text-amber-800 dark:text-amber-300">
+                              <span className="mt-0.5 block text-xs text-warning-800 dark:text-warning-300">
                                 {r.sectionWarning}
                               </span>
                             ) : null}

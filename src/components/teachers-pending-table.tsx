@@ -208,10 +208,10 @@ export function TeachersPendingTable({
                 <TableBody>
                   {visibleRows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="max-w-[16rem] font-medium">
+                      <TableCell className="max-w-64 font-medium">
                         <CellText>{row.fullName}</CellText>
                       </TableCell>
-                      <TableCell className="max-w-[18rem] text-sm">
+                      <TableCell className="max-w-72 text-sm">
                         <CellText>{row.email}</CellText>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">

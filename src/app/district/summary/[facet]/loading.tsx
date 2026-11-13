@@ -1,13 +1,13 @@
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
-import { SummarySlide } from "@/components/summary/summary-slide";
+import { PageSlide } from "@/components/ui/page-slide";
 import { SummaryFacetSkeleton } from "@/components/summary/summary-skeleton";
 
 export default function DistrictSummaryFacetLoading() {
   return (
     <RouteLoadingOverlay>
-      <SummarySlide side="summary">
+      <PageSlide side="child">
         <SummaryFacetSkeleton />
-      </SummarySlide>
+      </PageSlide>
     </RouteLoadingOverlay>
   );
 }

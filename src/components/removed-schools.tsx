@@ -89,7 +89,7 @@ export function RemovedSchoolsTable({ schools }: { schools: RemovedSchoolTableRo
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{school.name}</span>
               {school.isDemo ? (
-                <span className="rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
+                <span className="rounded-full border border-aral-300 bg-aral-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-aral-700 dark:border-aral-800 dark:bg-aral-950 dark:text-aral-300">
                   Demo
                 </span>
               ) : null}

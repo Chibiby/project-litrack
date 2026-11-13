@@ -133,11 +133,11 @@ const PILL_BASE =
 const PILL_TONE = {
   /** The comp's green "Active" / "Enrolled" state. */
   positive:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
+    "bg-success-100 text-success-strong dark:bg-success-900/30",
   neutral: "bg-muted text-muted-foreground",
-  warning: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
+  warning: "bg-warning-100 text-warning-strong dark:bg-warning-900/30",
   /** ARAL keeps the reserved violet. */
-  aral: "bg-violet-soft text-violet-soft-foreground",
+  aral: "bg-aral-soft text-aral-soft-foreground",
 } as const;
 
 export function StatusPill({

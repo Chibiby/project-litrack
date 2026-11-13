@@ -1,3 +1,4 @@
+import { EASE } from "@/lib/ui/motion";
 /**
  * Button press feel (operator reference video, "Sink, then spring"): on press
  * the button sinks to 95% and a soft circle spreads from the press point; on
@@ -60,7 +61,7 @@ export function sink(el: HTMLElement): void {
   if (typeof el.animate !== "function") return;
   el.animate([{ scale: String(currentScale(el)) }, { scale: String(PRESS_SCALE) }], {
     duration: PRESS_DOWN_MS,
-    easing: "cubic-bezier(0.2, 0, 0, 1)",
+    easing: EASE.standard,
     fill: "forwards",
   });
 }
@@ -123,7 +124,7 @@ export function ripple(el: HTMLElement, clientX: number, clientY: number, tone: 
       { transform: "scale(0.7)", opacity: peak, offset: 0.55 },
       { transform: "scale(1)", opacity: 0 },
     ],
-    { duration: RIPPLE_MS, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" },
+    { duration: RIPPLE_MS, easing: EASE.standard },
   );
   const remove = () => dot.remove();
   anim.onfinish = remove;

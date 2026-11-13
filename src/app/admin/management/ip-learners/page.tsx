@@ -195,7 +195,7 @@ async function IpBreakdowns({ params }: { params: LearnersHubParams }) {
                 <span className="font-medium">{g.label}</span>
                 <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
                   <span
-                    className="block h-full rounded-full bg-amber-500/80"
+                    className="block h-full rounded-full bg-warning-500/80"
                     style={{ width: `${(g.count / maxGrade) * 100}%` }}
                   />
                 </span>

@@ -10,8 +10,8 @@ import {
 afterEach(cleanup);
 
 const segments: BarSegment[] = [
-  { label: "Present", value: 18, className: "bg-emerald-500", dotClassName: "bg-emerald-500" },
-  { label: "Absent", value: 6, className: "bg-amber-500", dotClassName: "bg-amber-500" },
+  { label: "Present", value: 18, className: "bg-success-500", dotClassName: "bg-success-500" },
+  { label: "Absent", value: 6, className: "bg-warning-500", dotClassName: "bg-warning-500" },
   { label: "No Class", value: 0, className: "bg-muted", dotClassName: "bg-muted" },
 ];
 

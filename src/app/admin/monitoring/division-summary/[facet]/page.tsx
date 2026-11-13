@@ -4,7 +4,7 @@ import { SUMMARY_FACET_META, isSummaryFacetId } from "@/lib/summary/facet-meta";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { AppShell } from "@/components/app-shell";
-import { SummarySlide } from "@/components/summary/summary-slide";
+import { PageSlide } from "@/components/ui/page-slide";
 import { SummaryFacetView } from "@/components/summary/summary-facet-view";
 import { SummaryPageHero } from "@/components/summary/summary-page-hero";
 
@@ -33,7 +33,7 @@ export default async function AdminSummaryFacetPage({
       userName={user.fullName || user.email}
       hideTitle
     >
-      <SummarySlide side="summary">
+      <PageSlide side="child">
         <div className="mb-6">
           <SummaryPageHero
             facetId={facet}
@@ -48,7 +48,7 @@ export default async function AdminSummaryFacetPage({
           basePath={ADMIN_ROUTES.divisionSummary}
           userId={user.id}
         />
-      </SummarySlide>
+      </PageSlide>
     </AppShell>
   );
 }

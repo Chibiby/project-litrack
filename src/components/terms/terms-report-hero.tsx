@@ -102,7 +102,7 @@ export function TermsReportHero({
               className={cn(
                 "flex min-w-0 flex-col rounded-lg border px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-4 sm:py-2",
                 active
-                  ? "border-transparent bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30"
+                  ? "border-transparent bg-gradient-to-r from-aral-600 to-aral-500 text-white shadow-sm shadow-aral-500/30"
                   : "border-border bg-card/90 text-foreground hover:bg-card"
               )}
             >

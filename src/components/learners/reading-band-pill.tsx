@@ -19,9 +19,9 @@ import { isLegacyReadingValue } from "@/lib/reading/policy";
  */
 const BAND_TONE: Record<string, string> = {
   NON_DECODER_LOW_EMERGENT:
-    "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200",
+    "bg-danger-100 text-danger-strong dark:bg-danger-900/30",
   FRUSTRATION_HIGH_EMERGENT:
-    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
+    "bg-warning-100 text-warning-strong dark:bg-warning-900/30",
   INSTRUCTIONAL_DEVELOPING:
     "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
   DEVELOPING:
@@ -29,17 +29,17 @@ const BAND_TONE: Record<string, string> = {
   TRANSITIONING:
     "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-200",
   INDEPENDENT_GRADE_READY:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
+    "bg-success-100 text-success-strong dark:bg-success-900/30",
   // Kinder/Grade 1/Grade 2 letter/word rubric (docs/reading-policy-spec.md
   // section 2a) — same weakest-to-strongest ramp as the four bands above.
   CANNOT_NAME_SOUND_LETTERS:
-    "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200",
+    "bg-danger-100 text-danger-strong dark:bg-danger-900/30",
   LETTER_LEVEL:
-    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200",
+    "bg-warning-100 text-warning-strong dark:bg-warning-900/30",
   CV_BLENDING:
     "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
   CVC_BLENDING:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200",
+    "bg-success-100 text-success-strong dark:bg-success-900/30",
 };
 
 const PILL_BASE =
@@ -72,7 +72,7 @@ export function ReadingBandPill({
       className={cn(
         PILL_BASE,
         needsUpdate
-          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+          ? "bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-200"
           : (BAND_TONE[profile] ?? UNKNOWN_TONE),
         className
       )}
@@ -93,7 +93,7 @@ export function AralProfilePill({ hasProfile }: { hasProfile: boolean }) {
       className={cn(
         PILL_BASE,
         hasProfile
-          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
+          ? "bg-success-100 text-success-strong dark:bg-success-900/30"
           : "bg-muted text-muted-foreground"
       )}
     >
@@ -105,7 +105,7 @@ export function AralProfilePill({ hasProfile }: { hasProfile: boolean }) {
 /** The violet ARAL designation chip that sits beside the learner's name. */
 export function AralChip() {
   return (
-    <span className="inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-violet-soft-foreground">
+    <span className="inline-flex items-center rounded-full bg-aral-soft px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-aral-soft-foreground">
       ARAL
     </span>
   );

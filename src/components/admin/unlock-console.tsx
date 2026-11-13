@@ -480,10 +480,10 @@ export function UnlockConsole({ schools, active, scopes = UNLOCK_SCOPES as unkno
                   <TableBody>
                     {rows.map((row) => (
                       <TableRow key={`${row.kind}-${row.id}`}>
-                        <TableCell className="max-w-[14rem] font-medium">
+                        <TableCell className="max-w-56 font-medium">
                           <CellText>{row.who}</CellText>
                         </TableCell>
-                        <TableCell className="max-w-[14rem] text-muted-foreground">
+                        <TableCell className="max-w-56 text-muted-foreground">
                           <CellText>{row.schoolName}</CellText>
                         </TableCell>
                         <TableCell>{UNLOCK_SCOPE_LABELS[row.scope]}</TableCell>

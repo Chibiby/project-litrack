@@ -150,7 +150,7 @@ export function DistrictAdminsSummaryCards({
             {summary.uncoveredDistricts.map((district) => (
               <li
                 key={district}
-                className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+                className="rounded-full border border-warning-200 bg-warning-50 px-2.5 py-1 text-xs text-warning-900 dark:border-warning-900/60 dark:bg-warning-950/30 dark:text-warning-200"
               >
                 {district}
               </li>

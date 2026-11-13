@@ -131,9 +131,9 @@ export function withSection(s: RosterUrlState, section: string): RosterUrlState 
 }
 
 const TAB_BASE =
-  "h-11 shrink-0 gap-1.5 rounded-md px-3 text-[13px] font-medium sm:gap-2 sm:px-4 sm:text-sm lg:h-9";
+  "h-11 shrink-0 gap-1.5 rounded-md px-3 text-caption font-medium sm:gap-2 sm:px-4 sm:text-sm lg:h-9";
 const TAB_ON =
-  "border-transparent bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-sm shadow-violet-500/30 hover:from-violet-600 hover:to-violet-600 hover:text-white";
+  "border-transparent bg-gradient-to-r from-aral-600 to-aral-500 text-white shadow-sm shadow-aral-500/30 hover:from-aral-600 hover:to-aral-600 hover:text-white";
 
 export function LearnerRosterNav({
   basePath,
@@ -341,7 +341,7 @@ export function LearnerListToolbar(props: ToolbarProps) {
       resultCount={resultCount}
       label="Search learners by name"
       placeholder="Search by name or keyword…"
-      className="min-w-[12rem] flex-1 xl:min-w-0 xl:max-w-xs 2xl:max-w-sm"
+      className="min-w-48 flex-1 xl:min-w-0 xl:max-w-xs 2xl:max-w-sm"
       inputClassName="h-11 rounded-md lg:h-11"
     />
   );

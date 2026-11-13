@@ -209,7 +209,7 @@ export default async function SchoolsListPage({ searchParams }: PageProps) {
         Use the key icon on the school&apos;s row to put the School Head&apos;s password back to their
         School ID. They sign in with the School ID straight away and can choose a private password
         afterwards. See{" "}
-        <code className="rounded bg-amber-100 px-1 text-xs dark:bg-amber-900/60">docs/runbook.md</code>.
+        <code className="rounded bg-warning-100 px-1 text-xs dark:bg-warning-900/60">docs/runbook.md</code>.
       </PageTip>
 
       {removedView ? null : (

@@ -28,8 +28,8 @@ export function ThemeIcon({
   className?: string;
 }) {
   const maskId = `theme-moon-${useId().replace(/:/g, "")}`;
-  const ease = animate ? "transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" : "";
-  const fade = animate ? "transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" : "";
+  const ease = animate ? "transition-transform duration-slow ease-standard" : "";
+  const fade = animate ? "transition-[transform,opacity] duration-slow ease-standard" : "";
   const viewBoxOrigin = "[transform-box:view-box] [transform-origin:12px_12px]";
 
   return (

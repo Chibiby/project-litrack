@@ -126,18 +126,18 @@ export function TermsReportSummary({
         </StatCardRow>
       </div>
 
-      <div className="mt-3 flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50/70 p-3 dark:border-violet-900/60 dark:bg-violet-950/30 sm:mt-4 sm:p-4">
+      <div className="mt-3 flex items-center gap-3 rounded-lg border border-aral-200 bg-aral-50/70 p-3 dark:border-aral-900/60 dark:bg-aral-950/30 sm:mt-4 sm:p-4">
         <span
-          className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200 sm:size-10"
+          className="flex size-9 shrink-0 items-center justify-center rounded-md icon-glass text-aral-strong sm:size-10"
           aria-hidden
         >
           <Lock className="size-4 sm:size-5" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-violet-800 dark:text-violet-100 sm:text-base">
+          <p className="text-sm font-semibold text-aral-800 dark:text-aral-100 sm:text-base">
             Auto-Lock After Term Ends
           </p>
-          <p className="mt-0.5 text-xs leading-snug text-violet-900/75 dark:text-violet-100/75 sm:text-sm sm:leading-relaxed">
+          <p className="mt-0.5 text-xs leading-snug text-aral-900/75 dark:text-aral-100/75 sm:text-sm sm:leading-relaxed">
             This term will be automatically locked once the term duration has passed. Locked
             terms are read-only.
           </p>

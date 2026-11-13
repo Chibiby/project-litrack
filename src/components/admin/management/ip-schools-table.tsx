@@ -43,10 +43,10 @@ export function IpSchoolsTable({ rows }: { rows: IpSchoolRow[] }) {
             <TableBody>
               {shown.map((s) => (
                 <TableRow key={s.schoolId}>
-                  <TableCell className="max-w-[18rem] pl-4 font-medium">
+                  <TableCell className="max-w-72 pl-4 font-medium">
                     <CellText>{s.name}</CellText>
                   </TableCell>
-                  <TableCell className="max-w-[10rem] text-muted-foreground">
+                  <TableCell className="max-w-40 text-muted-foreground">
                     <CellText>{s.district}</CellText>
                   </TableCell>
                   <TableCell numeric>{n(s.ipLearners)}</TableCell>

@@ -150,7 +150,7 @@ function Inner({ rows, filters, list }: Props) {
                   <TableBody>
                     {rows.map((y) => (
                       <TableRow key={y.id}>
-                        <TableCell className="max-w-[20rem] pl-4">
+                        <TableCell className="max-w-80 pl-4">
                           <CellText className="font-medium">{y.schoolName}</CellText>
                           {y.district ? (
                             <span className="block truncate text-xs text-muted-foreground">

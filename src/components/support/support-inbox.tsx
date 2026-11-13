@@ -206,7 +206,7 @@ function TicketCard({
 
         {target && (
           <p className="flex items-center gap-1.5 text-sm">
-            <KeyRound className="size-4 shrink-0 text-violet" aria-hidden />
+            <KeyRound className="size-4 shrink-0 text-aral" aria-hidden />
             <span className="text-muted-foreground">
               Asked to reopen {UNLOCK_SCOPE_LABELS[ticket.requestedScope!].toLowerCase()}
               {" — "}
@@ -227,8 +227,8 @@ function TicketCard({
         )}
 
         {ticket.resolutionNote && (
-          <div className="rounded-lg bg-violet-soft p-3 text-violet-soft-foreground">
-            <p className="text-xs font-semibold uppercase tracking-wide text-violet-soft-foreground/70">
+          <div className="rounded-lg bg-aral-soft p-3 text-aral-soft-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wide text-aral-soft-foreground/70">
               Your reply
               {ticket.resolverName ? ` · ${ticket.resolverName}` : ""}
             </p>
@@ -265,7 +265,7 @@ function TicketCard({
               <Button
                 type="button"
                 size="sm"
-                className="bg-violet text-violet-foreground hover:bg-violet/90 lg:h-9"
+                className="bg-aral text-aral-foreground hover:bg-aral/90 lg:h-9"
                 onClick={() => onAnswer("resolve")}
               >
                 <Check className="size-4" aria-hidden />
@@ -363,13 +363,13 @@ function AnswerDialog({
 
         <div className="space-y-4">
           {canGrant && mode === "resolve" && (
-            <div className="space-y-3 rounded-lg border border-violet/40 bg-violet-soft/40 p-3">
+            <div className="space-y-3 rounded-lg border border-aral/40 bg-aral-soft/40 p-3">
               <label className="flex items-start gap-2.5 text-sm">
                 <input
                   type="checkbox"
                   checked={grantAccess}
                   onChange={(event) => setGrantAccess(event.target.checked)}
-                  className="mt-0.5 size-4 shrink-0 accent-violet"
+                  className="mt-0.5 size-4 shrink-0 accent-aral"
                 />
                 <span>
                   <span className="font-medium">Reopen {target}</span>
@@ -443,7 +443,7 @@ function AnswerDialog({
             className={
               mode === "decline"
                 ? undefined
-                : "bg-violet text-violet-foreground hover:bg-violet/90"
+                : "bg-aral text-aral-foreground hover:bg-aral/90"
             }
           >
             {mode === "decline" ? "Decline" : "Send answer"}

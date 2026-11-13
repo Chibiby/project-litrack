@@ -4,7 +4,7 @@ import { requireAdminScope } from "@/lib/auth/district-scope";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { AppShell } from "@/components/app-shell";
-import { SummarySlide } from "@/components/summary/summary-slide";
+import { PageSlide } from "@/components/ui/page-slide";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { SummaryFacetIndex } from "@/components/summary/summary-facet-index";
 
@@ -22,7 +22,7 @@ export default async function AdminSummaryIndexPage() {
       userName={user.fullName || user.email}
       hideTitle
     >
-      <SummarySlide side="list">
+      <PageSlide side="parent">
         <div className="mb-6">
           <SchoolHeadHero
             eyebrow="Division summary"
@@ -32,7 +32,7 @@ export default async function AdminSummaryIndexPage() {
           />
         </div>
         <SummaryFacetIndex basePath={ADMIN_ROUTES.divisionSummary} />
-      </SummarySlide>
+      </PageSlide>
     </AppShell>
   );
 }

@@ -1,7 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { AppShell } from "@/components/app-shell";
-import { SummarySlide } from "@/components/summary/summary-slide";
+import { PageSlide } from "@/components/ui/page-slide";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { SummaryFacetIndex } from "@/components/summary/summary-facet-index";
 import { describeScope } from "@/components/district/scope-label";
@@ -19,7 +19,7 @@ export default async function DistrictSummaryIndexPage() {
       userName={user.fullName || user.email}
       hideTitle
     >
-      <SummarySlide side="list">
+      <PageSlide side="parent">
         <div className="mb-6">
           <SchoolHeadHero
             eyebrow="District summary"
@@ -30,7 +30,7 @@ export default async function DistrictSummaryIndexPage() {
           />
         </div>
         <SummaryFacetIndex basePath="/district/summary" />
-      </SummarySlide>
+      </PageSlide>
     </AppShell>
   );
 }

@@ -115,7 +115,7 @@ export default async function AttendancePage({
                       {a.date.toLocaleDateString()}
                     </TableCell>
                     <TableCell>{ATTENDANCE_STATUS_LABELS[a.status]}</TableCell>
-                    <TableCell className="max-w-[20rem] text-xs text-muted-foreground">
+                    <TableCell className="max-w-80 text-xs text-muted-foreground">
                       {a.notes ? <CellText>{a.notes}</CellText> : <NoValue />}
                     </TableCell>
                   </TableRow>

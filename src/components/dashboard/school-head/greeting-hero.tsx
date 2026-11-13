@@ -84,7 +84,7 @@ export function SchoolHeadGreetingHero({
        * learners, Brighter tomorrows" doodle — so only that range gets a
        * translucent scrim behind the text.
        */}
-      <div className="lg:max-xl:relative lg:max-xl:z-10 lg:max-xl:max-w-[22rem] lg:max-xl:rounded-lg lg:max-xl:bg-card/85 lg:max-xl:p-4 lg:max-xl:shadow-card lg:max-xl:backdrop-blur-sm">
+      <div className="lg:max-xl:relative lg:max-xl:z-10 lg:max-xl:max-w-[22rem] lg:max-xl:rounded-lg lg:max-xl:bg-card/90 lg:max-xl:p-4 lg:max-xl:shadow-card lg:max-xl:backdrop-blur-md">
         <p className="hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300 lg:block">
           {eyebrow}
         </p>
@@ -111,7 +111,7 @@ export function SchoolHeadGreetingHero({
             </>
           )}
         </h1>
-        <p className="mt-2 line-clamp-2 max-w-[13rem] text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">
+        <p className="mt-2 line-clamp-2 max-w-52 text-base max-[439px]:max-w-[52%] max-[439px]:line-clamp-3 leading-snug lg:line-clamp-none text-slate-600 dark:text-slate-300 sm:max-w-md lg:text-lg lg:text-slate-800">
           {resolvedSubtitle}
         </p>
         {meta ? (

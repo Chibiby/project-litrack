@@ -139,7 +139,7 @@ export function ProfilingList({
                     <TableCell numeric className="text-muted-foreground">
                       {rowNumber(i)}
                     </TableCell>
-                    <TableCell className="max-w-[18rem] font-medium">
+                    <TableCell className="max-w-72 font-medium">
                       <CellText>{r.fullName}</CellText>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{r.gradeLabel}</TableCell>

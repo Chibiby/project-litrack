@@ -3,7 +3,7 @@ import * as authCard from "@/components/auth/auth-card";
 
 /**
  * A missing space between two Tailwind classes silently drops both
- * ("bg-card/35[.login-glass_&…]:bg-none" is one unknown class), which once
+ * ("bg-card/45[.login-glass_&…]:bg-none" is one unknown class), which once
  * turned the disabled glass Next button back to violet. Guard every exported
  * class string.
  */

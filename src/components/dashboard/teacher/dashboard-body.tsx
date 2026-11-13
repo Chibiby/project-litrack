@@ -261,7 +261,7 @@ function GradeChartCard({
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden
-            className="flex size-11 shrink-0 items-center justify-center rounded-md icon-glass text-violet-700 dark:text-violet-200"
+            className="flex size-11 shrink-0 items-center justify-center rounded-md icon-glass text-aral-strong"
           >
             <BarChart3 className="size-5" />
           </span>
@@ -291,14 +291,14 @@ function GradeChartCard({
           )}
         </div>
         <div className="shrink-0 md:w-64 xl:w-auto 2xl:w-64">
-          <div className="flex items-center gap-3 rounded-lg bg-violet-50 p-4 dark:bg-violet-950/40">
-            <Users aria-hidden className="size-8 shrink-0 text-violet-600 dark:text-violet-300" />
+          <div className="flex items-center gap-3 rounded-lg bg-aral-50 p-4 dark:bg-aral-950/40">
+            <Users aria-hidden className="size-8 shrink-0 text-aral-600 dark:text-aral-300" />
             <div>
-              <p className="text-lg font-bold text-violet-900 dark:text-violet-100">
+              <p className="text-lg font-bold text-aral-900 dark:text-aral-100">
                 {totalLearners} {totalLearners === 1 ? "learner" : "learners"}
               </p>
               <p className="text-sm text-muted-foreground">
-                across <span className="font-semibold text-amber-700 dark:text-amber-300">{gradeCount}</span>{" "}
+                across <span className="font-semibold text-warning-700 dark:text-warning-300">{gradeCount}</span>{" "}
                 {gradeCount === 1 ? "grade level" : "grade levels"}
               </p>
             </div>

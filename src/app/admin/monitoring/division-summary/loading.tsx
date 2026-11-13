@@ -1,12 +1,12 @@
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
-import { SummarySlide } from "@/components/summary/summary-slide";
+import { PageSlide } from "@/components/ui/page-slide";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AdminSummaryLoading() {
   return (
     <RouteLoadingOverlay>
-      <SummarySlide side="list">
+      <PageSlide side="parent">
         <SchoolHeadPageSkeleton hero>
           <div
             className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3"
@@ -17,7 +17,7 @@ export default function AdminSummaryLoading() {
             ))}
           </div>
         </SchoolHeadPageSkeleton>
-      </SummarySlide>
+      </PageSlide>
     </RouteLoadingOverlay>
   );
 }

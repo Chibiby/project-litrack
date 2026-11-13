@@ -128,7 +128,7 @@ export function ErrorLogTable({
                 <TableCell className="align-top">
                   <SeverityBadge severity={event.severity} />
                 </TableCell>
-                <TableCell className="max-w-[16rem] align-top text-xs text-muted-foreground">
+                <TableCell className="max-w-64 align-top text-xs text-muted-foreground">
                   {event.route ? <CellText>{event.route}</CellText> : <NoValue />}
                   {event.routeType ? (
                     <span className="block text-xs opacity-70">{event.routeType}</span>

@@ -44,11 +44,11 @@ export default async function AdminLoginPage({ searchParams }: AdminLoginPagePro
               </div>
             ) : null}
             {!authReady ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900">
                 <p className="font-medium">Sign-in unavailable</p>
                 {/* The env var names went to the error record, not to this page:
                     /admin/login is public, and anyone can read what is printed here. */}
-                <p className="mt-1 text-amber-800/90">{formatMessage("CONFIG_MISSING")}</p>
+                <p className="mt-1 text-warning-800/90">{formatMessage("CONFIG_MISSING")}</p>
               </div>
             ) : null}
           </>

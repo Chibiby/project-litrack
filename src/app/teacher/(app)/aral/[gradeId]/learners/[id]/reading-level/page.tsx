@@ -140,7 +140,7 @@ export default async function ReadingLevelPage({
                         <TableCell className="text-xs">{w.filipino ?? <NoValue />}</TableCell>
                         <TableCell className="text-xs">{w.word ?? <NoValue />}</TableCell>
                         <TableCell className="text-xs">{w.comprehension ?? <NoValue />}</TableCell>
-                        <TableCell className="max-w-[16rem] text-xs text-muted-foreground">
+                        <TableCell className="max-w-64 text-xs text-muted-foreground">
                           {w.notes ? <CellText>{w.notes}</CellText> : <NoValue />}
                         </TableCell>
                       </TableRow>

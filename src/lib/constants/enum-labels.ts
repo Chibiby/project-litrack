@@ -85,9 +85,9 @@ export const TERM_MARK_OPTIONS = (
  */
 export const TERM_MARK_TONE = {
   ADVANCING: {
-    cell: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-    text: "text-emerald-700 dark:text-emerald-300",
-    dot: "bg-emerald-500 dark:bg-emerald-400",
+    cell: "border-success-300 bg-success-50 text-success-700 dark:border-success-800 dark:bg-success-950 dark:text-success-300",
+    text: "text-success-700 dark:text-success-300",
+    dot: "bg-success-500 dark:bg-success-400",
   },
   BENCHMARKING: {
     cell: "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300",
@@ -95,9 +95,9 @@ export const TERM_MARK_TONE = {
     dot: "bg-blue-500 dark:bg-blue-400",
   },
   CONNECTING: {
-    cell: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
-    text: "text-amber-700 dark:text-amber-300",
-    dot: "bg-amber-500 dark:bg-amber-400",
+    cell: "border-warning-300 bg-warning-50 text-warning-700 dark:border-warning-800 dark:bg-warning-950 dark:text-warning-300",
+    text: "text-warning-700 dark:text-warning-300",
+    dot: "bg-warning-500 dark:bg-warning-400",
   },
   DEVELOPING: {
     cell: "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300",
@@ -105,9 +105,9 @@ export const TERM_MARK_TONE = {
     dot: "bg-orange-500 dark:bg-orange-400",
   },
   EMERGING: {
-    cell: "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
-    text: "text-rose-700 dark:text-rose-300",
-    dot: "bg-rose-500 dark:bg-rose-400",
+    cell: "border-danger-300 bg-danger-50 text-danger-700 dark:border-danger-900 dark:bg-danger-950 dark:text-danger-300",
+    text: "text-danger-700 dark:text-danger-300",
+    dot: "bg-danger-500 dark:bg-danger-400",
   },
 } as const;
 

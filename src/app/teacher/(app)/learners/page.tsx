@@ -601,7 +601,7 @@ export default async function TeacherLearnersPage({
         <h1 className="text-4xl font-extrabold tracking-tight text-slate-950 dark:text-white lg:text-5xl">
           Learners
         </h1>
-        <p className="mt-2 max-w-[10.5rem] text-base leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[16rem] lg:max-w-md lg:text-lg lg:text-slate-800">
+        <p className="mt-2 max-w-[10.5rem] text-base leading-snug text-slate-600 dark:text-slate-300 sm:max-w-64 lg:max-w-md lg:text-lg lg:text-slate-800">
           Manage and view all learners in your advisories.
           {isSuperAdmin && sp.schoolId ? " (Admin View)" : ""}
         </p>

@@ -74,7 +74,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
       }}
       className="space-y-6"
     >
-      <Card className="violet-section">
+      <Card className="aral-section">
         <CardHeader><CardTitle className="text-base">C. Reading Behavior (Letter-to-Word Level)</CardTitle></CardHeader>
         <CardContent className="space-y-6">
           {/* No absenteeism questions: Weekly Attendance already records every absence. */}
@@ -95,7 +95,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
         </CardContent>
       </Card>
 
-      <Card className="violet-section">
+      <Card className="aral-section">
         <CardHeader><CardTitle className="text-base">D. External Factors Affecting Reading Progress</CardTitle></CardHeader>
         <CardContent className="space-y-6">
           <div>
@@ -120,7 +120,7 @@ export function AralUpdateForm({ learnerId, defaultValues = {} }: { learnerId: s
         </CardContent>
       </Card>
 
-      <Card className="violet-section">
+      <Card className="aral-section">
         <CardHeader><CardTitle className="text-base">E. Suggested Interventions and Recommendations</CardTitle></CardHeader>
         <CardContent className="space-y-6">
           <div>

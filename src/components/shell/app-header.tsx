@@ -179,9 +179,9 @@ export function AppHeader({
           // its margins, so only margins animate on scroll. An animated width
           // also eased behind the page whenever the sidebar was toggled, which
           // read as lag.
-          "flex min-w-0 flex-1 items-center gap-3 border px-4 transition-[margin,height,border-radius,background-color,border-color,box-shadow] duration-300 ease-in-out lg:gap-4 lg:px-6",
+          "flex min-w-0 flex-1 items-center gap-3 border px-4 transition-[margin,height,border-radius,background-color,border-color,box-shadow] duration-base ease-in-out lg:gap-4 lg:px-6",
           scrolled
-            ? "mx-4 mt-2 h-[calc(100%-0.75rem)] rounded-2xl border-white/40 bg-glass/25 shadow-[0_8px_32px_rgb(15_23_42/0.10)] backdrop-blur-lg lg:mx-6 dark:border-white/10 dark:bg-glass/[0.06] dark:shadow-[0_8px_32px_rgb(0_0_0/0.35)]"
+            ? "mx-4 mt-2 h-[calc(100%-0.75rem)] rounded-2xl border-white/40 bg-glass/25 shadow-glass backdrop-blur-md lg:mx-6 dark:border-white/10 dark:bg-glass/[0.06]"
             : "h-full rounded-none border-transparent bg-transparent"
         )}
       >
@@ -269,7 +269,7 @@ export function AppHeader({
             <PopoverContent
               align="end"
               sideOffset={10}
-              className="w-80 rounded-2xl border-white/50 bg-glass/40 shadow-[0_12px_40px_rgb(15_23_42/0.14),inset_0_1px_0_rgb(255_255_255/0.6)] backdrop-blur-xl dark:border-white/10 dark:bg-[hsl(var(--surface)/0.55)] dark:shadow-[0_12px_40px_rgb(0_0_0/0.45)]"
+              className="w-80 rounded-2xl border-white/50 bg-glass/40 shadow-float backdrop-blur-xl dark:border-white/10 dark:bg-[hsl(var(--surface)/0.55)]"
             >
               <MonthCalendar todayKey={todayKey} />
             </PopoverContent>

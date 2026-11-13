@@ -20,7 +20,7 @@ export function LoginShell({
   return (
     <main
       id="main-content"
-      className={`relative isolate min-h-dvh overflow-x-hidden bg-sky-100${glass ? " login-glass" : ""}`}
+      className={`relative isolate min-h-dvh overflow-x-hidden bg-info-100${glass ? " login-glass" : ""}`}
     >
       {/* The art is drawn 12% taller than the screen and pinned to the top,
           which drops the building to about two thirds down (the mockup) and
@@ -93,7 +93,7 @@ function LoginBrand() {
 
       <h1 className="mt-5 text-[3.5rem] font-black leading-none tracking-tight sm:text-7xl lg:mt-14 lg:text-[6.5rem] xl:text-[7.5rem]">
         <span className="text-indigo-950">LIT</span>
-        <span className="text-violet-600">RACK</span>
+        <span className="text-aral-600">RACK</span>
       </h1>
       <p className="mt-1 text-balance text-sm font-semibold text-slate-700 sm:text-base lg:mt-2 lg:text-xl xl:text-2xl">
         School reading-profiling system for the ARAL Program

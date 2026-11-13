@@ -32,9 +32,9 @@ export type StatTone =
 
 /** The icon's colour. The tile behind it is plain glass (`TILE_GLASS`). */
 const TILE: Record<StatTone, string> = {
-  violet: "text-violet-700 dark:text-violet-200",
-  amber: "text-amber-700 dark:text-amber-200",
-  emerald: "text-emerald-700 dark:text-emerald-200",
+  violet: "text-aral-strong",
+  amber: "text-warning-strong",
+  emerald: "text-success-strong",
   primary: "text-blue-700 dark:text-blue-200",
   pink: "text-pink-700 dark:text-pink-200",
   neutral: "text-muted-foreground",
@@ -50,9 +50,9 @@ const TILE_GLASS = "icon-glass";
 
 /** Hover arrow colour. */
 const LINK: Record<StatTone, string> = {
-  violet: "text-violet-700 dark:text-violet-300",
-  amber: "text-amber-700 dark:text-amber-400",
-  emerald: "text-emerald-700 dark:text-emerald-400",
+  violet: "text-aral-700 dark:text-aral-300",
+  amber: "text-warning-700 dark:text-warning-400",
+  emerald: "text-success-700 dark:text-success-400",
   primary: "text-blue-700 dark:text-blue-400",
   pink: "text-pink-700 dark:text-pink-400",
   neutral: "text-muted-foreground",
@@ -60,9 +60,9 @@ const LINK: Record<StatTone, string> = {
 
 /** Border colour a card rings in on hover / focus. */
 const HOVER_RING: Record<StatTone, string> = {
-  violet: "hover:border-violet-300 focus-within:border-violet-300 dark:hover:border-violet-700 dark:focus-within:border-violet-700",
-  amber: "hover:border-amber-300 focus-within:border-amber-300 dark:hover:border-amber-700 dark:focus-within:border-amber-700",
-  emerald: "hover:border-emerald-300 focus-within:border-emerald-300 dark:hover:border-emerald-700 dark:focus-within:border-emerald-700",
+  violet: "hover:border-aral-300 focus-within:border-aral-300 dark:hover:border-aral-700 dark:focus-within:border-aral-700",
+  amber: "hover:border-warning-300 focus-within:border-warning-300 dark:hover:border-warning-700 dark:focus-within:border-warning-700",
+  emerald: "hover:border-success-300 focus-within:border-success-300 dark:hover:border-success-700 dark:focus-within:border-success-700",
   primary: "hover:border-blue-300 focus-within:border-blue-300 dark:hover:border-blue-700 dark:focus-within:border-blue-700",
   pink: "hover:border-pink-300 focus-within:border-pink-300 dark:hover:border-pink-700 dark:focus-within:border-pink-700",
   neutral: "hover:border-muted-foreground/40 focus-within:border-muted-foreground/40",
@@ -70,9 +70,9 @@ const HOVER_RING: Record<StatTone, string> = {
 
 /** The card's wash: its tone in the top-left corner, fading to the surface. */
 const WASH: Record<StatTone, string> = {
-  violet: "from-violet-100/70 dark:from-violet-950/40",
-  amber: "from-amber-100/60 dark:from-amber-950/30",
-  emerald: "from-emerald-100/60 dark:from-emerald-950/30",
+  violet: "from-aral-100/70 dark:from-aral-950/40",
+  amber: "from-warning-100/60 dark:from-warning-950/30",
+  emerald: "from-success-100/60 dark:from-success-950/30",
   primary: "from-blue-100/60 dark:from-blue-950/30",
   pink: "from-pink-100/60 dark:from-pink-950/30",
   neutral: "from-muted/70 dark:from-muted/40",
@@ -80,9 +80,9 @@ const WASH: Record<StatTone, string> = {
 
 /** Fill of the optional progress bar. */
 const BAR: Record<StatTone, string> = {
-  violet: "bg-violet-500",
-  amber: "bg-amber-500",
-  emerald: "bg-emerald-500",
+  violet: "bg-aral-500",
+  amber: "bg-warning-500",
+  emerald: "bg-success-500",
   primary: "bg-blue-500",
   pink: "bg-pink-500",
   neutral: "bg-muted-foreground",
@@ -154,26 +154,26 @@ export function StatCard({
         // the top-left corner, over a backdrop blur.
         "bg-card/55 bg-gradient-to-br via-card/55 via-60% to-card/55 backdrop-blur-xl dark:bg-card/45 dark:via-card/45 dark:to-card/45",
         "border-white/60 dark:border-white/10",
-        "shadow-[0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[0_8px_24px_-12px_rgb(0_0_0/0.5)]",
+        "shadow-raised",
         denseOnPhone ? "p-3" : "p-4",
         WASH[tone],
         // Every card — clickable or read-only — lifts, enlarges slightly,
         // deepens its shadow and rings in its tone on hover / focus.
-        "transition-[transform,box-shadow,border-color,opacity] duration-200 ease-out",
-        "hover:z-20 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-[0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:hover:shadow-[0_16px_32px_-12px_rgb(0_0_0/0.6)]",
-        "focus-within:z-20 focus-within:-translate-y-0.5 focus-within:scale-[1.02] focus-within:shadow-[0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:focus-within:shadow-[0_16px_32px_-12px_rgb(0_0_0/0.6)]",
+        "transition-[transform,box-shadow,border-color,opacity] duration-base ease-out",
+        "hover:z-20 hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lift",
+        "focus-within:z-20 focus-within:-translate-y-0.5 focus-within:scale-[1.02] focus-within:shadow-lift",
         "motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100",
         HOVER_RING[tone],
         // Only a card that goes somewhere looks pressable.
         clickable &&
-          "cursor-pointer active:translate-y-0 active:scale-[0.98] active:shadow-[0_2px_6px_-2px_rgb(15_23_42/0.15)] motion-reduce:active:scale-100"
+          "cursor-pointer active:translate-y-0 active:scale-[0.98] active:shadow-pressed motion-reduce:active:scale-100"
       )}
     >
       {clickable ? (
         <ArrowUpRight
           aria-hidden
           className={cn(
-            "absolute right-3 top-3 size-4 opacity-0 transition-all duration-200",
+            "absolute right-3 top-3 size-4 opacity-0 transition-[transform,opacity] duration-base",
             "-translate-x-1 translate-y-1 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100",
             "group-focus-within:translate-x-0 group-focus-within:translate-y-0 group-focus-within:opacity-100",
             // A touch screen cannot hover to reveal it, so the arrow just shows.
@@ -194,7 +194,7 @@ export function StatCard({
           <span
             aria-hidden
             className={cn(
-              "flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105 motion-reduce:group-hover:scale-100",
+              "flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-base group-hover:scale-105 motion-reduce:group-hover:scale-100",
               denseOnPhone ? "@[14rem]/stat:size-[3.75rem]" : "@[14rem]/stat:size-[4.25rem]",
               "@[18rem]/stat:size-20",
               TILE_GLASS,

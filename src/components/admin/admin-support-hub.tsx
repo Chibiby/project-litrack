@@ -72,14 +72,14 @@ export function AdminSupportHub({
             className={cn(
               "h-11 shrink-0 rounded-none border-b-2 px-3 text-sm sm:px-4",
               tab === "chat"
-                ? "border-violet text-violet hover:bg-violet-soft/60 hover:text-violet"
+                ? "border-aral text-aral hover:bg-aral-soft/60 hover:text-aral"
                 : "border-transparent text-muted-foreground"
             )}
           >
             <MessageCircle className="size-4" aria-hidden />
             Chat
           </Button>
-          <Button type="button" role="tab" variant="ghost" aria-selected={tab === "email"} aria-controls="admin-support-email" onClick={() => selectTab("email")} className={cn("h-11 shrink-0 rounded-none border-b-2 px-3 text-sm sm:px-4", tab === "email" ? "border-violet text-violet hover:bg-violet-soft/60 hover:text-violet" : "border-transparent text-muted-foreground")}>
+          <Button type="button" role="tab" variant="ghost" aria-selected={tab === "email"} aria-controls="admin-support-email" onClick={() => selectTab("email")} className={cn("h-11 shrink-0 rounded-none border-b-2 px-3 text-sm sm:px-4", tab === "email" ? "border-aral text-aral hover:bg-aral-soft/60 hover:text-aral" : "border-transparent text-muted-foreground")}>
             <Mail className="size-4" aria-hidden />Email
           </Button>
           <Button
@@ -92,7 +92,7 @@ export function AdminSupportHub({
             className={cn(
               "h-11 shrink-0 rounded-none border-b-2 px-3 text-sm sm:px-4",
               tab === "tickets"
-                ? "border-violet text-violet hover:bg-violet-soft/60 hover:text-violet"
+                ? "border-aral text-aral hover:bg-aral-soft/60 hover:text-aral"
                 : "border-transparent text-muted-foreground"
             )}
           >

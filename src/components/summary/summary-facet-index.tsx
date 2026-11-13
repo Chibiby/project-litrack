@@ -1,4 +1,4 @@
-import { SummaryNavLink } from "./summary-slide";
+import { PageNavLink } from "@/components/ui/page-slide";
 import {
   ArrowLeft,
   BookOpen,
@@ -37,7 +37,7 @@ export const SUMMARY_FACET_ICON: Record<SummaryFacetId, LucideIcon> = {
 };
 
 const PRIMARY_TILE = "icon-glass text-blue-700 dark:text-blue-200";
-const ARAL_TILE = "icon-glass text-violet-700 dark:text-violet-200";
+const ARAL_TILE = "icon-glass text-aral-strong";
 
 // Same tile palette as the dashboard stat cards. Violet is the ARAL accent:
 // only the facets whose population is ARAL learners.
@@ -47,8 +47,8 @@ export const SUMMARY_FACET_TILE: Record<SummaryFacetId, string> = {
   "end-of-term": PRIMARY_TILE,
   attendance: ARAL_TILE,
   "reading-levels": ARAL_TILE,
-  compliance: "icon-glass text-amber-700 dark:text-amber-200",
-  profiling: "icon-glass text-emerald-700 dark:text-emerald-200",
+  compliance: "icon-glass text-warning-strong",
+  profiling: "icon-glass text-success-strong",
   aral: ARAL_TILE,
   bosy: ARAL_TILE,
   mosy: ARAL_TILE,
@@ -80,16 +80,16 @@ export function SummaryFacetIndex({
         const Icon = SUMMARY_FACET_ICON[facet.id];
         return (
           <li key={facet.id} className="min-w-0">
-            <SummaryNavLink
+            <PageNavLink
               dir="forward"
               href={`${basePath}/${facet.id}${query ? `?${query}` : ""}`}
               prefetch={true}
               className={cn(
                 "group flex h-full items-start gap-3 rounded-lg border p-4 sm:p-5",
                 // Frosted glass, the stat card recipe: a translucent surface over a blur.
-                "border-white/60 bg-card/55 backdrop-blur-xl dark:border-white/10 dark:bg-card/45",
-                "shadow-[0_8px_24px_-12px_rgb(15_23_42/0.18)] dark:shadow-[0_8px_24px_-12px_rgb(0_0_0/0.5)]",
-                "transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-12px_rgb(15_23_42/0.25)] dark:hover:shadow-[0_16px_32px_-12px_rgb(0_0_0/0.6)] motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+                "glass-card",
+                "shadow-raised",
+                "transition-[transform,box-shadow] duration-base hover:-translate-y-0.5 hover:shadow-lift motion-reduce:transition-none motion-reduce:hover:translate-y-0",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
@@ -114,7 +114,7 @@ export function SummaryFacetIndex({
                 aria-hidden
                 className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
               />
-            </SummaryNavLink>
+            </PageNavLink>
           </li>
         );
       })}
@@ -130,10 +130,10 @@ export function SummaryFacetIndex({
 export function SummaryBackLink({ basePath }: { basePath: string }) {
   return (
     <Button asChild variant="outline" size="sm" className="w-fit">
-      <SummaryNavLink dir="back" href={basePath} prefetch={true}>
+      <PageNavLink dir="back" href={basePath} prefetch={true}>
         <ArrowLeft aria-hidden className="size-4" />
         Back to summaries
-      </SummaryNavLink>
+      </PageNavLink>
     </Button>
   );
 }

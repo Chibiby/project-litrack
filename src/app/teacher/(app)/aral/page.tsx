@@ -186,9 +186,9 @@ async function AralLearnersTable({
                   <TableBody>
                     {learners.map((l) => (
                       <TableRow key={l.id}>
-                        <TableCell className="max-w-[18rem] font-medium">
+                        <TableCell className="max-w-72 font-medium">
                           <span className="flex min-w-0 items-center gap-2">
-                            <Sparkles className="h-3 w-3 shrink-0 text-violet" aria-hidden />
+                            <Sparkles className="h-3 w-3 shrink-0 text-aral" aria-hidden />
                             <CellText>{l.fullName}</CellText>
                           </span>
                         </TableCell>
@@ -220,7 +220,7 @@ async function AralLearnersTable({
                   {learners.map((l) => (
                     <StackedRow
                       key={l.id}
-                      leading={<Sparkles className="h-3 w-3 text-violet" aria-hidden />}
+                      leading={<Sparkles className="h-3 w-3 text-aral" aria-hidden />}
                       title={l.fullName}
                       href={learnerHref(l)}
                       value={

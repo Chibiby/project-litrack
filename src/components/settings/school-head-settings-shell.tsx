@@ -84,10 +84,10 @@ export function SchoolHeadSettingsShell({
         phoneMaskClassName="max-[439px]:[&>img]:[mask-image:linear-gradient(to_right,transparent_63%,black_68%)]"
         contentClassName="lg:min-h-[15rem]"
       >
-        <h1 className="max-w-[11rem] text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:max-w-none sm:text-3xl lg:text-5xl">
+        <h1 className="max-w-44 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:max-w-none sm:text-3xl lg:text-5xl">
           Profile Settings
         </h1>
-        <p className="mt-2 max-w-[11rem] text-sm leading-snug text-slate-600 dark:text-slate-300 sm:max-w-sm sm:text-base lg:max-w-md lg:text-lg lg:text-slate-800">
+        <p className="mt-2 max-w-44 text-sm leading-snug text-slate-600 dark:text-slate-300 sm:max-w-sm sm:text-base lg:max-w-md lg:text-lg lg:text-slate-800">
           Manage your account and school head profile.
         </p>
       </PageHero>

@@ -24,11 +24,11 @@ const HEAD_CLASS =
 
 const TIER_CHIP: Record<BosyTier, string> = {
   tier1:
-    "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200",
+    "border-warning-200 bg-warning-50 text-warning-900 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-200",
   tier2: "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200",
   tier3: "border-pink-200 bg-pink-50 text-pink-900 dark:border-pink-900/60 dark:bg-pink-950/40 dark:text-pink-200",
   tier4:
-    "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200",
+    "border-success-200 bg-success-50 text-success-900 dark:border-success-900/60 dark:bg-success-950/40 dark:text-success-200",
 };
 
 function Dash() {
@@ -114,7 +114,7 @@ export function BosyTable({
                 {rows.map((r, i) => (
                   <TableRow key={r.id}>
                     <TableCell numeric className="text-muted-foreground">{rowNumber(i)}</TableCell>
-                    <TableCell className="max-w-[18rem] font-medium">
+                    <TableCell className="max-w-72 font-medium">
                       {r.fullName}
                       {!r.isAralLearner ? (
                         <span className="ml-2 text-xs font-normal text-muted-foreground">(moved out)</span>
@@ -123,10 +123,10 @@ export function BosyTable({
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {r.sectionName ? `${r.gradeLabel} - ${r.sectionName}` : r.gradeLabel}
                     </TableCell>
-                    <TableCell className="min-w-[13rem]">
+                    <TableCell className="min-w-52">
                       <LevelCell label={r.filipinoLabel} difficulties={r.filipinoDifficulties} />
                     </TableCell>
-                    <TableCell className="min-w-[13rem]">
+                    <TableCell className="min-w-52">
                       {r.readsEnglish ? (
                         <LevelCell label={r.englishLabel} difficulties={r.englishDifficulties} />
                       ) : (

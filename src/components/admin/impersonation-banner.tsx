@@ -43,7 +43,7 @@ export function ImpersonationBanner({
   }
 
   return (
-    <div className="sticky top-0 z-50 border-b border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/60 dark:text-amber-100">
+    <div className="sticky top-0 z-50 border-b border-warning-300 bg-warning-100 text-warning-950 dark:border-warning-500/40 dark:bg-warning-950/60 dark:text-warning-100">
       <div className="mx-auto flex flex-wrap items-center justify-between gap-2 px-4 py-2">
         <p className="flex items-center gap-2 text-sm">
           {testLab ? (
@@ -75,7 +75,7 @@ export function ImpersonationBanner({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-200 dark:border-amber-500/50 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/50"
+                  className="border-warning-400 bg-warning-50 text-warning-950 hover:bg-warning-200 dark:border-warning-500/50 dark:bg-transparent dark:text-warning-100 dark:hover:bg-warning-900/50"
                 >
                   Pages
                 </Button>
@@ -104,7 +104,7 @@ export function ImpersonationBanner({
           ) : null}
           {expired ? (
             <form action={logoutAction}>
-              <SignOutButton className="border border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-200 dark:border-amber-500/50 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/50" />
+              <SignOutButton className="border border-warning-400 bg-warning-50 text-warning-950 hover:bg-warning-200 dark:border-warning-500/50 dark:bg-transparent dark:text-warning-100 dark:hover:bg-warning-900/50" />
             </form>
           ) : (
             <Button
@@ -113,7 +113,7 @@ export function ImpersonationBanner({
               variant="outline"
               loading={pending}
               loadingText="Returning…"
-              className="border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-200 dark:border-amber-500/50 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/50"
+              className="border-warning-400 bg-warning-50 text-warning-950 hover:bg-warning-200 dark:border-warning-500/50 dark:bg-transparent dark:text-warning-100 dark:hover:bg-warning-900/50"
               onClick={backToAdmin}
             >
               {testLab ? "Back to Test Lab" : "Return to admin"}

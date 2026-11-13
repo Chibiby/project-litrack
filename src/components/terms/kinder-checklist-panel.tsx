@@ -173,7 +173,7 @@ function DomainSection({
                   <TableHead className="w-32">T1</TableHead>
                   <TableHead className="w-32">T2</TableHead>
                   <TableHead className="w-32">T3</TableHead>
-                  <TableHead className="min-w-[10rem]">Remarks (Optional)</TableHead>
+                  <TableHead className="min-w-40">Remarks (Optional)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

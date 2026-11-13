@@ -286,7 +286,7 @@ export function GradeLevelBarChart({
           />
           <Bar
             dataKey="value"
-            fill="hsl(var(--violet))"
+            fill="hsl(var(--aral))"
             radius={[6, 6, 0, 0]}
             maxBarSize={56}
           >

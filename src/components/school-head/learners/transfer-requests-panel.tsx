@@ -133,7 +133,7 @@ export function TransferRequestsPanel({
         </p>
       ) : null}
       {staleInPick > 0 ? (
-        <p className="text-xs text-amber-800 dark:text-amber-300">
+        <p className="text-xs text-warning-800 dark:text-warning-300">
           {plural(staleInPick, "flagged request")} {staleInPick === 1 ? "is" : "are"} left out of Approve selected.
           Decline {staleInPick === 1 ? "it" : "them"} instead.
         </p>
@@ -216,7 +216,7 @@ function RequestRow({
     <li
       id={`transfer-request-${r.id}`}
       className={cn(
-        "flex scroll-mt-24 flex-col gap-2 py-3 target:bg-amber-50/60 lg:flex-row lg:items-start lg:gap-4 dark:target:bg-amber-950/30",
+        "flex scroll-mt-24 flex-col gap-2 py-3 target:bg-warning-50/60 lg:flex-row lg:items-start lg:gap-4 dark:target:bg-warning-950/30",
         checked && "bg-muted/40"
       )}
     >
@@ -247,7 +247,7 @@ function RequestRow({
           </p>
           {r.reason ? <p className="text-xs text-foreground">Note: {r.reason}</p> : null}
           {r.staleReason ? (
-            <p className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-warning-100 px-2 py-0.5 text-xs font-medium text-warning-900 dark:bg-warning-900/30 dark:text-warning-200">
               <AlertTriangle className="size-3.5" aria-hidden />
               Can&apos;t approve: {TRANSFER_BLOCK_REASON_LABELS[r.staleReason]}
             </p>

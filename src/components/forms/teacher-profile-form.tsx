@@ -1555,7 +1555,7 @@ export function TeacherProfileForm({
             ) : (
               <>
                 {noAssignableSections ? (
-                  <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+                  <div className="rounded-md border border-warning-300 bg-warning-50 px-4 py-3 text-sm text-warning-900 dark:border-warning-900/60 dark:bg-warning-950/40 dark:text-warning-100">
                     {gradeLevels.length === 0
                       ? "Your school has no grade levels set up yet. Ask your School Head to add grade levels and sections before you can finish profiling."
                       : "Every section in your school already has an adviser. Ask your School Head to add a section for you before you can finish profiling."}

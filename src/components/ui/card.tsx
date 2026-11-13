@@ -8,7 +8,7 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
       className={cn(
         // Frosted glass: a translucent card surface with a backdrop blur, so the
         // light-rays background shows softly through every panel.
-        "rounded-lg border border-glass/60 bg-card/55 text-card-foreground shadow-card backdrop-blur-xl dark:border-white/10 dark:bg-card/45",
+        "rounded-lg border glass-card text-card-foreground shadow-card",
         className
       )}
       {...props}

@@ -233,7 +233,7 @@ export function AccountRowActions({
                   size="sm"
                   disabled={isNonSignInHead}
                   aria-describedby={isNonSignInHead ? reasonId : undefined}
-                  className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-transparent dark:text-amber-300"
+                  className="border-warning-300 bg-warning-50 text-warning-900 hover:bg-warning-100 dark:border-warning-700 dark:bg-transparent dark:text-warning-300"
                 >
                   <UserCog className="mr-1.5 h-4 w-4" aria-hidden />
                   Sign in as

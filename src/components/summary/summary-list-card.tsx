@@ -33,8 +33,8 @@ export function SummaryListCard({ list }: { list: SummaryList }) {
           className={cn(
             "flex size-10 shrink-0 items-center justify-center rounded-md",
             list.rows.length > 0
-              ? "icon-glass text-amber-700 dark:text-amber-200"
-              : "icon-glass text-emerald-700 dark:text-emerald-200"
+              ? "icon-glass text-warning-strong"
+              : "icon-glass text-success-strong"
           )}
         >
           {list.rows.length > 0 ? <School className="size-5" /> : <CheckCircle2 className="size-5" />}
@@ -91,7 +91,7 @@ export function SummaryListCard({ list }: { list: SummaryList }) {
                             key={j}
                             className={cn(
                               "border-b border-border/60 px-3 py-2.5 align-top",
-                              j === 0 ? "min-w-[12rem] font-medium text-foreground" : "text-muted-foreground",
+                              j === 0 ? "min-w-48 font-medium text-foreground" : "text-muted-foreground",
                               typeof value === "number" && "whitespace-nowrap text-right tabular-nums"
                             )}
                           >
