@@ -11,7 +11,7 @@
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,
-  // Run the Worker next to the database. Supabase is in AWS ap-southeast-1
+  // Run the Worker next to the database. Neon is in AWS ap-southeast-1
   // (Singapore); a page makes many Postgres round trips, so running at the
   // edge location nearest each user put the full user→Singapore distance into
   // every query. This is the Cloudflare equivalent of the old Vercel `sin1` pin.

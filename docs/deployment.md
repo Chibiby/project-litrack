@@ -161,11 +161,18 @@ Supabase project. This replaces the Vercel `sin1` pin described in the appendix.
 
 Carried over from the Vercel cutover and not yet closed:
 
-- **Rate limiting is per-isolate.** Without `UPSTASH_REDIS_REST_URL` / `_TOKEN`,
-  `src/lib/rate-limit.ts` uses an in-memory window. Workers spread requests across many isolates, so
-  the login throttle bounds far less than it appears to. See `docs/runbook.md`.
-- **Backups still live in Vercel Blob** (`src/lib/db/backup-store.ts`), which keeps the Vercel
-  account load-bearing after the move. R2 is the obvious replacement.
+- **Rate limiting is shared through D1** since 2026-11-13. Without `UPSTASH_REDIS_REST_URL` /
+  `_TOKEN`, `src/lib/rate-limit.ts` counts attempts in the D1 database `litrack-rate-limit`
+  (binding `RATE_LIMIT_D1`, table `rl_hits`), which every isolate shares. Only when D1 is
+  unreachable does it fall back to a per-isolate window. See `docs/runbook.md`.
+- **Backups live in R2** since 2026-11-13: the private bucket `litrack-backups` (binding
+  `BACKUPS`, `src/lib/db/backup-store-r2.ts`). Vercel Blob (`BLOB_READ_WRITE_TOKEN`) is only the
+  fallback when the binding is missing. Backups written to Blob before the switch are no longer
+  listed in `/admin/database`.
+- **Profile photos live in R2**: bucket `litrack-avatars` (binding `AVATARS`), public at
+  `https://avatars.arallitrack.com`, which `next.config.mjs` inlines as
+  `NEXT_PUBLIC_AVATAR_BASE_URL` in Cloudflare builds. Photos uploaded on the old account did not
+  move; those users show initials until they upload again.
 - **Streaming backups are unproven in production.** Backups used to fail with error 1102
   (`exceededMemory`) because `createSnapshot` built all ~111 MB in one isolate. They now stream
   (see "How a backup is written"), but no run has completed on Workers yet. On the first
@@ -177,7 +184,8 @@ Carried over from the Vercel cutover and not yet closed:
     those count against the Worker's subrequest limit;
   - a restore streams the file inside a 240 s transaction.
 
-  Supabase PITR remains the real disaster recovery.
+  Neon keeps only 6 hours of restore history (`history_retention_seconds`), so these backups are
+  the real disaster recovery beyond that window.
 - **Heavy report paths are unverified on Workers.** `pdfkit` is bundled into the Worker rather than
   left external (see the comment in `next.config.mjs`), and `exceljs` exports are large jobs in
   an isolate that is capped at 128 MB. `maxDuration` means nothing here; Workers enforce CPU and

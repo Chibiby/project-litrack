@@ -173,10 +173,11 @@ What to do:
 2. Raise the limit: **Supabase Dashboard → Authentication → Rate Limits →
    "Sign in / Sign up"**. The default of 30 per 5 min is sized for one person,
    not for a division of ~330 schools logging in at the same time of morning.
-3. Set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` on the Worker if they
-   are unset. Without them LITRACK's own limiter degrades to a per-instance
-   window (it logs `[rate-limit] … not an effective limit` once), so a retry
-   loop is never stopped before it reaches Supabase.
+3. Check the limiter is shared. Without Upstash keys it counts attempts in D1
+   (`RATE_LIMIT_D1`, table `rl_hits`). If Workers Logs show
+   `[rate-limit] Neither Upstash nor the RATE_LIMIT_D1 binding is reachable`, the
+   binding is missing from `wrangler.jsonc` or the table was never created:
+   `npx wrangler d1 execute litrack-rate-limit --remote --command "CREATE TABLE IF NOT EXISTS rl_hits (key TEXT NOT NULL, ts INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS rl_hits_key_ts ON rl_hits (key, ts);"`
 
 Sign-in itself is made **by the browser**, not by the server action, so each
 person spends their own IP budget rather than the deployment's — see
