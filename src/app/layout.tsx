@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Archivo, IBM_Plex_Mono, Inter } from "next/font/google";
+import { IBM_Plex_Mono, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import { SparkIntro } from "@/components/brand/spark-intro";
 import { SparkIntroScript } from "@/components/brand/spark-intro-script";
@@ -22,10 +23,15 @@ const inter = Inter({
  * the intro plays on the entry routes once per tab: preloading them from every
  * page in the app would spend a request on the ~99% of navigations that never
  * draw the lockup. They are still self-hosted and swap in on the play.
+ *
+ * Archivo is a local file (Google's latin variable font, 400-700) rather than
+ * next/font/google: on 2026-11-13 the Cloudflare build's fetch of it from
+ * Google failed every time ("Can't resolve .../font/google/font") while the
+ * same files downloaded fine by hand, which blocked the 2.61.0 deploy.
  */
-const archivo = Archivo({
-  subsets: ["latin"],
-  weight: ["400", "700"],
+const archivo = localFont({
+  src: "./fonts/archivo-latin.woff2",
+  weight: "400 700",
   variable: "--font-archivo",
   display: "swap",
   preload: false,

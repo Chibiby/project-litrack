@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.61.1",
+    date: "2026-11-13",
+    title: "Behind-the-scenes fix for the 2.61.0 update",
+    announce: false,
+    fixes: [
+      { text: "The font used by the opening animation now ships with LITRACK, so installing an update no longer depends on downloading it.", roles: ["SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.61.0",
     date: "2026-11-13",
     title: "Profile photos are back, and quieter chat",
