@@ -47,7 +47,10 @@ const { default: SchoolsListPage, SCHOOLS_LIST_KEYS } = await import(
 
 /** Walk `SchoolsListPage`'s returned tree to its `Suspense` element. */
 function suspenseElementOf(pageElement: ReactElement): ReactElement {
-  const children = (pageElement.props as { children: ReactElement[] }).children;
+  // The page is wrapped in <PageSlide side="parent">; step inside it to AdminPage.
+  const slideProps = pageElement.props as { side?: string; children: ReactElement };
+  const adminPage = slideProps.side ? slideProps.children : pageElement;
+  const children = (adminPage.props as { children: ReactElement[] }).children;
   return children[children.length - 1];
 }
 

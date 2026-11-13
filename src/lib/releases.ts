@@ -135,6 +135,20 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.61.0",
+    date: "2026-11-13",
+    title: "Profile photos are back, and quieter chat",
+    announce: true,
+    fixes: [
+      { text: "You can upload a profile photo again. Photos added before 8 November need to be uploaded once more.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "An open chat checks for new messages less often while nobody is writing, which saves mobile data. It speeds up again as soon as a message arrives.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "Announcement dates now follow the Philippine day, so a post made early in the morning no longer shows yesterday's date.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "The Audit log and Error log show times in Philippine time instead of UTC.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "Opening a school from Schools slides its page in from the right, and All schools slides the list back in from the left.", roles: ["SUPER_ADMIN"] },
+      { text: "Repeated wrong sign-ins are now limited across the whole system, not separately on each server.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN"] },
+    ],
+  },
+  {
     version: "2.60.0",
     date: "2026-11-13",
     title: "A tidier, faster look",

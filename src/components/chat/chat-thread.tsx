@@ -103,7 +103,7 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
   const [pollStalled, setPollStalled] = useState(false);
   const pollFailuresRef = useRef(0);
   /** When the thread last showed a new message, for the poll back-off. */
-  const lastChangeAtRef = useRef(Date.now());
+  const lastChangeAtRef = useRef(0);
   const refreshNoticeRef = useRef(false);
 
   const logRef = useRef<HTMLDivElement>(null);
@@ -195,6 +195,7 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
   // Poll only while the tab is visible. A backgrounded phone should not be
   // making a request every six seconds on a teacher's mobile data.
   useEffect(() => {
+    lastChangeAtRef.current = Date.now();
     let timer: number | undefined;
     function poll() {
       if (document.visibilityState !== "visible" || navigator.onLine === false) return;

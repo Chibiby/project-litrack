@@ -52,7 +52,10 @@ const { default: SchoolsListPage } = await import("@/app/admin/management/school
 
 /** Walk `SchoolsListPage`'s returned tree to the `SchoolsTableBody` element. */
 function schoolsTableBodyElementOf(pageElement: ReactElement): ReactElement {
-  const children = (pageElement.props as { children: ReactElement[] }).children;
+  // The page is wrapped in <PageSlide side="parent">; step inside it to AdminPage.
+  const slideProps = pageElement.props as { side?: string; children: ReactElement };
+  const adminPage = slideProps.side ? slideProps.children : pageElement;
+  const children = (adminPage.props as { children: ReactElement[] }).children;
   const suspense = children[children.length - 1];
   return (suspense.props as { children: ReactElement }).children;
 }
