@@ -11,7 +11,7 @@ vi.mock("@/lib/teachers/aral-teacher", () => ({
 }));
 
 import { handAralLearnersToAdvisers } from "@/lib/teachers/hand-over-aral";
-import { deactivatedToast } from "@/lib/teachers/removal-copy";
+import { deactivateDescription, deactivatedToast } from "@/lib/teachers/removal-copy";
 
 const SCHOOL = "school-1";
 const TUTOR = "tutor-1";
@@ -115,6 +115,23 @@ describe("deactivatedToast", () => {
     );
     expect(deactivatedToast({ ok: true, data: { aralMoved: 1, aralKept: 0 } })).toBe(
       "Teacher deactivated. 1 ARAL learner moved to their adviser."
+    );
+  });
+});
+
+describe("deactivateDescription", () => {
+  it("leaves out advisory learners for a teacher with no class", () => {
+    expect(deactivateDescription({ fullName: "Ana Cruz", aralLearnerCount: 2, learnerCount: 0 })).toBe(
+      "Ana Cruz will not be able to sign in until reactivated. Their 2 ARAL learners will move to the learner's adviser, where the learner has an active one."
+    );
+  });
+
+  it("names only what applies", () => {
+    expect(deactivateDescription({ fullName: "Ana Cruz", aralLearnerCount: 1, learnerCount: 30 })).toBe(
+      "Ana Cruz will not be able to sign in until reactivated. Their 1 ARAL learner will move to the learner's adviser, where the learner has an active one. Their advisory learners stay in their class."
+    );
+    expect(deactivateDescription({ fullName: "Ana Cruz", aralLearnerCount: 0, learnerCount: 0 })).toBe(
+      "Ana Cruz will not be able to sign in until reactivated."
     );
   });
 });

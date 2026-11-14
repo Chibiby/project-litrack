@@ -39,7 +39,7 @@ import { setTeacherAdvisorySection } from "@/lib/actions/teacher";
 import { removeUserAvatar } from "@/lib/actions/avatar";
 import { advisoryCapFor, advisoryCapReason } from "@/lib/teachers/advisory-limits";
 import { FLOATING_CHIP_LABEL, UNASSIGNED_CHIP_LABEL } from "@/lib/teachers/floating-copy";
-import { removalAdvisoryNote, deactivatedToast } from "@/lib/teachers/removal-copy";
+import { removalAdvisoryNote, deactivatedToast, deactivateDescription } from "@/lib/teachers/removal-copy";
 import {
   resyncOverrides,
   signaturesFor,
@@ -453,11 +453,7 @@ function TeacherManageButtons({
       {mode === "active" ? (
         <ConfirmAction
           title="Deactivate teacher?"
-          description={
-            row.aralLearnerCount > 0
-              ? `${row.fullName} will not be able to sign in until reactivated. Their ${row.aralLearnerCount} ARAL learner${row.aralLearnerCount === 1 ? "" : "s"} move to each learner's adviser. Advisory learners stay assigned.`
-              : `${row.fullName} will not be able to sign in until reactivated. Learners stay assigned.`
-          }
+          description={deactivateDescription(row)}
           confirmLabel="Deactivate"
           variant="destructive"
           disabled={rowBusy}

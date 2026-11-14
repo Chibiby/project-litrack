@@ -44,3 +44,23 @@ export function deactivatedToast(res: unknown): string {
   }
   return parts.length === 1 ? "Teacher deactivated" : parts.join(" ");
 }
+
+/**
+ * The Deactivate confirmation. Names only what applies to this teacher: a
+ * volunteer with no class is not told about advisory learners.
+ */
+export function deactivateDescription(row: {
+  fullName: string;
+  aralLearnerCount: number;
+  learnerCount: number;
+}): string {
+  const parts = [`${row.fullName} will not be able to sign in until reactivated.`];
+  if (row.aralLearnerCount > 0) {
+    const n = row.aralLearnerCount;
+    parts.push(
+      `Their ${n} ARAL learner${n === 1 ? "" : "s"} will move to the learner's adviser, where the learner has an active one.`
+    );
+  }
+  if (row.learnerCount > 0) parts.push("Their advisory learners stay in their class.");
+  return parts.join(" ");
+}
