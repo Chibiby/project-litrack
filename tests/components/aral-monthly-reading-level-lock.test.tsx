@@ -52,9 +52,9 @@ const { AralMonthlyReadingLevelPanel } = await import(
   "@/components/aral/aral-monthly-reading-level-panel"
 );
 
-/** June 2026 — long past its July 7 grace deadline once "today" is September. */
+/** June 2026 — long past its July 14 grace deadline once "today" is September. */
 const PAST_MONTH = "2026-06-01";
-/** August 2026 — still inside its September 7 grace deadline on that same "today". */
+/** August 2026 — still inside its September 14 grace deadline on that same "today". */
 const IN_GRACE_MONTH = "2026-08-01";
 
 const LEARNERS = [
@@ -95,8 +95,8 @@ beforeEach(() => {
   window.HTMLElement.prototype.hasPointerCapture = vi.fn();
   window.HTMLElement.prototype.releasePointerCapture = vi.fn();
   // Fixed "today" so a month's grace window is deterministic: August 20,
-  // 2026 puts June (PAST_MONTH) well past its July 7 deadline, but is still
-  // short of August's (IN_GRACE_MONTH) September 7 deadline.
+  // 2026 puts June (PAST_MONTH) well past its July 14 deadline, but is still
+  // short of August's (IN_GRACE_MONTH) September 14 deadline.
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-08-20T04:00:00Z")); // ~noon Manila
 });
@@ -117,7 +117,7 @@ describe("monthly reading-level panel — lock state", () => {
 
     expect(screen.getByText("Locked")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save reading levels" })).toBeNull();
-    expect(screen.getByText("Editing closed on July 7, 2026.")).toBeTruthy();
+    expect(screen.getByText("Editing closed on July 14, 2026.")).toBeTruthy();
   });
 
   it("renders a Save control and a Reopened pill when the month is in unlockedMonths", () => {

@@ -78,7 +78,7 @@ export function formatMonthEndLongDate(monthKey: string): string {
 }
 
 /** Days a month stays editable after it ends, mirroring `ATTENDANCE_EDIT_GRACE_DAYS`. */
-export const READING_LEVEL_EDIT_GRACE_DAYS = 7;
+export const READING_LEVEL_EDIT_GRACE_DAYS = 14;
 
 /**
  * Last day a month's reading levels can still be saved: the month's last day

@@ -44,7 +44,7 @@ import { readingLevelDeadline } from "@/lib/month-range";
 const USER_ID = "teacher-marivic";
 const SCHOOL_ID = "school-malandag";
 const MONTH_KEY = "2026-08-01";
-const DEADLINE = readingLevelDeadline(MONTH_KEY); // 2026-09-07
+const DEADLINE = readingLevelDeadline(MONTH_KEY); // 2026-09-14
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -21,3 +21,26 @@ export function removalAdvisoryNote(row: {
   }
   return parts.length > 0 ? parts.join(" ") : null;
 }
+
+/**
+ * The toast after a School Head deactivates a teacher. Says where the ARAL
+ * learners went, and how many still need a tutor picked by hand.
+ */
+export function deactivatedToast(res: unknown): string {
+  const data =
+    res && typeof res === "object" && (res as { ok?: unknown }).ok === true
+      ? ((res as { data?: { aralMoved?: number; aralKept?: number } }).data ?? {})
+      : {};
+  const moved = data.aralMoved ?? 0;
+  const kept = data.aralKept ?? 0;
+  const parts = ["Teacher deactivated."];
+  if (moved > 0) {
+    parts.push(`${moved} ARAL learner${moved === 1 ? "" : "s"} moved to their adviser.`);
+  }
+  if (kept > 0) {
+    parts.push(
+      `${kept} ARAL learner${kept === 1 ? " has" : "s have"} no adviser to take over. Assign an ARAL teacher on the Learners page.`
+    );
+  }
+  return parts.length === 1 ? "Teacher deactivated" : parts.join(" ");
+}

@@ -228,7 +228,7 @@ const resolveMonthlyReadingLevelWindow = vi.fn(
   async (_arg?: unknown): Promise<WindowVerdict> => ({
     writable: true,
     reason: "in-window",
-    deadline: new Date(2026, 8, 7),
+    deadline: new Date(2026, 8, 14),
     grantId: null,
     grantKind: null,
   })
@@ -269,7 +269,7 @@ beforeEach(() => {
   resolveMonthlyReadingLevelWindow.mockResolvedValue({
     writable: true,
     reason: "in-window",
-    deadline: new Date(2026, 8, 7),
+    deadline: new Date(2026, 8, 14),
     grantId: null,
     grantKind: null,
   });
@@ -502,7 +502,7 @@ describe("bulkRecordMonthlyReadingLevel — the deadline gate", () => {
     resolveMonthlyReadingLevelWindow.mockResolvedValue({
       writable: false,
       reason: "locked",
-      deadline: new Date(2026, 8, 7),
+      deadline: new Date(2026, 8, 14),
       grantId: null,
       grantKind: null,
     });
@@ -511,7 +511,7 @@ describe("bulkRecordMonthlyReadingLevel — the deadline gate", () => {
 
     expect(res.ok).toBe(false);
     expect((res as { error: string }).error).toBe(
-      "This month is locked. Editing closed on September 7, 2026."
+      "This month is locked. Editing closed on September 14, 2026."
     );
     // The whole point of ordering the gate first: a refused save never reads
     // the roster and never opens a transaction.
@@ -529,7 +529,7 @@ describe("bulkRecordMonthlyReadingLevel — the deadline gate", () => {
     resolveMonthlyReadingLevelWindow.mockResolvedValue({
       writable: true,
       reason: "granted",
-      deadline: new Date(2026, 8, 7),
+      deadline: new Date(2026, 8, 14),
       grantId: "grant-99",
       grantKind: "school",
     });
@@ -558,7 +558,7 @@ describe("bulkRecordMonthlyReadingLevel — the deadline gate", () => {
     resolveMonthlyReadingLevelWindow.mockResolvedValue({
       writable: true,
       reason: "granted",
-      deadline: new Date(2026, 8, 7),
+      deadline: new Date(2026, 8, 14),
       grantId: "grant-42",
       grantKind: "user",
     });

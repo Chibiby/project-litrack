@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.64.0",
+    date: "2026-11-14",
+    title: "ARAL learners follow their adviser, and two weeks to finish records",
+    announce: true,
+    fixes: [
+      { text: "When you deactivate a teacher, the ARAL learners they tutor move to each learner's adviser, and the adviser is notified. A learner with no active adviser stays as it is, and the message tells you how many to assign by hand.", roles: ["SCHOOL_HEAD"] },
+      { text: "A week of ARAL attendance now stays open for 14 days after it ends, not 7.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "A month's reading levels now stay open for 14 days after the month ends, not 7.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "If a School Head deactivates an ARAL teacher, their ARAL learners who are in your class come to you. You get a notification when that happens.", roles: ["TEACHER"] },
+      { text: "Weekly attendance and monthly reading levels now lock 14 days after the period ends, not 7. Unlock grants work as before.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.63.0",
     date: "2026-11-14",
     title: "A simpler Reports page",

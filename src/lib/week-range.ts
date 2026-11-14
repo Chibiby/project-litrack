@@ -25,7 +25,7 @@ const MONTHS = [
 ];
 
 /** Days a week stays editable after it ends. */
-export const ATTENDANCE_EDIT_GRACE_DAYS = 7;
+export const ATTENDANCE_EDIT_GRACE_DAYS = 14;
 
 /** `August 24, 2026` */
 export function formatLongDate(date: Date): string {

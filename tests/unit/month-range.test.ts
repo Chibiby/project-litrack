@@ -119,21 +119,21 @@ describe("the reading-level deadline", () => {
     const deadline = readingLevelDeadline("2026-08-01");
     expect(deadline.getFullYear()).toBe(2026);
     expect(deadline.getMonth()).toBe(8); // September
-    expect(deadline.getDate()).toBe(7);
+    expect(deadline.getDate()).toBe(14);
   });
 
   it("rolls into March for a February month", () => {
     const deadline = readingLevelDeadline("2026-02-01");
     expect(deadline.getFullYear()).toBe(2026);
     expect(deadline.getMonth()).toBe(2); // March
-    expect(deadline.getDate()).toBe(7);
+    expect(deadline.getDate()).toBe(14);
   });
 
   it("rolls the year at the December/January boundary", () => {
     const deadline = readingLevelDeadline("2026-12-01");
     expect(deadline.getFullYear()).toBe(2027);
     expect(deadline.getMonth()).toBe(0); // January
-    expect(deadline.getDate()).toBe(7);
+    expect(deadline.getDate()).toBe(14);
   });
 
   it("stays on the intended local day when pinned to Asia/Manila, proving no UTC drift", () => {
@@ -141,13 +141,13 @@ describe("the reading-level deadline", () => {
     const deadline = readingLevelDeadline("2026-08-01");
     expect(deadline.getFullYear()).toBe(2026);
     expect(deadline.getMonth()).toBe(8); // September
-    expect(deadline.getDate()).toBe(7);
+    expect(deadline.getDate()).toBe(14);
     expect(deadline.getHours()).toBe(0);
   });
 
   it("spells the deadline out the same way the attendance deadline reads", () => {
-    expect(formatMonthDeadlineLongDate("2026-08-01")).toBe("September 7, 2026");
-    expect(formatMonthDeadlineLongDate("2026-12-01")).toBe("January 7, 2027");
-    expect(formatMonthDeadlineLongDate("2028-02-01")).toBe("March 7, 2028");
+    expect(formatMonthDeadlineLongDate("2026-08-01")).toBe("September 14, 2026");
+    expect(formatMonthDeadlineLongDate("2026-12-01")).toBe("January 14, 2027");
+    expect(formatMonthDeadlineLongDate("2028-02-01")).toBe("March 14, 2028");
   });
 });

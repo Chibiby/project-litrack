@@ -67,7 +67,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       "disabled",
     ],
     body: [
-      "A week of ARAL attendance stays editable for 7 days after it ends. Once that grace period passes the grid becomes read-only and saves are refused, so the record matches what was true at the time.",
+      "A week of ARAL attendance stays editable for 14 days after it ends. Once that grace period passes the grid becomes read-only and saves are refused, so the record matches what was true at the time.",
       "If you genuinely need to correct a closed week, use Request Access in this assistant. Your request goes to the division admin, and if they approve it you get temporary write access to that one week — it closes again on its own when the access expires.",
     ],
     roles: ["TEACHER"],

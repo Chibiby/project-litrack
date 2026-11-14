@@ -32,8 +32,11 @@ import {
   releaseTeacherAdvisory,
   type ReleasedAdvisory,
 } from "@/lib/teachers/release-advisory";
+import { handAralLearnersToAdvisers, type AralHandover } from "@/lib/teachers/hand-over-aral";
+import { notifyAralAssigned } from "@/lib/notifications";
 
 import {
+  revalidateLearnerScoped,
   revalidateSchoolDashboard,
   revalidateSchoolHeadTeachers,
   revalidateSchoolsList,
@@ -830,11 +833,21 @@ const setTeacherActiveSchema = z.object({
     .transform((v) => v === true || v === "true"),
 });
 
+/** What a deactivation did with the teacher's ARAL learners, for the toast. */
+export type TeacherDeactivateResult = { aralMoved: number; aralKept: number };
+
 /**
  * Deactivate or reactivate an approved teacher at this school.
  * Deactivated teachers cannot sign in; historical learner links are kept.
+ *
+ * Deactivating also hands the teacher's ARAL learners to each learner's own
+ * adviser, in the same transaction (see `handAralLearnersToAdvisers`), so no
+ * learner is left with a tutor who cannot sign in. Reactivating does not move
+ * them back: the School Head reassigns by hand if that is wanted.
  */
-export const setTeacherActive = action("setTeacherActive", async (formData: FormData): Promise<ActionResult> => {
+export const setTeacherActive = action("setTeacherActive", async (
+  formData: FormData
+): Promise<ActionResult<TeacherDeactivateResult>> => {
   const user = await requireSchoolUser("SCHOOL_HEAD");
 
   const parsed = setTeacherActiveSchema.safeParse({
@@ -864,10 +877,26 @@ export const setTeacherActive = action("setTeacherActive", async (formData: Form
     return { ok: true };
   }
 
-  await prismaFresh.user.update({
-    where: { id: teacher.id },
-    data: { isActive: parsed.data.isActive },
+  const deactivating = !parsed.data.isActive;
+  const handover: AralHandover = await prismaFresh.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: teacher.id },
+      data: { isActive: parsed.data.isActive },
+    });
+    return deactivating
+      ? handAralLearnersToAdvisers(tx, { teacherId: teacher.id, schoolId: user.schoolId })
+      : { moved: [], keptCount: 0 };
   });
+
+  for (const m of handover.moved) {
+    await notifyAralAssigned({
+      schoolId: user.schoolId,
+      recipientId: m.adviserId,
+      actorId: user.id,
+      learnerIds: m.learnerIds,
+    });
+  }
+  const aralMoved = handover.moved.reduce((n, m) => n + m.learnerIds.length, 0);
 
   await writeAudit({
     userId: user.id,
@@ -881,13 +910,28 @@ export const setTeacherActive = action("setTeacherActive", async (formData: Form
       schoolId: user.schoolId,
       teacherId: teacher.id,
       isActive: parsed.data.isActive,
+      ...(deactivating
+        ? {
+            aralLearnersMoved: aralMoved,
+            aralLearnersKept: handover.keptCount,
+            aralAdviserIds: handover.moved.map((m) => m.adviserId),
+          }
+        : {}),
     },
   });
 
   revalidateSchoolHeadTeachers(user.schoolId);
   revalidateSchoolsList();
   revalidateTeacherCaches(teacher.id);
-  return { ok: true };
+  if (aralMoved > 0) {
+    revalidatePath(SCHOOL_HEAD_ROUTES.learners);
+    revalidatePath("/teacher/aral");
+    revalidateLearnerScoped({ schoolId: user.schoolId, aralTeacherId: teacher.id, teacherShell: true });
+    for (const m of handover.moved) {
+      revalidateLearnerScoped({ schoolId: user.schoolId, aralTeacherId: m.adviserId, teacherShell: true });
+    }
+  }
+  return { ok: true, data: { aralMoved, aralKept: handover.keptCount } };
 }, { verb: "update the teacher" });
 
 /**
