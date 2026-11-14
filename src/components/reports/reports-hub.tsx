@@ -180,6 +180,16 @@ function periodText(filters: ReportFilters): string | null {
   return null;
 }
 
+/** The classes a history row covered. The server stores "All Classes" for no filter. */
+function classesText(row: { scopeLabel: string | null }): string {
+  return !row.scopeLabel || row.scopeLabel === "All Classes" ? "All classes" : row.scopeLabel;
+}
+
+/** What a screen reader calls a history row: the report and when, not a file name. */
+function rowName(row: RecentReportRow): string {
+  return `${REPORT_KIND_LABELS[row.kind]}, ${formatSchoolDateTime(row.createdAt)}`;
+}
+
 function ReportFormatChip({ format }: { format: keyof typeof REPORT_FORMAT_LABELS }) {
   return (
     <span
@@ -345,7 +355,7 @@ export function ReportsHub({
         disabled={busy !== null || !!locks[row.kind]}
         aria-disabled={!!locks[row.kind]}
         onClick={() => run(row.kind, row.filters, row.format, `row-${row.id}`)}
-        aria-label={`Download ${row.name} again`}
+        aria-label={`Download ${rowName(row)} again`}
         title={locks[row.kind] ?? "Download again"}
       >
         {busy === `row-${row.id}` ? (
@@ -361,7 +371,7 @@ export function ReportsHub({
           size="icon"
           disabled={busy !== null}
           onClick={() => remove(row)}
-          aria-label={`Remove ${row.name} from the list`}
+          aria-label={`Remove ${rowName(row)} from the list`}
           title="Remove from the list"
         >
           <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden />
@@ -497,6 +507,7 @@ export function ReportsHub({
         ) : (
           <ResponsiveTable
             className="mt-3"
+            breakpoint={900}
             table={
               <Table>
                 <TableHeader>
@@ -514,12 +525,11 @@ export function ReportsHub({
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="max-w-72">
-                        <span className="block font-medium">{REPORT_KIND_LABELS[row.kind]}</span>
-                        <CellText className="text-xs text-muted-foreground">{row.name}</CellText>
+                      <TableCell className="whitespace-nowrap font-medium">
+                        {REPORT_KIND_LABELS[row.kind]}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {row.scopeLabel ?? "All classes"}
+                      <TableCell className="max-w-56 text-muted-foreground">
+                        <CellText>{classesText(row)}</CellText>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {periodText(row.filters) ?? "School year"}
@@ -548,14 +558,11 @@ export function ReportsHub({
                     state={<ReportFormatChip format={row.format} />}
                     meta={
                       <>
-                        <span>{row.scopeLabel ?? "All classes"}</span>
+                        <span>{classesText(row)}</span>
                         <span className="tabular-nums">{formatSchoolDateTime(row.createdAt)}</span>
                       </>
                     }
-                    details={[
-                      { label: "Period", value: periodText(row.filters) ?? "School year" },
-                      { label: "File", value: row.name },
-                    ]}
+                    details={[{ label: "Period", value: periodText(row.filters) ?? "School year" }]}
                     actions={reportActions(row)}
                   />
                 ))}

@@ -148,4 +148,18 @@ describe("buildTeacherSummaryTable: Total row", () => {
     expect(table.rows).toHaveLength(1);
     expect(table.boldRowIndices).toBeUndefined();
   });
+
+  it("leaves out a section the teacher has no learner in", async () => {
+    // First section: 5 learners (count, then ARAL count). Second: none.
+    learnerCount.mockResolvedValueOnce(5).mockResolvedValueOnce(2).mockResolvedValue(0);
+    attendanceGroupBy.mockResolvedValue([]);
+    readingLevelRecordCount.mockResolvedValue(0);
+    sectionFindMany.mockResolvedValueOnce([section("sec-1", "A"), section("sec-2", "B")]);
+
+    const teacher = reportScope({ ...SCOPE, teacherId: "t-1" });
+    const table = await buildTeacherSummaryTable(teacher, {});
+
+    expect(table.rows.map((r) => r[0])).toEqual(["Grade 3 - A"]);
+    expect(table.summary[0]).toBe("1 class.");
+  });
 });

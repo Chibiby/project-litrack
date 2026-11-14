@@ -683,7 +683,7 @@ export const TERM_PERIOD_LABELS = {
 /** Reports Hub: what a generated report covers, and the file it produced. */
 export const REPORT_KIND_LABELS = {
   ATTENDANCE: "Attendance",
-  READING_LEVEL: "Reading Level",
+  READING_LEVEL: "Monthly Reading Level",
   TERM_GRADES: "Grades",
   TEACHER_SUMMARY: "Class Summary",
   CLASS_ROSTER: "Class Roster",

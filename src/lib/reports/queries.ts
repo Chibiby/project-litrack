@@ -308,6 +308,23 @@ export async function buildAttendanceTable(
  * one or the other, or a legacy Monday row would either vanish or the grid
  * would gain a stray non-1st column no month owns.
  */
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/**
+ * A reading period in words. The 1st of a month is that month's assessment
+ * ("November 2026"); any other day is a row the retired weekly grid left
+ * behind, named by its date ("Week of 2 November 2026").
+ */
+export function readingPeriodLabel(periodKey: string): string {
+  const [y, m, d] = periodKey.split("-").map(Number);
+  if (!y || !m || !d) return periodKey;
+  const month = `${MONTH_NAMES[m - 1]} ${y}`;
+  return d === 1 ? month : `Week of ${d} ${month}`;
+}
+
 export async function buildReadingLevelTable(
   scope: ReportScope,
   filters: ReportFilters
@@ -442,8 +459,8 @@ export async function buildReadingLevelTable(
       }
     }
     return {
-      heading: `Monthly Reading Level — ${periodKey}`,
-      sheetName: periodKey,
+      heading: readingPeriodLabel(periodKey),
+      sheetName: readingPeriodLabel(periodKey),
       columns,
       rows: blockRows,
       boldRowIndices,
@@ -795,6 +812,7 @@ export async function buildTeacherSummaryTable(
 
   const rows: (string | number | null)[][] = [];
   const total = { learners: 0, aral: 0, present: 0, absent: 0, excused: 0, gradeReady: 0 };
+  let shown = 0;
 
   for (const section of sections) {
     const scopedLearners = {
@@ -820,6 +838,11 @@ export async function buildTeacherSummaryTable(
         },
       }),
     ]);
+
+    // A teacher sees the classes they have learners in. A section of the same
+    // grade that belongs to another adviser would be a row of zeros.
+    if (scope.teacherId && learnerCount === 0) continue;
+    shown += 1;
 
     const counts = new Map(attendance.map((a) => [a.status, a._count._all]));
     const present = (counts.get("PRESENT") ?? 0) + (counts.get("LATE") ?? 0);
@@ -851,7 +874,7 @@ export async function buildTeacherSummaryTable(
 
   // A Total row, bold and last, as on the Division Summary exports. One class
   // needs none: its own row is already the total.
-  const hasTotal = sections.length > 1;
+  const hasTotal = shown > 1;
   if (hasTotal) {
     const marked = total.present + total.absent + total.excused;
     rows.push([
@@ -891,7 +914,7 @@ export async function buildTeacherSummaryTable(
     reportingPeriod: periodFromFilters(filters),
     gradeSection,
     summary: [
-      `${sections.length} ${sections.length === 1 ? "class" : "classes"}.`,
+      `${shown} ${shown === 1 ? "class" : "classes"}.`,
       "Present counts days marked Present or Late. Attendance Rate = Present divided by all marked days.",
     ],
     frame,

@@ -37,7 +37,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-const { buildReadingLevelTable, reportScope } = await import(
+const { buildReadingLevelTable, readingPeriodLabel, reportScope } = await import(
   "@/lib/reports/queries"
 );
 
@@ -176,5 +176,19 @@ describe("buildReadingLevelTable — the grid", () => {
       { id: "asc" },
     ]);
     expect(learnerArgs.where.schoolId).toBe("school-1");
+  });
+});
+
+describe("readingPeriodLabel", () => {
+  it("names the 1st of a month as that month", () => {
+    expect(readingPeriodLabel("2026-11-01")).toBe("November 2026");
+  });
+
+  it("names a legacy weekly row by its date", () => {
+    expect(readingPeriodLabel("2026-11-02")).toBe("Week of 2 November 2026");
+  });
+
+  it("never repeats the report title, which the sheet title already carries", () => {
+    expect(readingPeriodLabel("2026-11-01")).not.toMatch(/Reading Level/);
   });
 });
