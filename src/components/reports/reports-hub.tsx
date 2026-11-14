@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
   CellText,
+  NoValue,
   RowActions,
 } from "@/components/ui/table";
 import { ResponsiveTable, StackedList, StackedRow } from "@/components/ui/responsive-table";
@@ -84,6 +85,8 @@ type Props = {
   canDelete: boolean;
   /** Kinds this account cannot run, keyed to the sentence shown on the card. */
   locks?: ReportLocks;
+  /** What no filter covers, in the viewer's terms. A School Head sees the whole school. */
+  everythingLabel?: string;
 };
 
 const CARD_ICON: Record<ReportKind, typeof CalendarDays> = {
@@ -172,6 +175,17 @@ function prettyDate(key: string): string {
   return `${MONTHS[m - 1]} ${d}, ${y}`;
 }
 
+const DATED_KINDS = new Set<ReportKind>(
+  REPORT_CARDS.filter((c) => c.periods.length > 0).map((c) => c.kind)
+);
+
+/** A history row's period: its dates, "School year" with none, null when the report has no dates at all. */
+function rowPeriod(row: RecentReportRow): string | null {
+  const dates = periodText(row.filters);
+  if (dates) return dates;
+  return DATED_KINDS.has(row.kind) ? "School year" : null;
+}
+
 /** The period a history row covered, in words. Blank when it had no dates. */
 function periodText(filters: ReportFilters): string | null {
   if (filters.from && filters.to) return `${prettyDate(filters.from)} to ${prettyDate(filters.to)}`;
@@ -212,6 +226,7 @@ export function ReportsHub({
   recent,
   canDelete,
   locks = {},
+  everythingLabel = "All your classes",
 }: Props) {
   const [schoolYearId, setSchoolYearId] = useState(ALL);
   const [gradeLevelId, setGradeLevelId] = useState(ALL);
@@ -269,7 +284,7 @@ export function ReportsHub({
       ? chosenSection && sectionLabel(chosenSection)
       : gradeLevelId !== ALL
         ? grades.find((g) => g.id === gradeLevelId)?.label
-        : "All your classes",
+        : everythingLabel,
     schoolYearId !== ALL ? schoolYears.find((y) => y.id === schoolYearId)?.label : null,
   ]
     .filter(Boolean)
@@ -532,7 +547,7 @@ export function ReportsHub({
                         <CellText>{classesText(row)}</CellText>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {periodText(row.filters) ?? "School year"}
+                        {rowPeriod(row) ?? <NoValue label="No period" />}
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                         {formatSchoolDateTime(row.createdAt)}
@@ -562,7 +577,7 @@ export function ReportsHub({
                         <span className="tabular-nums">{formatSchoolDateTime(row.createdAt)}</span>
                       </>
                     }
-                    details={[{ label: "Period", value: periodText(row.filters) ?? "School year" }]}
+                    details={[{ label: "Period", value: rowPeriod(row) ?? <NoValue label="No period" /> }]}
                     actions={reportActions(row)}
                   />
                 ))}
@@ -639,8 +654,18 @@ function ReportCardItem({
         </div>
       ) : (
         <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-xs text-muted-foreground">
-            {last ? `Last downloaded ${formatSchoolDateTime(last.createdAt)}` : "Not downloaded yet"}
+          {/* Two short lines, never cut off: the date is the part worth reading. */}
+          <p className="min-w-0 text-xs leading-snug text-muted-foreground">
+            {last ? (
+              <>
+                <span className="block">Last downloaded</span>
+                <span className="block font-medium tabular-nums text-foreground">
+                  {formatSchoolDateTime(last.createdAt)}
+                </span>
+              </>
+            ) : (
+              "Not downloaded yet"
+            )}
           </p>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>

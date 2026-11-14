@@ -684,7 +684,7 @@ export const TERM_PERIOD_LABELS = {
 export const REPORT_KIND_LABELS = {
   ATTENDANCE: "Attendance",
   READING_LEVEL: "Monthly Reading Level",
-  TERM_GRADES: "Grades",
+  TERM_GRADES: "End of Term Grades",
   TEACHER_SUMMARY: "Class Summary",
   CLASS_ROSTER: "Class Roster",
   MOSY: "MOSY",

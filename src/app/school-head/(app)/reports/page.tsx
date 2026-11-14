@@ -57,6 +57,7 @@ async function SchoolHeadReportBody({
       }))}
       recent={recent}
       canDelete
+      everythingLabel="Every class in the school"
     />
   );
 }

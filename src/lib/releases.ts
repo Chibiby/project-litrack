@@ -144,7 +144,7 @@ export const RELEASES: readonly Release[] = [
       { text: "Removed what did nothing or repeated itself: the tabs, Quick Generate, Report Settings, Custom Report, Report Tips and View Guide. Class Roster now has its own card.", roles: ["TEACHER", "SCHOOL_HEAD"] },
       { text: "Grade and Section filters appear only when you have more than one to choose from, and the page says which classes every report will cover.", roles: ["TEACHER", "SCHOOL_HEAD"] },
       { text: "Each report shows when you last downloaded it. Recent downloads shows the period of each file, and Download again uses the same format as the first time.", roles: ["TEACHER", "SCHOOL_HEAD"] },
-      { text: "The reading level report is now named Monthly Reading Level, in the page and in the file. Teacher Summary is now Class Summary: it ends with a Total row when it covers more than one class, and a teacher no longer sees empty rows for sections that are not theirs. In the Excel file, each reading level sheet is named by its month.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "The reading level report is now named Monthly Reading Level, in the page and in the file. Teacher Summary is now Class Summary: it ends with a Total row when it covers more than one class, and a teacher no longer sees empty rows for sections that are not theirs. Its classes are listed Kinder first, then by grade. In the Excel file, each reading level sheet is named by its month. Class Roster shows Female and Male instead of capital letters.", roles: ["TEACHER", "SCHOOL_HEAD"] },
       { text: "This update changes the Reports page of Teachers and School Heads. Nothing on your pages changed.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
     ],
   },

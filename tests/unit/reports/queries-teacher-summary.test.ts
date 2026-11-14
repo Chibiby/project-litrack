@@ -162,4 +162,27 @@ describe("buildTeacherSummaryTable: Total row", () => {
     expect(table.rows.map((r) => r[0])).toEqual(["Grade 3 - A"]);
     expect(table.summary[0]).toBe("1 class.");
   });
+
+  it("lists Kinder first, then grades upward, sections A to Z inside a grade", async () => {
+    stubAggregates();
+    const of = (id: string, name: string, type: string) => ({ id, name, gradeLevel: { type }, adviser: null });
+    // The query returns them by section name alone, which mixes the grades.
+    sectionFindMany.mockResolvedValueOnce([
+      of("1", "A", "G1"),
+      of("2", "A", "KINDER"),
+      of("3", "A", "G4"),
+      of("4", "B", "KINDER"),
+      of("5", "Rosal", "G1"),
+    ]);
+
+    const table = await buildTeacherSummaryTable(SCOPE, {});
+
+    expect(table.rows.slice(0, 5).map((r) => r[0])).toEqual([
+      "Kinder - A",
+      "Kinder - B",
+      "Grade 1 - A",
+      "Grade 1 - Rosal",
+      "Grade 4 - A",
+    ]);
+  });
 });

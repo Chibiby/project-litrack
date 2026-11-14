@@ -1,10 +1,12 @@
 import "server-only";
+import { GRADE_LEVEL_TYPES } from "@/lib/validators/grade-level.schema";
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { teacherGradeScope, teacherLearnerScope } from "@/lib/teachers/scope";
 import {
   ATTENDANCE_STATUS_LABELS,
+  GENDER_LABELS,
   GRADE_LEVEL_LABELS,
   TERM_PERIOD_LABELS,
   WEEKLY_READING_COMPREHENSION_LEVEL_LABELS,
@@ -774,7 +776,7 @@ export async function buildClassRosterTable(
       formatListingNameFromRecord(l),
       GRADE_LEVEL_LABELS[l.gradeLevel.type] ?? l.gradeLevel.type,
       l.section?.name ?? "—",
-      l.gender ?? "",
+      l.gender ? (GENDER_LABELS[l.gender] ?? l.gender) : "",
       l.isAralLearner ? "Yes" : "No",
     ]),
   };
@@ -809,6 +811,17 @@ export async function buildTeacherSummaryTable(
     orderBy: { name: "asc" },
     take: 200,
   });
+
+  // Kinder first, then Grade 1 upward, sections A to Z inside each grade. The
+  // query orders by section name alone, which mixes the grades.
+  const gradeRank = (type: string) => {
+    const i = (GRADE_LEVEL_TYPES as readonly string[]).indexOf(type);
+    return i === -1 ? GRADE_LEVEL_TYPES.length : i;
+  };
+  sections.sort(
+    (a, b) =>
+      gradeRank(a.gradeLevel.type) - gradeRank(b.gradeLevel.type) || a.name.localeCompare(b.name)
+  );
 
   const rows: (string | number | null)[][] = [];
   const total = { learners: 0, aral: 0, present: 0, absent: 0, excused: 0, gradeReady: 0 };
