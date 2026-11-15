@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarDays,
   CalendarRange,
+  BookOpenCheck,
   ClipboardCheck,
   ClipboardList,
   Database,
@@ -259,6 +260,30 @@ export function getNavGroups(
               ...(options.pendingTeacherCount ? { badge: options.pendingTeacherCount } : {}),
             },
             { id: "school-head-aral-teachers", label: "ARAL Teachers", href: SCHOOL_HEAD_ROUTES.aralTeachers, icon: HandHelping },
+          ],
+        },
+        {
+          // What the head checks on: who is behind, and records that do not add up.
+          label: "Monitoring",
+          items: [
+            {
+              id: "school-head-monitoring-non-compliance",
+              label: "Non-compliance",
+              href: SCHOOL_HEAD_ROUTES.monitoringNonCompliance,
+              icon: ClipboardCheck,
+            },
+            {
+              id: "school-head-monitoring-aral",
+              label: "ARAL Monitoring",
+              href: SCHOOL_HEAD_ROUTES.monitoringAral,
+              icon: BookOpenCheck,
+            },
+            {
+              id: "school-head-monitoring-discrepancies",
+              label: "Discrepancies",
+              href: SCHOOL_HEAD_ROUTES.monitoringDiscrepancies,
+              icon: TriangleAlert,
+            },
           ],
         },
         {

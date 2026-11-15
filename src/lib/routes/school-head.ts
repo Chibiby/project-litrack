@@ -56,6 +56,13 @@ export const SCHOOL_HEAD_ROUTES = {
   /** Teachers who are the ARAL teacher of ARAL learners (Management group). */
   aralTeachers: "/school-head/aral-teachers",
 
+  /** Monitoring group: teachers behind on their tasks. */
+  monitoringNonCompliance: "/school-head/monitoring/non-compliance",
+  /** Monitoring group: ARAL teachers behind on attendance, reading level or profiling. */
+  monitoringAral: "/school-head/monitoring/aral",
+  /** Monitoring group: learner and section records that do not add up. */
+  monitoringDiscrepancies: "/school-head/monitoring/discrepancies",
+
   aral: "/school-head/aral",
   announcements: "/school-head/announcements",
   /** End of Terms subject list per grade (sidebar item). */

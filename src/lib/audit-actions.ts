@@ -401,6 +401,11 @@ export const AUDIT_ACTIONS = {
    * teacher name. Summaries hold counts only, and so does this row.
    */
   SUMMARY_EXPORT: "SUMMARY_EXPORT",
+  /**
+   * The School Head Monitoring > Non-compliance list downloaded (staff names
+   * and task status). Metadata is the filter and row counts — never a name.
+   */
+  TEACHER_TASKS_EXPORT: "TEACHER_TASKS_EXPORT",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -470,6 +475,7 @@ export const SECURITY_AUDIT_ACTIONS = [
   AUDIT_ACTIONS.KINDER_COMPETENCY_EXPORT,
   AUDIT_ACTIONS.SUMMARY_EXPORT,
   AUDIT_ACTIONS.ARAL_MOSY_EXPORT,
+  AUDIT_ACTIONS.TEACHER_TASKS_EXPORT,
   // Deletes and cross-tenant moves
   AUDIT_ACTIONS.LEARNER_DELETE,
   AUDIT_ACTIONS.LEARNER_TRANSFER_CROSS_SCHOOL,

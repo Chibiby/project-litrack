@@ -51,6 +51,9 @@ import { cn } from "@/lib/utils";
 import { bulkRecordMonthlyReadingLevel } from "@/lib/actions/reading-level";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
+import { draftStorageKey, useGridDraft } from "@/lib/ui/use-grid-draft";
+import { useAutosave } from "@/lib/ui/use-autosave";
+import { AutosaveStatusLine } from "@/components/aral/autosave-status";
 
 /**
  * Short codes for the badge face. The dropdown always carries the full label.
@@ -296,6 +299,18 @@ function isRowComplete(row: RowState | undefined, gradeType: string): boolean {
 }
 
 /** Presence, not completeness — grade-independent, unlike `isRowComplete` above. */
+/** One learner's row as the bulk save sends it. */
+function toEntry(learnerId: string, row: RowState) {
+  return {
+    learnerId,
+    englishProfile: row.englishProfile || undefined,
+    filipinoProfile: row.filipinoProfile || undefined,
+    wordRecognitionLevel: row.wordRecognitionLevel || undefined,
+    readingComprehensionLevel: row.readingComprehensionLevel || undefined,
+    notes: row.notes.trim() || undefined,
+  };
+}
+
 function hasAnyValue(row: RowState | undefined): boolean {
   if (!row) return false;
   return (
@@ -493,17 +508,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
 
     const entries = learners
       .filter((learner) => hasAnyValue(rows[learner.id]))
-      .map((learner) => {
-        const row = rows[learner.id]!;
-        return {
-          learnerId: learner.id,
-          englishProfile: row.englishProfile || undefined,
-          filipinoProfile: row.filipinoProfile || undefined,
-          wordRecognitionLevel: row.wordRecognitionLevel || undefined,
-          readingComprehensionLevel: row.readingComprehensionLevel || undefined,
-          notes: row.notes.trim() || undefined,
-        };
-      });
+      .map((learner) => toEntry(learner.id, rows[learner.id]!));
 
     const clears = learners
       .filter((learner) => !hasAnyValue(rows[learner.id]) && hadRecord.has(learner.id))
@@ -558,6 +563,64 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
     if (readOnly || pending) return;
     void persist();
   }, [persist, readOnly, pending]);
+
+  // Unsaved levels survive a reload, an app update, a dropped connection or a
+  // frozen tab: they are kept on this device until a save is confirmed.
+  useGridDraft({
+    storageKey: draftStorageKey("reading-level", monthStartKey),
+    enabled: !readOnly,
+    baseline,
+    rows,
+    setRows,
+    equal: (a, b) => !ROW_FIELDS.some((f) => (a ?? EMPTY_ROW)[f] !== (b ?? EMPTY_ROW)[f]),
+    onRestored: (n) =>
+      toast(
+        `Restored unsaved reading levels for ${n} learner${n === 1 ? "" : "s"} from earlier. They will save automatically.`
+      ),
+  });
+
+  /**
+   * The autosave's save: only the learners changed since the last save, no
+   * toasts, no refresh, and the selects stay enabled so the teacher keeps
+   * working. The baseline moves to exactly what was sent.
+   */
+  const quietSave = useCallback(async (): Promise<boolean> => {
+    if (readOnly) return false;
+    const snapshot = rows;
+    const changed = learners.filter((l) =>
+      ROW_FIELDS.some((f) => (baseline[l.id] ?? EMPTY_ROW)[f] !== (snapshot[l.id] ?? EMPTY_ROW)[f])
+    );
+    const entries = changed
+      .filter((l) => hasAnyValue(snapshot[l.id]))
+      .map((l) => toEntry(l.id, snapshot[l.id]!));
+    const clears = changed
+      .filter((l) => !hasAnyValue(snapshot[l.id]) && hadRecord.has(l.id))
+      .map((l) => l.id);
+    const markSent = () =>
+      setBaseline((prev) => ({ ...prev, ...Object.fromEntries(changed.map((l) => [l.id, snapshot[l.id]!])) }));
+    if (entries.length > 0 || clears.length > 0) {
+      const res = await callAction(() =>
+        bulkRecordMonthlyReadingLevel({ monthStart: monthStartKey, entries, clears })
+      );
+      if (!res.ok) return false;
+      setHadRecord((prev) => {
+        const next = new Set(prev);
+        for (const entry of entries) next.add(entry.learnerId);
+        for (const learnerId of clears) next.delete(learnerId);
+        return next;
+      });
+    }
+    markSent();
+    return true;
+  }, [readOnly, rows, learners, baseline, hadRecord, monthStartKey]);
+
+  const autosave = useAutosave({
+    enabled: !readOnly,
+    dirty,
+    changeToken: rows,
+    busy: pending,
+    save: quietSave,
+  });
 
   const discard = useCallback(() => {
     setRows(baseline);
@@ -674,6 +737,7 @@ export const AralMonthlyReadingLevelGridForm = forwardRef<
 
   return (
     <>
+      {!readOnly ? <AutosaveStatusLine status={autosave.status} className="px-4 py-2" /> : null}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>

@@ -1,6 +1,9 @@
 "use client";
 
-import { createRef, useMemo, useState, useTransition } from "react";
+import { createRef, useCallback, useMemo, useState, useTransition } from "react";
+import { draftStorageKey } from "@/lib/ui/use-grid-draft";
+import { useAutosave } from "@/lib/ui/use-autosave";
+import { AutosaveStatusLine } from "@/components/aral/autosave-status";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Download, Filter, Save } from "lucide-react";
@@ -196,7 +199,7 @@ export function TermsReportPanel({
     const batches = groups.map((group) => ({
       group,
       ref: gridRefs.get(group.key)?.current ?? null,
-      ...(gridRefs.get(group.key)?.current?.collect() ?? { entries: [], invalid: [] }),
+      ...(gridRefs.get(group.key)?.current?.collect() ?? { entries: [], invalid: [], snapshot: undefined }),
     }));
 
     const invalid = batches.flatMap((b) => b.invalid);
@@ -241,7 +244,7 @@ export function TermsReportPanel({
           if (saved + cleared > 0) router.refresh();
           return false;
         }
-        batch.ref?.commit();
+        batch.ref?.commit(batch.snapshot);
         saved += res.data?.saved ?? 0;
         cleared += res.data?.cleared ?? 0;
       }
@@ -262,6 +265,45 @@ export function TermsReportPanel({
     if (readOnly || savePending) return;
     void persist();
   }
+
+  /**
+   * The autosave's save: the same batches as `persist`, with no toasts, no
+   * refresh and no disabled cells, so a teacher still typing keeps focus. Each
+   * grid's baseline moves to exactly what it sent. An invalid score blocks it:
+   * nothing half-typed is ever saved.
+   */
+  async function quietPersist(): Promise<boolean | "blocked"> {
+    if (readOnly) return false;
+    const batches = groups.map((group) => {
+      const ref = gridRefs.get(group.key)?.current ?? null;
+      return { group, ref, ...(ref?.collect() ?? { entries: [], invalid: [], snapshot: undefined }) };
+    });
+    if (batches.some((b) => b.invalid.length > 0)) return "blocked";
+    for (const batch of batches) {
+      if (batch.entries.length === 0) continue;
+      const res = await callAction(() =>
+        saveTermGrades({
+          gradeLevelId: batch.group.gradeLevelId,
+          ...(batch.group.sectionId ? { sectionId: batch.group.sectionId } : {}),
+          term: state.term,
+          entries: batch.entries,
+        })
+      );
+      if (!res.ok) return false;
+      batch.ref?.commit(batch.snapshot);
+    }
+    return true;
+  }
+
+  const [editTick, setEditTick] = useState(0);
+  const onGridEdit = useCallback(() => setEditTick((n) => n + 1), []);
+  const autosave = useAutosave({
+    enabled: canSave && !readOnly,
+    dirty,
+    changeToken: editTick,
+    busy: savePending,
+    save: quietPersist,
+  });
 
   const showSave = canSave && !readOnly && groups.some((g) => g.learners.length > 0);
   const termCaption = `${termLabel} - ${completionPct}%`;
@@ -419,6 +461,9 @@ export function TermsReportPanel({
           </div>
         </div>
 
+        {canSave && !readOnly ? (
+          <AutosaveStatusLine status={autosave.status} className="border-b border-border/60 px-4 py-2" />
+        ) : null}
         {groups.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted-foreground">
             {state.q.trim() ? "No learners match this search." : "No learners in this advisory yet."}
@@ -449,6 +494,8 @@ export function TermsReportPanel({
               subjectStep={subjectStep}
               onNextSubjects={() => setSubjectStep((n) => n + 1)}
               onDirtyChange={dirtyHandlers.get(group.key)}
+              onEdit={onGridEdit}
+              draftKey={canSave && !readOnly ? draftStorageKey("term-grades", state.term, group.key) : null}
             />
           ))
         )}

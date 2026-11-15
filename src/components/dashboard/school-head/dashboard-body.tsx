@@ -39,7 +39,14 @@ import {
   learnersHref,
   transferRequestsHref,
   reportsHref,
+  monitoringNonComplianceHref,
+  monitoringAralHref,
+  monitoringDiscrepanciesHref,
 } from "./hrefs";
+import { getMonitoringCounts } from "@/lib/monitoring/load";
+import { buildMonitoringAttention } from "@/lib/monitoring/attention";
+import type { MonitoringCounts } from "@/lib/monitoring/counts";
+import { SchoolAttentionModal, type AttentionFigure } from "./attention-modal";
 import {
   SchoolHeadChartsSection,
   SchoolHeadIpSection,
@@ -127,7 +134,55 @@ export async function loadSchoolHeadDashboard({
     profiling: profilingHref(view),
     transferRequests: transferRequestsHref(view),
   };
-  const attentionItems = buildSchoolHeadAttention(data, attentionHrefs);
+  // Monitoring is extra: if its read fails the dashboard still renders, just
+  // without those rows.
+  let monitoring: MonitoringCounts | null = null;
+  try {
+    monitoring = await getMonitoringCounts(view.schoolId, data.todayKey);
+  } catch (err) {
+    console.error("[loadSchoolHeadDashboard] monitoring counts failed:", err);
+  }
+  const monitoringItems = monitoring
+    ? buildMonitoringAttention(monitoring, {
+        nonCompliance: monitoringNonComplianceHref(view),
+        aral: monitoringAralHref(view),
+        discrepancies: monitoringDiscrepanciesHref(view),
+      })
+    : [];
+  const setupItems = buildSchoolHeadAttention(data, attentionHrefs);
+  const attentionItems = [
+    ...monitoringItems,
+    ...(monitoringItems.length > 0 ? setupItems.filter((i) => i.id !== "allclear") : setupItems),
+  ];
+
+  // The daily pop-up: the same rows, plus three headline figures. Only for the
+  // School Head themself — a Super Admin drilling in is not interrupted.
+  const modalItems = attentionItems.filter((i) => i.href !== "");
+  const figures: AttentionFigure[] = monitoring
+    ? [
+        {
+          id: "teachers",
+          label: "Teachers behind",
+          value: `${monitoring.teachersWithPending} of ${monitoring.teachers}`,
+          href: monitoringNonComplianceHref(view),
+          icon: "teachers",
+        },
+        {
+          id: "aral",
+          label: "ARAL teachers behind",
+          value: `${monitoring.aralTeachersWithPending} of ${monitoring.aralTeachers}`,
+          href: monitoringAralHref(view),
+          icon: "aral",
+        },
+        {
+          id: "discrepancies",
+          label: "Discrepancies",
+          value: String(monitoring.discrepancyTotal),
+          href: monitoringDiscrepanciesHref(view),
+          icon: "discrepancies",
+        },
+      ]
+    : [];
 
   const quote = pickQuote();
   // The calendar shows the next quote in the list, so it never repeats the hero.
@@ -147,6 +202,14 @@ export async function loadSchoolHeadDashboard({
 
   const body = (
     <DashboardGlass className="flex flex-col gap-4">
+      {!view.isSuperAdminView ? (
+        <SchoolAttentionModal
+          schoolId={view.schoolId}
+          todayKey={data.todayKey}
+          figures={figures}
+          items={modalItems}
+        />
+      ) : null}
       <AdviserlessSectionsNotice sections={data.adviserlessSections} />
 
       {!data.activeYear ? (

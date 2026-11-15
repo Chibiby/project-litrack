@@ -135,6 +135,21 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.65.0",
+    date: "2026-11-15",
+    title: "Monitoring for School Heads, and autosave that keeps your entries",
+    announce: true,
+    fixes: [
+      { text: "A new Monitoring section in the side menu. Non-compliance lists the teachers who have not finished MOSY, reading levels, attendance, ARAL profiling or end-of-term reports, and you can export the list to Excel.", roles: ["SCHOOL_HEAD"] },
+      { text: "ARAL Monitoring shows only ARAL teachers who are behind on weekly attendance, the monthly reading level or ARAL profiling.", roles: ["SCHOOL_HEAD"] },
+      { text: "Discrepancies lists learners with no adviser or section, ARAL learners with no active ARAL teacher, enrollments that do not match, and sections without an adviser, with how to fix each.", roles: ["SCHOOL_HEAD"] },
+      { text: "Your dashboard's Needs your attention panel now counts the teachers with pending tasks and the discrepancies. Click a row to see who. Once a day, a pop-up shows the same summary when you sign in.", roles: ["SCHOOL_HEAD"] },
+      { text: "Weekly attendance, monthly reading levels and end-of-term grades now save automatically a few seconds after you stop typing. A line above the table says whether your changes are saved.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "If your internet drops, the page reloads after an update, or your device freezes, the entries you had not saved yet are kept on this device and come back when you open the page again. A newer value saved elsewhere always wins.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+      { text: "School Heads have a new Monitoring section (Non-compliance, ARAL Monitoring, Discrepancies) and a daily summary pop-up. Teachers' attendance, reading level and end-of-term grids now autosave and keep unsaved entries on the device. The Test Lab checklist lists the new pages.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.64.0",
     date: "2026-11-14",
     title: "ARAL learners follow their adviser, and two weeks to finish records",

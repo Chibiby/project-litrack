@@ -67,3 +67,18 @@ export function transferRequestsHref(view: SchoolHeadView): string {
 export function reportsHref(view: SchoolHeadView): string {
   return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.reports);
 }
+
+/** Monitoring > Non-compliance: teachers behind on a task. */
+export function monitoringNonComplianceHref(view: SchoolHeadView): string {
+  return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.monitoringNonCompliance);
+}
+
+/** Monitoring > ARAL Monitoring: ARAL teachers behind on an ARAL task. */
+export function monitoringAralHref(view: SchoolHeadView): string {
+  return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.monitoringAral);
+}
+
+/** Monitoring > Discrepancies. */
+export function monitoringDiscrepanciesHref(view: SchoolHeadView): string {
+  return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.monitoringDiscrepancies);
+}

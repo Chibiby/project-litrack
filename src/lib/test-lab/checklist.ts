@@ -39,6 +39,8 @@ export type TestLabChecklistItem = {
  * requires every `page.tsx` to be accounted for somewhere.
  */
 export const ALIASES: string[] = [
+  // Redirects to Monitoring > Non-compliance.
+  "/school-head/monitoring",
   "/school-head/grade-levels",
   "/school-head/school-years",
   "/school-head/school-info",
@@ -72,6 +74,9 @@ export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestL
     { id: "sh-kinder-checklist", role: "SCHOOL_HEAD", group: "Reports", label: "Kindergarten checklist", href: "/school-head/terms-reports/kinder" },
     { id: "sh-learners", role: "SCHOOL_HEAD", group: "Management", label: "Learners", href: "/school-head/learners" },
     { id: "sh-aral-teachers", role: "SCHOOL_HEAD", group: "Management", label: "ARAL teachers", href: "/school-head/aral-teachers" },
+    { id: "sh-monitoring-non-compliance", role: "SCHOOL_HEAD", group: "Monitoring", label: "Non-compliance", href: "/school-head/monitoring/non-compliance" },
+    { id: "sh-monitoring-aral", role: "SCHOOL_HEAD", group: "Monitoring", label: "ARAL Monitoring", href: "/school-head/monitoring/aral" },
+    { id: "sh-monitoring-discrepancies", role: "SCHOOL_HEAD", group: "Monitoring", label: "Discrepancies", href: "/school-head/monitoring/discrepancies" },
     { id: "sh-teachers", role: "SCHOOL_HEAD", group: "Teachers", label: "Teachers (active)", href: "/school-head/teachers" },
     { id: "sh-teachers-pending", role: "SCHOOL_HEAD", group: "Teachers", label: "Teachers (pending)", href: "/school-head/teachers/pending" },
     { id: "sh-teachers-inactive", role: "SCHOOL_HEAD", group: "Teachers", label: "Teachers (inactive)", href: "/school-head/teachers/inactive" },

@@ -64,6 +64,16 @@ export function schoolTeachers(schoolId: string): string {
 }
 
 /**
+ * One school's Teacher Tasks monitor (`src/lib/teacher-tasks/queries.ts`).
+ * Tenant-scoped like `schoolTeachers`. The entry also lives on a 60-second TTL,
+ * so teacher saves (attendance, reading levels, MOSY, grades) are not wired to
+ * bust it — the monitor is a minute behind at most.
+ */
+export function schoolTeacherTasks(schoolId: string): string {
+  return `school-teacher-tasks:${schoolId}`;
+}
+
+/**
  * The division admin's support inbox.
  *
  * Global rather than school-scoped, unlike every tenant tag above: the inbox is

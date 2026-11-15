@@ -8,6 +8,8 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { toast } from "sonner";
+import { useGridDraft } from "@/lib/ui/use-grid-draft";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,8 +80,14 @@ export type TermGradesGridExisting = {
  * them, then tells the grid those cells are now the saved state.
  */
 export type AralTermGradesGridFormHandle = {
-  collect: () => { entries: TermGradesSaveInput["entries"]; invalid: string[] };
-  commit: () => void;
+  collect: () => {
+    entries: TermGradesSaveInput["entries"];
+    invalid: string[];
+    /** The rows `entries` was built from; pass it back to `commit`. */
+    snapshot: Record<string, Record<string, string>>;
+  };
+  /** Marks `snapshot` (or what is on screen now) as the saved state. */
+  commit: (snapshot?: Record<string, Record<string, string>>) => void;
   /** Puts every cell back to the last saved grades. */
   discard: () => void;
 };
@@ -206,6 +214,10 @@ type Props = {
   onNextSubjects: () => void;
   /** True while any cell, visible or hidden by the Subject filter, differs from the last saved grades. */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Called on every cell edit, so the sheet's autosave can restart its quiet period. */
+  onEdit?: () => void;
+  /** Device draft key for this grid (term + section). Unsaved cells survive a reload. Null turns drafts off. */
+  draftKey?: string | null;
 };
 
 export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, Props>(
@@ -223,6 +235,8 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
       subjectStep,
       onNextSubjects,
       onDirtyChange,
+      onEdit,
+      draftKey = null,
     },
     ref
   ) {
@@ -256,7 +270,24 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
         ...prev,
         [learnerId]: { ...(prev[learnerId] ?? {}), [subjectId]: value },
       }));
+      onEdit?.();
     }
+
+    // Unsaved grades survive a reload, an app update, a dropped connection or
+    // a frozen tab: they are kept on this device until a save is confirmed.
+    useGridDraft({
+      storageKey: draftKey,
+      enabled: !disabled && draftKey !== null,
+      baseline: initial,
+      rows,
+      setRows,
+      equal: (a, b) =>
+        subjects.every((s) => cellValue(a, s.id).trim() === cellValue(b, s.id).trim()),
+      onRestored: (n) =>
+        toast(
+          `Restored unsaved grades for ${n} learner${n === 1 ? "" : "s"} from earlier. They will save automatically.`
+        ),
+    });
 
     /**
      * Reads its bounds off the input's own `data-grid-*` attributes rather
@@ -356,12 +387,12 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
               });
             }
           }
-          return { entries, invalid };
+          return { entries, invalid, snapshot: rows };
         },
         // The sheet is clean again, so the next save sends only what changes
         // after this point rather than resending the whole term.
-        commit() {
-          setInitial(rows);
+        commit(snapshot) {
+          setInitial(snapshot ?? rows);
         },
         discard() {
           setRows(initial);

@@ -39,6 +39,9 @@ import { cn } from "@/lib/utils";
 import { saveAralWeeklyAttendance } from "@/lib/actions/attendance";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
+import { draftStorageKey, useGridDraft } from "@/lib/ui/use-grid-draft";
+import { useAutosave } from "@/lib/ui/use-autosave";
+import { AutosaveStatusLine } from "@/components/aral/autosave-status";
 import { AttendanceGridRow } from "@/components/forms/aral-weekly-attendance-grid-row";
 import {
   CELL_LETTER,
@@ -457,6 +460,46 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
+  // Unsaved marks survive a reload, an app update, a dropped connection or a
+  // frozen tab: they are kept on this device until a save is confirmed.
+  useGridDraft({
+    storageKey: draftStorageKey("attendance", gradeId, weekStartKey),
+    enabled: !readOnly,
+    baseline: initial,
+    rows,
+    setRows,
+    onRestored: (n) =>
+      toast(
+        `Restored unsaved attendance for ${n} learner${n === 1 ? "" : "s"} from earlier. It will save automatically.`
+      ),
+  });
+
+  /**
+   * The autosave's save: no toasts, no refresh, and the cells stay enabled so a
+   * teacher still typing keeps focus. The baseline moves to exactly what was
+   * sent, so a mark typed while this was in flight stays unsaved and goes next.
+   */
+  const quietSave = useCallback(async (): Promise<boolean> => {
+    if (readOnly) return false;
+    const snapshot = rows;
+    const cells = changedCells(learners, days, initial, snapshot);
+    if (cells.length === 0) return true;
+    const res = await callAction(() =>
+      saveAralWeeklyAttendance({ gradeId, weekStart: weekStartKey, cells })
+    );
+    if (!res.ok) return false;
+    setInitial(snapshot);
+    return true;
+  }, [readOnly, rows, learners, days, initial, gradeId, weekStartKey]);
+
+  const autosave = useAutosave({
+    enabled: !readOnly,
+    dirty,
+    changeToken: rows,
+    busy: pending,
+    save: quietSave,
+  });
+
   const persist = useCallback((): Promise<boolean> => {
     if (readOnly || pending) {
       // Refusing without trying must still say so, or "Save and continue" just
@@ -558,6 +601,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
 
   return (
     <>
+      {!readOnly ? <AutosaveStatusLine status={autosave.status} className="px-4 py-2" /> : null}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
