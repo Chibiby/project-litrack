@@ -23,13 +23,15 @@ import { callAction } from "@/lib/ui/call-action";
 import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { isActionFailure } from "@/lib/errors/client";
 import { RotateCcw } from "lucide-react";
+import type { SectionPeople } from "@/lib/school-head/section-people";
+import type { AdviserOption } from "@/components/school-head/section-people";
 
 export type GradeLevelCard = {
   id: string;
   type: string;
   teacherCount: number;
   learnerCount: number;
-  sections: { id: string; name: string; learnerCount: number }[];
+  sections: { id: string; name: string; learnerCount: number; people?: SectionPeople }[];
   /** True while waiting for server revalidation after create. */
   pendingCreate?: boolean;
 };
@@ -124,11 +126,14 @@ export function GradeLevelsClient({
   archived = [],
   inactiveTypes,
   readOnly = false,
+  adviserOptions = [],
 }: {
   active: GradeLevelCard[];
   archived?: ArchivedGradeCard[];
   inactiveTypes: string[];
   readOnly?: boolean;
+  /** Approved, active teachers who can be made a section's adviser. */
+  adviserOptions?: AdviserOption[];
 }) {
   const [pending, startTransition] = useTransition();
   const [optimistic, dispatchOptimistic] = useOptimistic(
@@ -202,6 +207,13 @@ export function GradeLevelsClient({
                         gradeLevelId={grade.id}
                         sections={grade.sections}
                         readOnly={readOnly}
+                        manage={{
+                          gradeLevelId: grade.id,
+                          gradeLabel: label,
+                          gradeType: grade.type,
+                          adviserOptions,
+                          readOnly,
+                        }}
                       />
                     ) : (
                       <p className="text-xs text-muted-foreground">

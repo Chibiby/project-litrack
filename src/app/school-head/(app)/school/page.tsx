@@ -7,23 +7,29 @@ import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
-import {
-  SCHOOL_TABS,
-  SCHOOL_WORKSPACE_TABS,
-} from "@/components/school-head/workspace-tabs";
 import { ListCardSkeleton } from "@/components/loading";
 import { GradeLevelsClient } from "@/components/school-head/grade-levels-client";
+import { buildSectionPeople, personName } from "@/lib/school-head/section-people";
+import { advisoryCapFor } from "@/lib/teachers/advisory-limits";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The School workspace root serves grade levels rather than redirecting to a
- * child segment — see the note on `SCHOOL_HEAD_ROUTES.schoolGradeLevels`.
+ * Grade and Section. The School workspace root serves this page rather than
+ * redirecting to a child segment — see the note on `SCHOOL_HEAD_ROUTES.schoolGradeLevels`.
  */
 
 const ALL_TYPES = [
   "KINDER", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "FLOATING",
 ] as const;
+
+const PERSON = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  isActive: true,
+  deletedAt: true,
+} as const;
 
 interface GradeLevelsPageProps {
   searchParams: Promise<{ schoolId?: string }>;
@@ -39,7 +45,8 @@ async function GradeLevelsGrid({
   // Deactivated grades are read too, not filtered out: a grade that exists but
   // is switched off is a different thing from one that was never created, and
   // the page has to offer Restore for the first and Create for the second.
-  const existing = await prisma.gradeLevel.findMany({
+  const [existing, adviserRows, pendingRows] = await Promise.all([
+    prisma.gradeLevel.findMany({
     where: { schoolId },
     select: {
       id: true,
@@ -55,10 +62,58 @@ async function GradeLevelsGrid({
           // page can warn before Remove. `deleteSection` re-counts in its own
           // transaction and is the authority; this number is only a warning.
           _count: { select: { learners: { where: { deletedAt: null, archivedAt: null } } } },
+          // Who is in the section, for its expandable row. Names only; the
+          // same live-roster filter as the count above.
+          adviser: { select: { ...PERSON, role: true } },
+          teachers: { select: { teacher: { select: PERSON } } },
+          learners: {
+            where: { deletedAt: null, archivedAt: null },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              isAralLearner: true,
+              aralTeacher: { select: PERSON },
+            },
+          },
         },
         orderBy: { name: "asc" },
       },
     },
+  }),
+    // Who may be made an adviser: the same filter `setTeacherAdvisorySection`
+    // applies, so the picker never offers a teacher the action would refuse.
+    prisma.user.findMany({
+      where: {
+        schoolId,
+        role: "TEACHER",
+        approvalStatus: "APPROVED",
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        advisorySections: { where: { deletedAt: null }, select: { id: true } },
+        teacherProfile: { select: { designation: true, advisoryMode: true } },
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    }),
+    // Learners with a transfer request waiting cannot be moved directly.
+    prisma.sectionTransferRequest.findMany({
+      where: { schoolId, status: "PENDING" },
+      select: { learnerId: true },
+    }),
+  ]);
+  const pendingLearnerIds = new Set(pendingRows.map((r) => r.learnerId));
+  // Volunteers and floating teachers advise nothing (cap 0), so they are not
+  // offered at all; a teacher at their cap stays listed, marked full.
+  const adviserOptions = adviserRows.flatMap((t) => {
+    const cap = advisoryCapFor(t.teacherProfile?.designation, t.teacherProfile?.advisoryMode);
+    return cap === 0
+      ? []
+      : [{ id: t.id, name: personName(t), advisoryCount: t.advisorySections.length, cap }];
   });
   const existingMap = new Map(existing.map((g) => [g.type, g]));
 
@@ -91,6 +146,7 @@ async function GradeLevelsGrid({
         id: s.id,
         name: s.name,
         learnerCount: s._count.learners,
+        people: buildSectionPeople(s, pendingLearnerIds),
       })),
     };
   });
@@ -106,6 +162,7 @@ async function GradeLevelsGrid({
       archived={archived}
       inactiveTypes={[...inactiveTypes]}
       readOnly={isSuperAdminView}
+      adviserOptions={adviserOptions}
     />
   );
 }
@@ -128,16 +185,14 @@ export default async function SchoolWorkspacePage({ searchParams }: GradeLevelsP
 
   return (
     <SchoolHeadPage
-      title="Grade levels"
+      title="Grade and Section"
       view={view}
-      tabs={SCHOOL_WORKSPACE_TABS}
-      activeTab={SCHOOL_TABS.gradeLevels}
       hero={
         <SchoolHeadHero
           eyebrow="School"
           eyebrowIcon={School}
-          title="Grade levels"
-          subtitle="Activate the grades your school offers, then add each grade's sections."
+          title="Grade and Section"
+          subtitle="Activate the grades your school offers, then add each grade's sections. Open a section to see its teachers and learners."
           stats={
             <>
               <StatCard

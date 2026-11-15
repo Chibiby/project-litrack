@@ -81,7 +81,7 @@ export const DISCREPANCY_META: Record<DiscrepancyKind, DiscrepancyMeta> = {
   SECTION_NO_ADVISER: {
     title: "Sections with no active adviser",
     description: "These sections have no adviser, or their adviser is inactive or removed.",
-    fix: "Assign an adviser to the section in School Setup.",
+    fix: "Assign an adviser to the section in Grade and Section.",
     subject: "section",
   },
 };

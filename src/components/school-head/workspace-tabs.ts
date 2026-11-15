@@ -2,46 +2,14 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import type { SchoolHeadTab } from "@/components/school-head/school-head-page";
 
 /**
- * Tab sets for the two School Head workspaces.
+ * Tab sets for the School Head workspaces. The School pages (Overview, School
+ * Year, Grade and Section) are separate sidebar entries, not tabs.
  *
  * Kept out of the pages so three sibling routes cannot disagree about their own
  * tab bar — the failure mode where a tab is added to two of three panels and the
  * third silently drops it. Keys are the URL segment, so a page's `activeTab` is
  * whatever segment it serves.
  */
-
-/**
- * School setup: grade levels, years and school info are one job — configure the
- * school — so they read as tabs rather than three unrelated sidebar entries.
- * Grade levels leads because it is the one a new head must do first: no grade
- * levels means no sections, no advisories, and no learners. It is also the
- * workspace root, so its tab href is the bare workspace path.
- *
- * Keys are opaque identifiers, not URL segments — grade levels has no segment.
- */
-export const SCHOOL_TABS = {
-  gradeLevels: "grade-levels",
-  years: "years",
-  info: "info",
-} as const;
-
-export const SCHOOL_WORKSPACE_TABS: SchoolHeadTab[] = [
-  {
-    key: SCHOOL_TABS.gradeLevels,
-    label: "Grade levels",
-    href: SCHOOL_HEAD_ROUTES.school,
-  },
-  {
-    key: SCHOOL_TABS.years,
-    label: "School years",
-    href: SCHOOL_HEAD_ROUTES.schoolYears,
-  },
-  {
-    key: SCHOOL_TABS.info,
-    label: "School information",
-    href: SCHOOL_HEAD_ROUTES.schoolInfo,
-  },
-];
 
 /**
  * Teacher roster states. These were four tables stacked down one page, so the

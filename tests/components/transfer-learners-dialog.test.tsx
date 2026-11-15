@@ -123,7 +123,7 @@ describe("TransferLearnersDialog — choosing a section", () => {
     expect(screen.getByText("Current section")).toBeTruthy();
     const noAdviser = screen.getByRole("radio", { name: /Ilang-Ilang/ }) as HTMLButtonElement;
     expect(noAdviser.disabled).toBe(true);
-    expect(screen.getByText(/No adviser yet — assign one in School Setup/)).toBeTruthy();
+    expect(screen.getByText(/No adviser yet — assign one in Grade and Section/)).toBeTruthy();
     expect(screen.getByText("Adviser: Ben Reyes")).toBeTruthy();
     expect((screen.getByRole("radio", { name: /Rosal/ }) as HTMLButtonElement).disabled).toBe(false);
   });
@@ -231,7 +231,7 @@ describe("TransferLearnersDialog — request mode", () => {
 
     expect(screen.getByText("Request a section transfer")).toBeTruthy();
     expect(screen.getByText(/No adviser yet$/)).toBeTruthy();
-    expect(screen.queryByText(/School Setup/)).toBeNull();
+    expect(screen.queryByText(/Grade and Section/)).toBeNull();
     expect(screen.getByLabelText("Note for your School Head (optional)")).toBeTruthy();
     expect(screen.getByText("0 / 300")).toBeTruthy();
 

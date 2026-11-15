@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.66.0",
+    date: "2026-11-15",
+    title: "A School menu, and grades and sections you can manage in one place",
+    announce: true,
+    fixes: [
+      { text: "The side menu has one School group: Overview (your school's details), School Year, Grade and Section, End-of-Term Subjects, ARAL Program and Kindergarten Checklist. School Setup and Programs are gone; nothing was removed, only moved.", roles: ["SCHOOL_HEAD"] },
+      { text: "Grade and Section is now a full management page. Open any section to see its adviser, teachers and learners, change the adviser, and move learners to another section of the same grade.", roles: ["SCHOOL_HEAD"] },
+      { text: "The adviser picker shows only teachers who can advise, and says who already has a full advisory.", roles: ["SCHOOL_HEAD"] },
+      { text: "If your School Head changes your advisory section or moves learners between sections, your class list updates the same way it always has.", roles: ["TEACHER"] },
+      { text: "The School Head menu now has a School group (Overview, School Year, Grade and Section, End-of-Term Subjects, ARAL Program, Kindergarten Checklist) in place of School Setup and Programs. Grade and Section lets a School Head set section advisers and move learners between sections. When you view a school, these pages are read-only.", roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.65.0",
     date: "2026-11-15",
     title: "Monitoring for School Heads, and autosave that keeps your entries",

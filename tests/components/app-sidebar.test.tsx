@@ -526,10 +526,11 @@ describe("AppSidebar — school head", () => {
     pathname.value = "/school-head";
     render(<AppSidebar role="SCHOOL_HEAD" userName="Head" expanded />);
     expect(screen.getAllByText("Overview").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("School Setup").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("School").length).toBeGreaterThan(0);
+    expect(screen.queryByText("School Setup")).toBeNull();
     expect(screen.getAllByText("Management").length).toBeGreaterThan(0);
     expect(screen.queryByText("People")).toBeNull();
-    expect(screen.getAllByText("Programs").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Programs")).toBeNull();
     expect(screen.getAllByText("Communication & Records").length).toBeGreaterThan(0);
     expect(
       screen.getAllByRole("link", { name: "Teachers" })[0].getAttribute("href")

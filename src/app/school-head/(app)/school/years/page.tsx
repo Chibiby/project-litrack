@@ -6,10 +6,6 @@ import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
-import {
-  SCHOOL_TABS,
-  SCHOOL_WORKSPACE_TABS,
-} from "@/components/school-head/workspace-tabs";
 import { Callout } from "@/components/ui/callout";
 import { Surface, SurfaceBody, SurfaceHeader } from "@/components/ui/surface";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -69,15 +65,13 @@ export default async function SchoolYearsPage({ searchParams }: PageProps) {
 
   return (
     <SchoolHeadPage
-      title="School years"
+      title="School Year"
       view={view}
-      tabs={SCHOOL_WORKSPACE_TABS}
-      activeTab={SCHOOL_TABS.years}
       hero={
         <SchoolHeadHero
           eyebrow="School"
           eyebrowIcon={School}
-          title="School years"
+          title="School Year"
           subtitle="The Division Admin creates school years and picks the active one. You set when each year starts and ends at your school."
           stats={
             <>

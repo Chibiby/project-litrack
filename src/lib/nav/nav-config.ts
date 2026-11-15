@@ -17,6 +17,7 @@ import {
   GraduationCap,
   HandHelping,
   KeyRound,
+  Layers,
   LayoutDashboard,
   LifeBuoy,
   ListOrdered,
@@ -287,18 +288,18 @@ export function getNavGroups(
           ],
         },
         {
-          // "School Setup" replaces the three separate entries (school years,
-          // grade levels, school info) that were really one job; they are tabs
-          // inside the workspace now.
-          label: "School Setup",
+          // Everything about the school itself: its details, its year, its
+          // grades and sections, and the programmes it runs. Overview, School
+          // Year and Grade and Section were once tabs of one "School Setup"
+          // page; each is its own entry now. Longest-prefix matching keeps
+          // Grade and Section (`/school-head/school`) from lighting up on the
+          // other two, whose paths extend it.
+          label: "School",
           items: [
-            { id: "school-head-school", label: "School Setup", href: SCHOOL_HEAD_ROUTES.school, icon: School },
+            { id: "school-head-school-info", label: "Overview", href: SCHOOL_HEAD_ROUTES.schoolInfo, icon: School },
+            { id: "school-head-school-years", label: "School Year", href: SCHOOL_HEAD_ROUTES.schoolYears, icon: CalendarRange },
+            { id: "school-head-school", label: "Grade and Section", href: SCHOOL_HEAD_ROUTES.school, icon: Layers },
             { id: "school-head-term-subjects", label: "End-of-Term Subjects", href: SCHOOL_HEAD_ROUTES.termSubjects, icon: ListOrdered },
-          ],
-        },
-        {
-          label: "Programs",
-          items: [
             { id: "school-head-aral", label: "ARAL Program", href: SCHOOL_HEAD_ROUTES.aral, icon: Sparkles },
             { id: "school-head-kinder-checklist", label: "Kindergarten Checklist", href: SCHOOL_HEAD_ROUTES.kinderChecklist, icon: ClipboardList },
           ],

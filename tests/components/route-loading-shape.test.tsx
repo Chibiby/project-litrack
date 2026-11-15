@@ -42,7 +42,6 @@ import SchoolHeadAuditLoading from "@/app/school-head/(app)/audit/loading";
 import SchoolHeadTermSubjectsLoading from "@/app/school-head/(app)/term-subjects/loading";
 import SchoolHeadReportsLoading from "@/app/school-head/(app)/reports/loading";
 import {
-  SCHOOL_WORKSPACE_TABS,
   TEACHER_TABS,
 } from "@/components/school-head/workspace-tabs";
 import { AralAttendanceSkeleton, AralReadingLevelSkeleton } from "@/components/loading";
@@ -453,7 +452,7 @@ const SCHOOL_HEAD_HERO_ROUTES: SchoolHeadHeroRoute[] = [
   {
     label: "school workspace",
     Boundary: SchoolWorkspaceLoading,
-    tabs: SCHOOL_WORKSPACE_TABS.length,
+    tabs: 0,
   },
   {
     label: "teachers",
@@ -526,9 +525,9 @@ describe("School Head hero route loading boundaries", () => {
     expect(tabSkeletonCountOf(container)).toBe(5);
   });
 
-  it("the school workspace boundary draws its own three tabs", () => {
+  it("the school workspace boundary draws no tab bar: its pages are separate sidebar entries", () => {
     const { container } = render(<SchoolWorkspaceLoading />);
-    expect(tabSkeletonCountOf(container)).toBe(3);
+    expect(tabSkeletonCountOf(container)).toBe(0);
   });
 
   it("the untabbed hero routes draw no tab bar", () => {

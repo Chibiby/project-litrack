@@ -8,10 +8,6 @@ import { resolveSchoolHeadView } from "@/lib/school-head/view";
 import { SchoolHeadPage } from "@/components/school-head/school-head-page";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { StatCard } from "@/components/dashboard/teacher/stat-cards";
-import {
-  SCHOOL_TABS,
-  SCHOOL_WORKSPACE_TABS,
-} from "@/components/school-head/workspace-tabs";
 import { Surface, SurfaceBody, SurfaceHeader } from "@/components/ui/surface";
 import { SchoolInfoForm } from "@/components/school-head/school-info-form";
 
@@ -61,15 +57,13 @@ export default async function SchoolInfoPage({ searchParams }: PageProps) {
 
   return (
     <SchoolHeadPage
-      title="School information"
+      title="Overview"
       view={view}
-      tabs={SCHOOL_WORKSPACE_TABS}
-      activeTab={SCHOOL_TABS.info}
       hero={
         <SchoolHeadHero
           eyebrow="School"
           eyebrowIcon={School}
-          title="School information"
+          title="Overview"
           subtitle="Details shown on reports and exports. The DepEd School ID cannot be changed."
           stats={
             <>

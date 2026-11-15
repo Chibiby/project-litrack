@@ -615,14 +615,13 @@ describe("getNavGroups — admin", () => {
 });
 
 describe("getNavGroups — school head", () => {
-  it("splits nav into Overview, Management, Monitoring, School Setup, Programs and Communication & Records", () => {
+  it("splits nav into Overview, Management, Monitoring, School and Communication & Records", () => {
     const groups = getNavGroups("SCHOOL_HEAD");
     expect(groups.map((g) => g.label)).toEqual([
       "Overview",
       "Management",
       "Monitoring",
-      "School Setup",
-      "Programs",
+      "School",
       "Communication & Records",
     ]);
     // Dashboard sits above the labelled groups on its own so it reads as the
@@ -645,14 +644,19 @@ describe("getNavGroups — school head", () => {
       "/school-head/monitoring/discrepancies",
     ]);
     expect(groups[3].items.map((i) => i.label)).toEqual([
-      "School Setup",
+      "Overview",
+      "School Year",
+      "Grade and Section",
       "End-of-Term Subjects",
-    ]);
-    expect(groups[4].items.map((i) => i.label)).toEqual([
       "ARAL Program",
       "Kindergarten Checklist",
     ]);
-    expect(groups[5].items.map((i) => i.label)).toEqual([
+    expect(groups[3].items.slice(0, 3).map((i) => i.href)).toEqual([
+      "/school-head/school/info",
+      "/school-head/school/years",
+      "/school-head/school",
+    ]);
+    expect(groups[4].items.map((i) => i.label)).toEqual([
       "Announcements",
       "Reports",
       "Audit Log",

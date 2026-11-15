@@ -23,6 +23,11 @@ import {
 } from "@/lib/ui/optimistic";
 import { callAction } from "@/lib/ui/call-action";
 import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
+import type { SectionPeople } from "@/lib/school-head/section-people";
+import {
+  SectionPeoplePanel,
+  type SectionManageContext,
+} from "@/components/school-head/section-people";
 
 export function CreateSectionForm({
   grades,
@@ -84,7 +89,7 @@ export function CreateSectionForm({
   );
 }
 
-type SectionItem = { id: string; name: string; learnerCount: number };
+type SectionItem = { id: string; name: string; learnerCount: number; people?: SectionPeople };
 
 const removeDescription = (name: string) =>
   `"${name}" will be hidden from teachers, and any adviser assigned to it is unassigned.`;
@@ -234,10 +239,13 @@ export function GradeSectionsPanel({
   gradeLevelId,
   sections,
   readOnly = false,
+  manage,
 }: {
   gradeLevelId: string;
   sections: SectionItem[];
   readOnly?: boolean;
+  /** Adviser and learner management inside each section's expandable row. */
+  manage?: SectionManageContext;
 }) {
   const [pending, startTransition] = useTransition();
   // Held here, not in the row: the optimistic removal unmounts the row, which
@@ -334,6 +342,24 @@ export function GradeSectionsPanel({
                   />
                 </CollapsibleSectionRow>
               )}
+              {s.people ? (
+                <SectionPeoplePanel
+                  sectionId={s.id}
+                  name={s.name}
+                  people={s.people}
+                  manage={manage}
+                  destinations={optimisticSections
+                    .filter((d) => d.id !== s.id && d.people)
+                    .map((d) => ({
+                      id: d.id,
+                      name: d.name,
+                      gradeLevelId,
+                      adviser: d.people?.adviser?.usable
+                        ? { id: d.people.adviser.id, fullName: d.people.adviser.name }
+                        : null,
+                    }))}
+                />
+              ) : null}
             </li>
           ))}
         </ul>

@@ -352,7 +352,7 @@ function SectionChoice({
                       ? `Adviser: ${d.adviser.fullName}`
                       : isRequest
                         ? "No adviser yet"
-                        : "No adviser yet — assign one in School Setup"}
+                        : "No adviser yet — assign one in Grade and Section"}
                   </span>
                 </span>
               </label>
