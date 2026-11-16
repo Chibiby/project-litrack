@@ -16,12 +16,12 @@ function setDesktop(matches: boolean) {
 }
 
 /**
- * jsdom has no layout. Give the legal line a bottom of 720 and everything
+ * jsdom has no layout. Give the sign-in card a bottom of 720 and everything
  * else a top of 400 in a 600px-wide column: room for a 296px-tall video.
  */
 function stubLayout() {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
-    const legal = this.hasAttribute("data-login-legal");
+    const legal = this.hasAttribute("data-login-card");
     return { top: legal ? 690 : 400, bottom: legal ? 720 : 400, left: 0, right: 600, width: 600, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
   });
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
@@ -37,7 +37,7 @@ function Page({ withForm = false }: { withForm?: boolean }) {
             <button type="submit">Sign in</button>
           </form>
         ) : null}
-        <p data-login-legal="">Terms</p>
+        <div data-login-card="">Card</div>
       </div>
     </>
   );
@@ -86,7 +86,7 @@ describe("LoginAdReel", () => {
     expect(v.controls).toBe(false);
   });
 
-  it("ends level with the bottom of the legal line", () => {
+  it("ends level with the bottom of the sign-in card", () => {
     setDesktop(true);
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));

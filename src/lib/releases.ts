@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.71.2",
+    date: "2026-11-16",
+    title: "Sign-in page touch-ups",
+    announce: false,
+    fixes: [
+      { text: "On a computer the sign-in video now ends level with the bottom of the Sign In card.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "The school picture behind the sign-in page is slightly dimmer, so the frosted Sign In card stands out.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.71.1",
     date: "2026-11-16",
     title: "The sign-in video now shows on laptop screens",

@@ -70,10 +70,10 @@ function clock(seconds: number): string {
  * bottom edge lines up with the legal line's. Null when it would be too small.
  */
 function measure(anchor: HTMLElement): Box | null {
-  const legal = document.querySelector<HTMLElement>("[data-login-legal]");
-  if (!legal) return null;
+  const card = document.querySelector<HTMLElement>("[data-login-card]");
+  if (!card) return null;
   const top = anchor.getBoundingClientRect().top;
-  const bottom = legal.getBoundingClientRect().bottom;
+  const bottom = card.getBoundingClientRect().bottom;
   const room = bottom - top - GAP_PX;
   const width = Math.min(anchor.clientWidth, room * (16 / 9));
   const height = width * (9 / 16);
@@ -187,8 +187,8 @@ export function LoginAdReel({ placement }: { placement: AdPlacement }) {
     update();
     const observer = new ResizeObserver(update);
     observer.observe(document.body);
-    const column = document.querySelector("[data-login-legal]")?.parentElement;
-    if (column) observer.observe(column);
+    const card = document.querySelector("[data-login-card]");
+    if (card) observer.observe(card);
     window.addEventListener("resize", update);
     return () => {
       observer.disconnect();

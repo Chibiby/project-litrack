@@ -56,6 +56,8 @@ export function LoginShell({
             className="object-cover object-[42%_top] lg:object-top"
           />
         </div>
+        {/* Dims the art a little so the frosted card stands out from it. */}
+        <div className="absolute inset-0 bg-indigo-950/15" />
         {/* A light wash under the text, strongest where the wordmark sits. */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/15 to-transparent lg:bg-gradient-to-r lg:from-white/55 lg:via-white/10 lg:to-transparent" />
       </div>
@@ -63,7 +65,8 @@ export function LoginShell({
       <div className="mx-auto flex min-h-dvh w-full max-w-[96rem] flex-col items-center gap-6 px-4 py-8 sm:px-6 md:max-lg:justify-center md:max-lg:gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-10 xl:px-16 2xl:px-24">
         <LoginBrand media={brandMedia} />
         <div className="w-full max-w-md lg:max-w-[32rem] lg:shrink-0 2xl:max-w-[38rem]">
-          {children}
+          {/* The desktop video lines its bottom up with this card's. */}
+          <div data-login-card="">{children}</div>
           <LegalLinks />
           {cardMedia}
         </div>
