@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.69.1",
+    date: "2026-11-16",
+    title: "Easier-to-read links on the sign-in page",
+    announce: false,
+    fixes: [
+      { text: "The Terms and Conditions and Privacy Policy links under the sign-in card now sit on a light background, so they are easy to read over the picture.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.69.0",
     date: "2026-11-16",
     title: "Privacy Policy, Terms and Conditions, and LITRACK videos on the sign-in page",
