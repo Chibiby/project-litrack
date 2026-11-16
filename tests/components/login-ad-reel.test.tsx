@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginAdReel } from "@/components/auth/login-ad-reel";
 
@@ -15,10 +15,11 @@ function setDesktop(matches: boolean) {
   }));
 }
 
+const video = () => document.querySelector("video");
+
 describe("LoginAdReel", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    sessionStorage.clear();
     // jsdom has no requestIdleCallback; the component falls back to arming directly.
     Object.defineProperty(window, "requestIdleCallback", { value: undefined, configurable: true });
     // jsdom does not implement media playback.
@@ -31,16 +32,18 @@ describe("LoginAdReel", () => {
     vi.useRealTimers();
   });
 
-  it("appears on desktop only after the page has been quiet, with no autoplay or preload", () => {
+  it("appears on desktop after the page has been quiet: one looping video, no autoplay, no preload", () => {
     setDesktop(true);
     render(<LoginAdReel />);
-    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(video()).toBeNull();
     act(() => vi.advanceTimersByTime(4100));
-    const video = document.querySelector("video") as HTMLVideoElement;
-    expect(video).not.toBeNull();
-    expect(video.getAttribute("preload")).toBe("none");
-    expect(video.autoplay).toBe(false);
-    expect(screen.getAllByRole("button", { pressed: false })).toHaveLength(2);
+    const v = video() as HTMLVideoElement;
+    expect(v).not.toBeNull();
+    expect(document.querySelectorAll("video")).toHaveLength(1);
+    expect(v.getAttribute("src")).toBe("/ads/litrack-ads.mp4");
+    expect(v.getAttribute("preload")).toBe("none");
+    expect(v.loop).toBe(true);
+    expect(v.autoplay).toBe(false);
   });
 
   it("waits while the person is typing", () => {
@@ -49,9 +52,9 @@ describe("LoginAdReel", () => {
     act(() => vi.advanceTimersByTime(3000));
     fireEvent.keyDown(window, { key: "a" });
     act(() => vi.advanceTimersByTime(3000));
-    expect(document.querySelector("video")).toBeNull();
+    expect(video()).toBeNull();
     act(() => vi.advanceTimersByTime(1100));
-    expect(document.querySelector("video")).not.toBeNull();
+    expect(video()).not.toBeNull();
   });
 
   it("never appears once a sign-in form is submitted, and leaves when one is", () => {
@@ -74,18 +77,6 @@ describe("LoginAdReel", () => {
     setDesktop(false);
     render(<LoginAdReel />);
     act(() => vi.advanceTimersByTime(10000));
-    expect(document.querySelector("video")).toBeNull();
-  });
-
-  it("stays closed for the session once closed", () => {
-    setDesktop(true);
-    const { unmount } = render(<LoginAdReel />);
-    act(() => vi.advanceTimersByTime(4100));
-    fireEvent.click(screen.getByRole("button", { name: "Close videos" }));
-    expect(document.querySelector("video")).toBeNull();
-    unmount();
-    render(<LoginAdReel />);
-    act(() => vi.advanceTimersByTime(10000));
-    expect(document.querySelector("video")).toBeNull();
+    expect(video()).toBeNull();
   });
 });

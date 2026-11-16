@@ -1,22 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
-const ADS = [
-  { id: "juans-year", title: "Juan's Year" },
-  { id: "one-school-day", title: "One School Day" },
-  { id: "four-desks", title: "Four Desks" },
-] as const;
+/** One file: the three LITRACK videos joined end to end. */
+const SRC = "/ads/litrack-ads.mp4";
+const POSTER = "/ads/litrack-ads.webp";
 
-/** Desktop only: the corner card would cover the sign-in form on a phone. */
+/** Desktop only: on a phone the video would push the sign-in form down. */
 const DESKTOP_QUERY = "(min-width: 1024px)";
-/** How long the page must sit untouched before the card appears. */
+/** How long the page must sit untouched before the video appears. */
 const QUIET_MS = 4000;
-const DISMISS_KEY = "litrack:login-ads-dismissed";
 
 type Connection = { saveData?: boolean };
+
+function shouldSkip(): boolean {
+  if (typeof window === "undefined") return true;
+  if (!window.matchMedia(DESKTOP_QUERY).matches) return true;
+  const conn = (navigator as Navigator & { connection?: Connection }).connection;
+  return conn?.saveData === true;
+}
 
 /**
  * Removing a <video> element alone can leave its download open; clearing the
@@ -29,39 +31,23 @@ function stopVideo(v: HTMLVideoElement | null) {
   v.load();
 }
 
-function shouldSkip(): boolean {
-  if (typeof window === "undefined") return true;
-  if (!window.matchMedia(DESKTOP_QUERY).matches) return true;
-  const conn = (navigator as Navigator & { connection?: Connection }).connection;
-  if (conn?.saveData) return true;
-  try {
-    if (sessionStorage.getItem(DISMISS_KEY) === "1") return true;
-  } catch {
-    // Storage blocked: show the card; dismissing it still hides it for this page.
-  }
-  return false;
-}
-
 /**
- * LITRACK's ad videos in the bottom-left corner of the sign-in page, desktop
- * only. Nothing about it competes with signing in:
+ * LITRACK's videos under the title and tagline on the sign-in page, desktop
+ * only, as one looping video. Nothing about it competes with signing in:
  *
  * - It mounts last: after the window `load` event, then an idle callback,
  *   then QUIET_MS with no typing, clicking or scrolling. Any activity
  *   restarts that wait, so it never appears while someone is filling in the
  *   form.
- * - Once a sign-in form is submitted it never mounts, and a card that is
- *   already showing is removed (its video stops downloading).
- * - Videos never autoplay and use `preload="none"`: only the small poster
- *   loads until someone presses play.
- * - Skipped on phones and tablets, with Data Saver on, and after the
- *   visitor closes it (for the rest of the browser session).
+ * - Once a sign-in form is submitted it never mounts, and a video that is
+ *   already showing is removed (its download stops).
+ * - It never autoplays and uses `preload="none"`: only the poster loads until
+ *   someone presses play. Then it loops.
+ * - Skipped on phones and tablets, and with Data Saver on.
  */
 export function LoginAdReel() {
   const [ready, setReady] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  const [index, setIndex] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -119,58 +105,20 @@ export function LoginAdReel() {
     };
   }, []);
 
-  if (!ready || signingIn || dismissed) return null;
-
-  const ad = ADS[index];
-
-  const close = () => {
-    stopVideo(videoRef.current);
-    setDismissed(true);
-    try {
-      sessionStorage.setItem(DISMISS_KEY, "1");
-    } catch {
-      // Storage blocked: hidden for this page only.
-    }
-  };
+  if (!ready || signingIn) return null;
 
   return (
-    <aside
-      aria-label="About LITRACK: videos"
-      className="fixed bottom-4 left-4 z-30 hidden w-80 overflow-hidden rounded-xl border border-border/60 bg-background/90 shadow-xl backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-slow lg:block xl:w-96"
-    >
-      <div className="flex items-center justify-between gap-2 pb-1 pl-3 pr-1 pt-1">
-        <p className="text-sm font-semibold text-foreground">See LITRACK at work</p>
-        <Button type="button" variant="ghost" size="icon" onClick={close} aria-label="Close videos">
-          <X className="h-4 w-4" aria-hidden />
-        </Button>
-      </div>
-      <video
-        key={ad.id}
-        ref={videoRef}
-        className="aspect-video w-full bg-black"
-        src={`/ads/${ad.id}.mp4`}
-        poster={`/ads/${ad.id}.webp`}
-        preload="none"
-        controls
-        playsInline
-        controlsList="nodownload"
-        aria-label={`${ad.title}, LITRACK video`}
-      />
-      <div role="group" aria-label="Choose a video" className="flex gap-1 p-2">
-        {ADS.map((a, i) => (
-          <Button
-            key={a.id}
-            type="button"
-            size="sm"
-            variant={i === index ? "default" : "ghost"}
-            onClick={() => setIndex(i)}
-            aria-pressed={i === index}
-            className="min-w-0 flex-1 px-2 text-xs"
-          >
-            <span className="truncate">{a.title}</span>
-          </Button>
-        ))}
-      </div>
-    </aside>
+    <video
+      ref={videoRef}
+      className="mt-8 hidden aspect-video w-full max-w-xl overflow-hidden rounded-xl bg-black shadow-xl ring-1 ring-border/50 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-slow lg:block xl:max-w-2xl"
+      src={SRC}
+      poster={POSTER}
+      preload="none"
+      controls
+      loop
+      playsInline
+      controlsList="nodownload"
+      aria-label="LITRACK at work, video"
+    />
   );
 }

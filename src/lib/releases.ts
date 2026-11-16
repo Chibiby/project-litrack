@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.70.0",
+    date: "2026-11-16",
+    title: "One LITRACK video under the sign-in title",
+    announce: false,
+    fixes: [
+      { text: "On a computer, the sign-in page shows one LITRACK video under the title instead of a corner box. It plays all three stories in a loop once you press play, and it never plays by itself or shows while you are typing or signing in.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.69.1",
     date: "2026-11-16",
     title: "Easier-to-read links on the sign-in page",

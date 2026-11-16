@@ -13,10 +13,13 @@ import Link from "next/link";
 export function LoginShell({
   children,
   glass = false,
+  brandMedia,
 }: {
   children: React.ReactNode;
   /** Frosted-glass sign-in card (see AuthCard's `.login-glass` styles). */
   glass?: boolean;
+  /** Shown under the title and tagline (the sign-in page's video). */
+  brandMedia?: React.ReactNode;
 }) {
   return (
     <main
@@ -55,7 +58,7 @@ export function LoginShell({
       </div>
 
       <div className="mx-auto flex min-h-dvh w-full max-w-[96rem] flex-col items-center gap-6 px-4 py-8 sm:px-6 md:max-lg:justify-center md:max-lg:gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-10 xl:px-16 2xl:px-24">
-        <LoginBrand />
+        <LoginBrand media={brandMedia} />
         <div className="w-full max-w-md lg:max-w-[32rem] lg:shrink-0 2xl:max-w-[38rem]">
           {children}
           <LegalLinks />
@@ -65,7 +68,7 @@ export function LoginShell({
   );
 }
 
-function LoginBrand() {
+function LoginBrand({ media }: { media?: React.ReactNode }) {
   return (
     <section
       aria-label="LITRACK"
@@ -104,6 +107,7 @@ function LoginBrand() {
         Track progress. Empower teachers. Support every learner.{" "}
         <span className="lg:block">Together, we build a more literate Philippines.</span>
       </p>
+      {media}
     </section>
   );
 }
