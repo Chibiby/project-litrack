@@ -36,7 +36,7 @@ import {
 import type { UserRole } from "@prisma/client";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
-import { DISTRICT_ROUTES, DISTRICT_SUMMARY_FACETS } from "@/lib/routes/district";
+import { DISTRICT_ROUTES } from "@/lib/routes/district";
 
 export interface NavItem {
   id: string;
@@ -440,13 +440,12 @@ export function getNavGroups(
           ],
         },
         {
-          label: "Summaries",
-          items: DISTRICT_SUMMARY_FACETS.map((facet) => ({
-            id: `district-summary-${facet.id}`,
-            label: facet.label,
-            href: DISTRICT_ROUTES.summary(facet.id),
-            icon: BarChart3,
-          })),
+          // One row, like the division's Monitoring → Division Summary: the
+          // summary index lists every facet, grouped, so the sidebar does not.
+          label: "Monitoring",
+          items: [
+            { id: "district-summary", label: "District Summary", href: DISTRICT_ROUTES.summaryIndex, icon: BarChart3 },
+          ],
         },
         {
           label: "Settings",

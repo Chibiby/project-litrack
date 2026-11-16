@@ -5,6 +5,7 @@ import { getShellWarmHrefs } from "@/lib/nav/warm-hrefs";
 import { getNavGroups, flattenNavGroups } from "@/lib/nav/nav-config";
 import { USER_ROLE_LABELS } from "@/lib/constants/enum-labels";
 import { DISTRICT_SUMMARY_FACETS } from "@/lib/routes/district";
+import { DISTRICT_SUMMARY_GROUPS } from "@/lib/summary/facet-meta";
 
 /**
  * Every `UserRole` value, run through every role-keyed map/switch this suite
@@ -83,10 +84,13 @@ describe("role-exhaustiveness", () => {
     expect(getNavGroups("NOT_A_ROLE" as unknown as (typeof ALL_ROLES)[number])).toEqual([]);
   });
 
-  it("getNavGroups covers every DISTRICT_ADMIN summary facet", () => {
+  it("getNavGroups gives DISTRICT_ADMIN one summary entry, and its index covers every facet", () => {
     const items = flattenNavGroups(getNavGroups("DISTRICT_ADMIN"));
-    const summaryItems = items.filter((i) => i.href.startsWith("/district/summary/"));
-    expect(summaryItems.length).toBe(DISTRICT_SUMMARY_FACETS.length);
+    expect(items.filter((i) => i.href.startsWith("/district/summary")).map((i) => i.href)).toEqual([
+      "/district/summary",
+    ]);
+    const grouped = DISTRICT_SUMMARY_GROUPS.flatMap((g) => g.facetIds);
+    expect([...grouped].sort()).toEqual(DISTRICT_SUMMARY_FACETS.map((f) => f.id).sort());
   });
 
   it("USER_ROLE_LABELS has a distinct, non-empty label for every role", () => {

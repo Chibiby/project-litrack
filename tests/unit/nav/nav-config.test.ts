@@ -703,7 +703,7 @@ describe("getNavGroups — school head", () => {
 });
 
 describe("getNavGroups — district admin", () => {
-  it("orders groups Overview, Schools, Operations, Summaries, Settings", () => {
+  it("orders groups Overview, Schools, Operations, Monitoring, Settings", () => {
     // Before this reorder, Operations sat under Summary's eight links and fell
     // below the fold at 1920x1080 (sidebar scrollHeight 1173 vs 824 visible).
     // Schools and Operations must come before the summary facet links.
@@ -712,7 +712,7 @@ describe("getNavGroups — district admin", () => {
       "Overview",
       "Schools",
       "Operations",
-      "Summaries",
+      "Monitoring",
       "Settings",
     ]);
   });
@@ -748,9 +748,10 @@ describe("getNavGroups — district admin", () => {
     expect(unlocks?.href).toBe("/district/unlocks");
   });
 
-  it("lists Schools and every Operations row before any summary facet row", () => {
+  it("lists Schools and every Operations row before the District Summary row", () => {
     const items = flattenNavGroups(getNavGroups("DISTRICT_ADMIN"));
-    const summaryStart = items.findIndex((i) => i.id.startsWith("district-summary-"));
+    const summaryStart = items.findIndex((i) => i.id === "district-summary");
+    expect(summaryStart).toBeGreaterThan(-1);
     const schoolsIdx = items.findIndex((i) => i.id === "district-schools");
     const operationsIds = ["district-announcements", "district-transfers", "district-unlocks", "district-support"];
     expect(schoolsIdx).toBeGreaterThan(-1);
@@ -762,26 +763,16 @@ describe("getNavGroups — district admin", () => {
     }
   });
 
-  it("matches summary facet nav labels to the facet registry's page-title labels", () => {
-    // Nav label must equal the facet page's H1, which reads SUMMARY_FACET_META.
+  it("has one District Summary row under Monitoring, not a row per facet", () => {
+    const groups = getNavGroups("DISTRICT_ADMIN");
+    const summaryRows = flattenNavGroups(groups).filter((i) => i.href.startsWith("/district/summary"));
+    expect(summaryRows).toEqual([expect.objectContaining({ id: "district-summary", label: "District Summary", href: "/district/summary" })]);
+    expect(groups.find((g) => g.items.some((i) => i.id === "district-summary"))?.label).toBe("Monitoring");
+  });
+
+  it("highlights District Summary on every facet page", () => {
     const items = flattenNavGroups(getNavGroups("DISTRICT_ADMIN"));
-    const labels = items
-      .filter((i) => i.id.startsWith("district-summary-"))
-      .map((i) => i.label);
-    expect(labels).toEqual([
-      "Learners",
-      "Reading behaviour",
-      "End of term",
-      "Weekly attendance",
-      "Monthly reading level",
-      "Non-compliance",
-      "Teacher and School Head profiling",
-      "ARAL learners",
-      "BOSY",
-      "MOSY",
-      "ARAL teachers",
-      "Advisory",
-    ]);
+    expect(resolveActiveHref("/district/summary/compliance", items)).toBe("/district/summary");
   });
 });
 

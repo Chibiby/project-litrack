@@ -28,6 +28,8 @@ export const DISTRICT_ROUTES = {
   settingsProfile: "/district/settings/profile",
   settingsSecurity: "/district/settings/security",
 
+  /** The summary index: every facet, grouped by topic. */
+  summaryIndex: "/district/summary",
   /** One district admin's view of a summary facet, e.g. `summary("learners")`. */
   summary: (facetId: DistrictSummaryFacetId) => `/district/summary/${facetId}`,
 } as const;

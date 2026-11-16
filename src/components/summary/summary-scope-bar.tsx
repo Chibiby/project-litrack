@@ -41,6 +41,13 @@ export type SummaryScopeBarProps = {
   schools: readonly ScopeBarSchool[];
   /** "All my districts" for a district admin, "All districts" for the division. */
   allDistrictsLabel: string;
+  /**
+   * The grouping levels offered. A district admin's own summary offers
+   * "By school" and "Overall" only; the division keeps "By district" too.
+   */
+  levels?: readonly SummaryLevel[];
+  /** False hides the District select (the district admin's own summary). */
+  showDistrictFilter?: boolean;
   /** Compliance facet only: pick one flag's list instead of all of them. */
   flag?: string | null;
   /** Present only for the compliance facet; renders the Flag select when set. */
@@ -71,6 +78,8 @@ export function SummaryScopeBar({
   districts,
   schools,
   allDistrictsLabel,
+  levels,
+  showDistrictFilter = true,
   flag = null,
   flagOptions,
 }: SummaryScopeBarProps) {
@@ -86,6 +95,9 @@ export function SummaryScopeBar({
       hint: `${s.schoolIdCode} · ${s.district ?? NO_DISTRICT_LABEL}`,
     })),
   ];
+
+  const shownLevels = levels ? LEVELS.filter((item) => levels.includes(item.id)) : LEVELS;
+  const selectCount = 1 + (showDistrictFilter ? 1 : 0) + (flagOptions ? 1 : 0);
 
   function go(patch: Record<string, string | null>) {
     const changesLevel = "level" in patch;
@@ -110,9 +122,12 @@ export function SummaryScopeBar({
         <div
           role="group"
           aria-labelledby="summary-level-label"
-          className="grid grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1"
+          className={cn(
+            "grid gap-1 rounded-lg bg-muted/60 p-1",
+            shownLevels.length === 2 ? "grid-cols-2" : "grid-cols-3"
+          )}
         >
-          {LEVELS.map((item) => {
+          {shownLevels.map((item) => {
             const active = item.id === level;
             return (
               <Button
@@ -140,9 +155,10 @@ export function SummaryScopeBar({
       <div
         className={cn(
           "grid min-w-0 flex-1 grid-cols-1 gap-3",
-          flagOptions ? "sm:grid-cols-3" : "sm:grid-cols-2"
+          selectCount === 3 ? "sm:grid-cols-3" : selectCount === 2 ? "sm:grid-cols-2" : null
         )}
       >
+        {showDistrictFilter ? (
         <div className="min-w-0">
           <Label htmlFor="summary-district" className="mb-1.5 block text-xs font-medium text-muted-foreground">
             District
@@ -166,6 +182,7 @@ export function SummaryScopeBar({
             </SelectContent>
           </Select>
         </div>
+        ) : null}
 
         <div className="min-w-0">
           <Label htmlFor="summary-school" className="mb-1.5 block text-xs font-medium text-muted-foreground">

@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { SUMMARY_FACET_META, isSummaryFacetId } from "@/lib/summary/facet-meta";
 import { AppShell } from "@/components/app-shell";
@@ -20,6 +20,22 @@ export default async function DistrictSummaryFacetPage({
   const { facet } = await params;
   if (!isSummaryFacetId(facet)) notFound();
 
+  // A district admin's summary is overall or by school only, so an old link's
+  // `level=district` is dropped. `district=` is dropped too for an admin with
+  // one district: the page shows no District filter to undo it.
+  const search = await searchParams;
+  const dropDistrict =
+    search.district !== undefined && scope.kind === "districts" && scope.districts.length <= 1;
+  if (search.level === "district" || dropDistrict) {
+    const kept = new URLSearchParams();
+    for (const [key, value] of Object.entries(search)) {
+      if ((key === "district" && dropDistrict) || (key === "level" && value === "district")) continue;
+      for (const v of Array.isArray(value) ? value : value === undefined ? [] : [value]) kept.append(key, v);
+    }
+    const qs = kept.toString();
+    redirect(`/district/summary/${facet}${qs ? `?${qs}` : ""}`);
+  }
+
   const meta = SUMMARY_FACET_META[facet];
   return (
     <AppShell
@@ -40,7 +56,7 @@ export default async function DistrictSummaryFacetPage({
         <SummaryFacetView
           facetId={facet}
           adminScope={scope}
-          searchParams={await searchParams}
+          searchParams={search}
           basePath="/district/summary"
           userId={user.id}
         />

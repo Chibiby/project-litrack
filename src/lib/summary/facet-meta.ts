@@ -93,6 +93,21 @@ export const SUMMARY_FACET_LIST: readonly SummaryFacetMeta[] = SUMMARY_FACET_IDS
   (id) => SUMMARY_FACET_META[id]
 );
 
+/**
+ * The district admin's summary index, grouped by what each summary is for:
+ * what needs following up first, then learners, the ARAL program, teachers.
+ * Every facet appears exactly once.
+ */
+export const DISTRICT_SUMMARY_GROUPS: readonly { label: string; facetIds: readonly SummaryFacetId[] }[] = [
+  { label: "Follow-up", facetIds: ["compliance"] },
+  { label: "Learners", facetIds: ["learners", "end-of-term"] },
+  {
+    label: "ARAL program",
+    facetIds: ["aral", "bosy", "mosy", "attendance", "reading-levels", "reading-behavior"],
+  },
+  { label: "Teachers", facetIds: ["aral-teachers", "advisory", "profiling"] },
+];
+
 export function isSummaryFacetId(value: unknown): value is SummaryFacetId {
   return typeof value === "string" && (SUMMARY_FACET_IDS as readonly string[]).includes(value);
 }

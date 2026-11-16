@@ -50,6 +50,8 @@ function monthOptions(): string[] {
   return Array.from({ length: MONTH_OPTION_COUNT }, (_, i) => shiftMonth(current, -i));
 }
 
+const DISTRICT_PORTAL_LEVELS: readonly SummaryLevel[] = ["school", "overall"];
+
 function levelOf(flat: FlatSearchParams): SummaryLevel {
   return flat.level === "overall" || flat.level === "district" || flat.level === "school"
     ? flat.level
@@ -136,6 +138,10 @@ export async function SummaryFacetView({
     );
   }
 
+  // A district admin's own summary: overall and by school only (the district
+  // facet page strips `level=district` before this renders). The District
+  // filter stays only for an admin with more than one district.
+  const districtPortal = adminScope.kind === "districts";
   const level = levelOf(flat);
   // Search, sort and paging stay out of both Suspense keys: the period bar does
   // not depend on them, and the tables must stay mounted (dimmed by their own
@@ -166,6 +172,8 @@ export async function SummaryFacetView({
                 district: s.district,
               }))}
               allDistrictsLabel={adminScope.kind === "districts" ? "All my districts" : "All districts"}
+              levels={districtPortal ? DISTRICT_PORTAL_LEVELS : undefined}
+              showDistrictFilter={!districtPortal || districts.length > 1}
               flag={facetId === "compliance" ? parseComplianceFlagParam(flat.flag) : undefined}
               flagOptions={
                 facetId === "compliance"

@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.67.0",
+    date: "2026-11-16",
+    title: "One District Summary, organized by topic",
+    announce: true,
+    fixes: [
+      { text: "The side menu has one District Summary entry under Monitoring, in place of a row for every summary.", roles: ["DISTRICT_ADMIN"] },
+      { text: "District Summary groups its summaries by topic: Follow-up (non-compliance), Learners, ARAL program and Teachers. Each one still covers only the schools in your districts, and each still exports.", roles: ["DISTRICT_ADMIN"] },
+      { text: "Summaries show figures Overall or By school. \"By district\" is gone, and the District filter only appears if you have more than one district.", roles: ["DISTRICT_ADMIN"] },
+      { text: "District admins now have one District Summary page for their own schools, grouped by topic, Overall or By school. Division Summary is unchanged.", roles: ["SUPER_ADMIN"] },
+      { text: "Your district office's summary of your school's figures is now one page, grouped by topic. Nothing changes in what you enter.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+    ],
+  },
+  {
     version: "2.66.0",
     date: "2026-11-15",
     title: "A School menu, and grades and sections you can manage in one place",

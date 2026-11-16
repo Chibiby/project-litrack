@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { SUMMARY_FACET_LIST } from "@/lib/summary/facet-meta";
+import { SUMMARY_FACET_LIST, type SummaryFacetMeta } from "@/lib/summary/facet-meta";
 import type { SummaryFacetId } from "@/lib/summary/types";
 
 export const SUMMARY_FACET_ICON: Record<SummaryFacetId, LucideIcon> = {
@@ -61,6 +61,7 @@ export function SummaryFacetIndex({
   basePath,
   query,
   gridColsXl = 3,
+  facets = SUMMARY_FACET_LIST,
 }: {
   basePath: string;
   query?: string;
@@ -68,6 +69,8 @@ export function SummaryFacetIndex({
    * aside (e.g. the district overview's left column) need fewer than the
    * default full-width 3. Always 3+ from `2xl` up. */
   gridColsXl?: 2 | 3;
+  /** The cards to show, in order. Defaults to every facet. */
+  facets?: readonly SummaryFacetMeta[];
 }) {
   return (
     <ul
@@ -76,7 +79,7 @@ export function SummaryFacetIndex({
         gridColsXl === 2 ? "xl:grid-cols-2" : "xl:grid-cols-3",
       )}
     >
-      {SUMMARY_FACET_LIST.map((facet) => {
+      {facets.map((facet) => {
         const Icon = SUMMARY_FACET_ICON[facet.id];
         return (
           <li key={facet.id} className="min-w-0">

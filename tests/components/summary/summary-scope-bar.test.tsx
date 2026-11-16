@@ -37,6 +37,32 @@ function hrefOfLastPush(): URL {
   return new URL(push.mock.calls[0]![0] as string, "http://x");
 }
 
+describe("SummaryScopeBar on a district admin's own summary", () => {
+  it("offers only By school and Overall, and no District select, when told to", () => {
+    render(
+      <SummaryScopeBar
+        {...base}
+        searchParams={{}}
+        district={null}
+        districts={["Alabel 1"]}
+        levels={["school", "overall"]}
+        showDistrictFilter={false}
+      />
+    );
+    expect(screen.getByRole("button", { name: "By school" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Overall" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "By district" })).toBeNull();
+    expect(screen.queryByLabelText("District")).toBeNull();
+    expect(screen.getByLabelText("School")).not.toBeNull();
+  });
+
+  it("keeps all three levels and the District select by default", () => {
+    render(<SummaryScopeBar {...base} />);
+    expect(screen.getByRole("button", { name: "By district" })).not.toBeNull();
+    expect(screen.getByLabelText("District")).not.toBeNull();
+  });
+});
+
 describe("SummaryScopeBar", () => {
   it("switching the level sets ?level and keeps the district", () => {
     render(<SummaryScopeBar {...base} />);

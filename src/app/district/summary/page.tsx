@@ -5,6 +5,7 @@ import { PageSlide } from "@/components/ui/page-slide";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { SummaryFacetIndex } from "@/components/summary/summary-facet-index";
 import { describeScope } from "@/components/district/scope-label";
+import { DISTRICT_SUMMARY_GROUPS, SUMMARY_FACET_META } from "@/lib/summary/facet-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,22 @@ export default async function DistrictSummaryIndexPage() {
             meta={describeScope(scope)}
           />
         </div>
-        <SummaryFacetIndex basePath="/district/summary" />
+        <div className="space-y-6">
+          {DISTRICT_SUMMARY_GROUPS.map((group, i) => (
+            <section key={group.label} aria-labelledby={`summary-group-${i}`} className="min-w-0">
+              <h2
+                id={`summary-group-${i}`}
+                className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                {group.label}
+              </h2>
+              <SummaryFacetIndex
+                basePath="/district/summary"
+                facets={group.facetIds.map((id) => SUMMARY_FACET_META[id])}
+              />
+            </section>
+          ))}
+        </div>
       </PageSlide>
     </AppShell>
   );
