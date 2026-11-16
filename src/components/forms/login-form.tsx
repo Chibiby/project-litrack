@@ -152,13 +152,13 @@ function focusStepField(step: HTMLElement | null) {
 
 /**
  * The Teachers / School Head switch: one track holding both options, the
- * picked one as the violet pill. Track lg (12px) with p-1 (4px) → options
+ * picked one as the blue pill. Track lg (12px) with p-1 (4px) → options
  * md (8px), so the corners stay concentric (docs/design-radius.md).
  */
 const ROLE_SWITCH =
   "grid grid-cols-2 gap-1 rounded-lg border border-white/60 bg-card/45 p-1 shadow-highlight-soft";
 const ROLE_OPTION =
-  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aral-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base 2xl:h-12 [&_svg]:size-4 sm:[&_svg]:size-5";
+  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base 2xl:h-12 [&_svg]:size-4 sm:[&_svg]:size-5";
 const ROLE_PICKED = AUTH_PILL;
 const ROLE_UNPICKED = "text-slate-700 hover:bg-card/45 hover:text-indigo-950";
 

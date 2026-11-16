@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.72.0",
+    date: "2026-11-16",
+    title: "A blue, tidier sign-in page",
+    announce: false,
+    fixes: [
+      { text: "The sign-in page is blue to match the LITRACK video, including the Teachers / School Head choice and the Sign in button.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "On a computer the LITRACK title now starts level with the top of the Sign In card, and the video sits right under the tagline.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "While the video is getting ready, a loading spinner holds its place, so the space is never empty while you type or sign in.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "If you close the sign-in video, it comes back the next time the page loads.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.71.2",
     date: "2026-11-16",
     title: "Sign-in page touch-ups",

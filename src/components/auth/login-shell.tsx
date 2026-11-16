@@ -62,12 +62,21 @@ export function LoginShell({
         <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-white/15 to-transparent lg:bg-gradient-to-r lg:from-white/55 lg:via-white/10 lg:to-transparent" />
       </div>
 
-      <div className="mx-auto flex min-h-dvh w-full max-w-[96rem] flex-col items-center gap-6 px-4 py-8 sm:px-6 md:max-lg:justify-center md:max-lg:gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-10 lg:px-10 xl:px-16 2xl:px-24">
+      {/* Phones and tablets: one centred column. Desktop: a grid whose second
+          row holds both the wordmark block and the sign-in card, so the top of
+          LITRACK lines up with the top of the card (and the video, sized in
+          LoginAdReel, ends level with the card's bottom). The logos sit in the
+          row above, the legal line in the row below. */}
+      <div className="mx-auto flex min-h-dvh w-full max-w-[96rem] flex-col items-center gap-6 px-4 py-8 sm:px-6 md:max-lg:justify-center md:max-lg:gap-10 lg:grid lg:grid-cols-[minmax(0,1fr)_32rem] lg:content-center lg:items-start lg:gap-x-16 lg:gap-y-0 xl:gap-x-20 lg:px-10 xl:px-16 2xl:grid-cols-[minmax(0,1fr)_38rem] 2xl:px-24 lg:[@media(max-height:820px)]:py-3">
         <LoginBrand media={brandMedia} />
-        <div className="w-full max-w-md lg:max-w-[32rem] lg:shrink-0 2xl:max-w-[38rem]">
+        <div className="w-full max-w-md lg:contents">
           {/* The desktop video lines its bottom up with this card's. */}
-          <div data-login-card="">{children}</div>
-          <LegalLinks />
+          <div data-login-card="" className="lg:col-start-2 lg:row-start-2">
+            {children}
+          </div>
+          <div className="lg:col-start-2 lg:row-start-3">
+            <LegalLinks />
+          </div>
           {cardMedia}
         </div>
       </div>
@@ -75,15 +84,12 @@ export function LoginShell({
   );
 }
 
-// Laptop screens (a 1366×768 display leaves about 650px inside the browser):
-// a tighter header leaves room under the tagline for the sign-in video.
+// Short laptop screens (1366×768 leaves about 650px inside the browser) get
+// smaller logos and title so the page still fits.
 function LoginBrand({ media }: { media?: React.ReactNode }) {
   return (
-    <section
-      aria-label="LITRACK"
-      className="flex w-full flex-col items-center text-center lg:max-w-2xl lg:items-start lg:self-start lg:pt-4 lg:text-left xl:max-w-[46rem] lg:[@media(max-height:820px)]:pt-0"
-    >
-      <div className="flex items-center gap-3 sm:gap-5">
+    <section aria-label="LITRACK" className="flex w-full flex-col items-center text-center lg:contents">
+      <div className="flex items-center gap-3 sm:gap-5 lg:col-start-1 lg:row-start-1 lg:mb-8 lg:self-end lg:justify-self-start lg:[@media(max-height:820px)]:mb-4">
         <Image
           src="/logo.webp"
           alt="ARAL Program logo"
@@ -91,9 +97,9 @@ function LoginBrand({ media }: { media?: React.ReactNode }) {
           height={512}
           priority
           sizes="(min-width: 1024px) 128px, 80px"
-          className="h-16 w-auto sm:h-24 lg:h-40 lg:[@media(max-height:820px)]:h-28"
+          className="h-16 w-auto sm:h-24 lg:h-32 lg:[@media(max-height:820px)]:h-16"
         />
-        <span aria-hidden className="h-11 w-px bg-muted-foreground/40 sm:h-16 lg:h-24 lg:[@media(max-height:820px)]:h-16" />
+        <span aria-hidden className="h-11 w-px bg-muted-foreground/40 sm:h-16 lg:h-20 lg:[@media(max-height:820px)]:h-10" />
         <Image
           src="/partner-logos.webp"
           alt="Partner organizations: DepEd, Bagong Pilipinas, and Division of Sarangani"
@@ -101,22 +107,24 @@ function LoginBrand({ media }: { media?: React.ReactNode }) {
           height={216}
           priority
           sizes="(min-width: 1024px) 352px, 220px"
-          className="h-auto w-[9rem] sm:w-[14rem] lg:w-[22rem] lg:[@media(max-height:820px)]:w-[15.5rem]"
+          className="h-auto w-[9rem] sm:w-[14rem] lg:w-[18rem] lg:[@media(max-height:820px)]:w-[10rem]"
         />
       </div>
 
-      <h1 className="mt-5 text-[3.5rem] font-black leading-none tracking-tight sm:text-7xl lg:mt-14 lg:text-[6.5rem] xl:text-[7.5rem] lg:[@media(max-height:820px)]:mt-6 lg:[@media(max-height:820px)]:text-[5.5rem]">
-        <span className="text-indigo-950">LIT</span>
-        <span className="text-aral-600">RACK</span>
-      </h1>
-      <p className="mt-1 text-balance text-sm font-semibold text-slate-700 sm:text-base lg:mt-2 lg:text-xl xl:text-2xl">
-        School reading-profiling system for the ARAL Program
-      </p>
-      <p className="mt-2 max-w-xl text-balance text-xs leading-relaxed text-slate-700 sm:text-sm lg:mt-6 lg:max-w-none lg:text-base xl:text-lg lg:[@media(max-height:820px)]:mt-3">
-        Track progress. Empower teachers. Support every learner.{" "}
-        <span className="lg:block">Together, we build a more literate Philippines.</span>
-      </p>
-      {media}
+      <div className="flex w-full flex-col items-center lg:col-start-1 lg:row-start-2 lg:max-w-[46rem] lg:items-start lg:text-left">
+        <h1 className="mt-5 text-[3.5rem] font-black leading-none tracking-tight sm:text-7xl lg:-mt-[0.1em] lg:text-[6.5rem] xl:text-[7.5rem] lg:[@media(max-height:820px)]:text-[5.5rem]">
+          <span className="text-indigo-950">LIT</span>
+          <span className="text-blue-600">RACK</span>
+        </h1>
+        <p className="mt-1 text-balance text-sm font-semibold text-slate-700 sm:text-base lg:mt-3 lg:text-xl xl:text-2xl">
+          School reading-profiling system for the ARAL Program
+        </p>
+        <p className="mt-2 max-w-xl text-balance text-xs leading-relaxed text-slate-700 sm:text-sm lg:mt-3 lg:max-w-none lg:text-base xl:text-lg">
+          Track progress. Empower teachers. Support every learner.{" "}
+          <span className="lg:block">Together, we build a more literate Philippines.</span>
+        </p>
+        {media}
+      </div>
     </section>
   );
 }

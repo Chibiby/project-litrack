@@ -4,9 +4,9 @@ import { LiquidGlassLayer } from "./liquid-glass-layer";
 
 /**
  * The white card every sign-in step renders in (see LoginShell), in the v2
- * app's colours: a lavender-to-sky wash under the header, like the page
- * banners, and violet as the primary and focus colour — set as tokens here so
- * the default Button variant and every input's focus ring follow it.
+ * app's colours: a pale blue wash under the header and blue controls, matching
+ * the LITRACK wordmark in the sign-in video (the app's own primary blue, so the
+ * default Button variant and every input's focus ring follow it).
  */
 export function AuthCard({
   className,
@@ -18,7 +18,7 @@ export function AuthCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-white/70 bg-card bg-gradient-to-b from-aral-50 via-info-50/40 via-25% to-card to-50% p-6 shadow-auth [--primary:var(--aral)] [--ring:var(--aral)] sm:p-8 2xl:p-12",
+        "rounded-xl border border-white/70 bg-card bg-gradient-to-b from-blue-50 via-info-50/40 via-25% to-card to-50% p-6 shadow-auth sm:p-8 2xl:p-12",
         // Inside LoginShell's `glass` frame (/login only) the card itself goes
         // clear and LiquidGlassLayer draws the glass behind the content: tint,
         // specular rim, and (Chromium) a lens that bends the art at the edge.
@@ -49,7 +49,7 @@ export function AuthCardHeader({
       {Icon ? (
         <span
           aria-hidden
-          className="relative mb-5 flex size-16 items-center justify-center rounded-lg bg-aral-100 text-aral-600 2xl:mb-6 2xl:size-20"
+          className="relative mb-5 flex size-16 items-center justify-center rounded-lg bg-blue-100 text-blue-700 2xl:mb-6 2xl:size-20"
         >
           <Icon className="size-9 2xl:size-11" strokeWidth={1.75} />
         </span>
@@ -65,17 +65,17 @@ export function AuthCardHeader({
 /** Label style shared by the sign-in fields. */
 export const AUTH_LABEL = "text-sm font-medium text-indigo-950 2xl:text-base";
 
-/** The violet gradient pill of the sidebar highlight, for the v2 sign-in controls. */
-export const AUTH_PILL = "bg-gradient-to-r from-aral-600 to-aral-500 text-white shadow-md shadow-aral-500/30 hover:from-aral-700 hover:to-aral-600";
+/** The blue gradient pill of the sidebar highlight, for the v2 sign-in controls. */
+export const AUTH_PILL = "bg-gradient-to-r from-blue-700 to-blue-600 text-white shadow-md shadow-blue-600/30 hover:from-blue-800 hover:to-blue-700";
 
 /**
  * The large call to action ("Next", "Sign in"). On the Liquid Glass card a
  * button that cannot be pressed yet turns into a plain glass pill (translucent
- * fill, hairline edge, muted text) instead of a washed-out violet one; while it
- * is busy signing in (aria-busy) it keeps the violet.
+ * fill, hairline edge, muted text) instead of a washed-out blue one; while it
+ * is busy signing in (aria-busy) it keeps the blue.
  */
 export const AUTH_PRIMARY_BUTTON = cn(
-  "h-11 w-full rounded-xl text-sm font-bold sm:h-12 sm:text-base 2xl:h-14 2xl:text-lg [&_svg]:size-4 sm:[&_svg]:size-5 bg-gradient-to-r from-aral-600 to-aral-500 text-white shadow-md shadow-aral-500/30 hover:from-aral-700 hover:to-aral-600",
+  "h-11 w-full rounded-xl text-sm font-bold sm:h-12 sm:text-base 2xl:h-14 2xl:text-lg [&_svg]:size-4 sm:[&_svg]:size-5 bg-gradient-to-r from-blue-700 to-blue-600 text-white shadow-md shadow-blue-600/30 hover:from-blue-800 hover:to-blue-700",
   "[.login-glass_&:disabled:not([aria-busy=true])]:border [.login-glass_&:disabled:not([aria-busy=true])]:border-white/70 [.login-glass_&:disabled:not([aria-busy=true])]:bg-card/45 [.login-glass_&:disabled:not([aria-busy=true])]:bg-none [.login-glass_&:disabled:not([aria-busy=true])]:text-slate-500 [.login-glass_&:disabled:not([aria-busy=true])]:opacity-100 [.login-glass_&:disabled:not([aria-busy=true])]:shadow-highlight",
 );
 
@@ -104,7 +104,7 @@ export const FLOAT_INPUT = cn(
   "h-12 pb-1 pl-14 pt-5 text-base text-indigo-950 lg:h-12 lg:text-base 2xl:h-14 2xl:pt-6",
 );
 export const FLOAT_LABEL =
-  "pointer-events-none absolute left-14 top-1/2 -translate-y-1/2 text-sm font-normal text-slate-600 sm:text-base transition-[top,font-size,color] duration-fast motion-reduce:transition-none group-focus-within:top-3 group-focus-within:text-xs group-focus-within:text-aral-700 group-data-[filled=true]:top-3 group-data-[filled=true]:text-xs group-has-[:autofill]:top-3 group-has-[:autofill]:text-xs 2xl:group-has-[:autofill]:top-4 2xl:group-focus-within:top-4 2xl:group-data-[filled=true]:top-4";
+  "pointer-events-none absolute left-14 top-1/2 -translate-y-1/2 text-sm font-normal text-slate-600 sm:text-base transition-[top,font-size,color] duration-fast motion-reduce:transition-none group-focus-within:top-3 group-focus-within:text-xs group-focus-within:text-blue-800 group-data-[filled=true]:top-3 group-data-[filled=true]:text-xs group-has-[:autofill]:top-3 group-has-[:autofill]:text-xs 2xl:group-has-[:autofill]:top-4 2xl:group-focus-within:top-4 2xl:group-data-[filled=true]:top-4";
 
 /** Notes inside the glass card (session ended, …): a glass fill, not a grey box. */
 export const GLASS_NOTE =
@@ -112,4 +112,4 @@ export const GLASS_NOTE =
 
 /** Text links in the card ("Forgot password?", "School login"). */
 export const AUTH_LINK =
-  "font-medium text-aral-700 underline underline-offset-4 hover:text-aral-800";
+  "font-medium text-blue-800 underline underline-offset-4 hover:text-blue-900";

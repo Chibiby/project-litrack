@@ -86,15 +86,15 @@ describe("LoginAdReel", () => {
     expect(v.controls).toBe(false);
   });
 
-  it("ends level with the bottom of the sign-in card", () => {
+  it("sits right under the tagline, no wider than 85% of the column", () => {
     setDesktop(true);
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
     const frame = (video() as HTMLVideoElement).closest("figure") as HTMLElement;
-    // Room: 720 - 400 - 24 = 296px tall; 600px wide gives a 337.5px-tall 16:9
-    // box, so the height wins: 296 tall, 526.2 wide, 24px from the tagline.
-    expect(parseFloat(frame.style.height)).toBeCloseTo(296, 0);
-    expect(parseFloat(frame.style.width)).toBeCloseTo(296 * (16 / 9), 0);
+    // Room: 720 - 400 - 24 = 296px tall. The video may use 85% of the 600px
+    // column (510px), so the width wins: 286.9 tall, 24px under the tagline.
+    expect(parseFloat(frame.style.height)).toBeCloseTo(510 * (9 / 16), 0);
+    expect(parseFloat(frame.style.width)).toBeCloseTo(510, 0);
     expect(parseFloat(frame.style.marginTop)).toBeCloseTo(24, 0);
   });
 
@@ -139,7 +139,7 @@ describe("LoginAdReel", () => {
     expect(screen.getByRole("button", { name: "Full screen" })).toBeTruthy();
   });
 
-  it("closes from the X and stays closed for the session", () => {
+  it("closes from the X, and comes back when the page loads again", () => {
     setDesktop(true);
     const { unmount } = render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
@@ -148,7 +148,7 @@ describe("LoginAdReel", () => {
     unmount();
     render(<Page />);
     act(() => vi.advanceTimersByTime(10000));
-    expect(video()).toBeNull();
+    expect(video()).not.toBeNull();
   });
 
   it("has a timeline to seek", () => {
@@ -169,24 +169,37 @@ describe("LoginAdReel", () => {
     expect(video()).not.toBeNull();
   });
 
-  it("waits while the person is typing", () => {
+  it("holds the spot with a loader while the person is typing, then shows the player", () => {
     setDesktop(true);
     render(<Page />);
+    expect(screen.getByRole("status", { name: "Loading video" })).toBeTruthy();
     act(() => vi.advanceTimersByTime(3000));
     fireEvent.keyDown(window, { key: "a" });
     act(() => vi.advanceTimersByTime(3000));
     expect(video()).toBeNull();
+    expect(screen.getByRole("status", { name: "Loading video" })).toBeTruthy();
     act(() => vi.advanceTimersByTime(1100));
     expect(video()).not.toBeNull();
+    expect(screen.queryByRole("status", { name: "Loading video" })).toBeNull();
   });
 
-  it("never appears once a sign-in form is submitted, and leaves when one is", () => {
+  it("stays on screen when the sign-in form is submitted, but stops its download", () => {
     setDesktop(true);
     const { container } = render(<Page withForm />);
     act(() => vi.advanceTimersByTime(4100));
-    expect(container.querySelector("video")).not.toBeNull();
+    const v = container.querySelector("video") as HTMLVideoElement;
+    expect(v).not.toBeNull();
     fireEvent.submit(container.querySelector("form") as HTMLFormElement);
-    expect(container.querySelector("video")).toBeNull();
+    expect(container.querySelector("video")).toBe(v);
+    expect(v.getAttribute("src")).toBeNull();
+  });
+
+  it("swaps the loader for the player straight away when signing in before it appeared", () => {
+    setDesktop(true);
+    const { container } = render(<Page withForm />);
+    act(() => vi.advanceTimersByTime(1000));
+    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+    expect(container.querySelector("video")).not.toBeNull();
   });
 
   it("does not load on phones and tablets", () => {

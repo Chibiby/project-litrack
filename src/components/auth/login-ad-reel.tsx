@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Maximize, Minimize, Pause, Play, Volume1, Volume2, VolumeX, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Loader2, Maximize, Minimize, Pause, Play, Volume1, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -27,9 +27,10 @@ const QUIET_MS = 4000;
 const GAP_PX = 24;
 /** Below this height the brand-column video is too small to be worth showing. */
 const MIN_HEIGHT_PX = 150;
+/** The video never spans more than this share of the brand column. */
+const MAX_WIDTH_SHARE = 0.85;
 /** While playing, the controls hide after this long without the pointer moving. */
 const IDLE_MS = 2500;
-const DISMISS_KEY = "litrack:login-video-closed";
 
 type Connection = { saveData?: boolean };
 type Box = { width: number; height: number; offset: number };
@@ -39,12 +40,7 @@ function shouldSkip(placement: AdPlacement): boolean {
   if (typeof window === "undefined") return true;
   if (!window.matchMedia(QUERY[placement]).matches) return true;
   const conn = (navigator as Navigator & { connection?: Connection }).connection;
-  if (conn?.saveData) return true;
-  try {
-    return sessionStorage.getItem(DISMISS_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return Boolean(conn?.saveData);
 }
 
 /**
@@ -65,9 +61,9 @@ function clock(seconds: number): string {
 }
 
 /**
- * The 16:9 box that fits between the tagline and the bottom of the sign-in
- * card's legal line, as wide as the brand column allows, pushed down so its
- * bottom edge lines up with the legal line's. Null when it would be too small.
+ * The 16:9 box right under the tagline, no lower than the sign-in card's
+ * bottom edge and no wider than MAX_WIDTH_SHARE of the brand column. Null when
+ * it would be too small.
  */
 function measure(anchor: HTMLElement): Box | null {
   const card = document.querySelector<HTMLElement>("[data-login-card]");
@@ -75,21 +71,36 @@ function measure(anchor: HTMLElement): Box | null {
   const top = anchor.getBoundingClientRect().top;
   const bottom = card.getBoundingClientRect().bottom;
   const room = bottom - top - GAP_PX;
-  const width = Math.min(anchor.clientWidth, room * (16 / 9));
+  // A little narrower than the column, so it does not crowd the card.
+  const width = Math.min(anchor.clientWidth * MAX_WIDTH_SHARE, room * (16 / 9));
   const height = width * (9 / 16);
   if (height < MIN_HEIGHT_PX) return null;
-  return { width, height, offset: GAP_PX + (room - height) };
+  return { width, height, offset: GAP_PX };
+}
+
+/** Re-checks the placement when the window crosses the desktop breakpoint. */
+function subscribeMedia(onChange: () => void) {
+  const mq = window.matchMedia(QUERY.brand);
+  mq.addEventListener?.("change", onChange);
+  return () => mq.removeEventListener?.("change", onChange);
 }
 
 /**
  * Whether the video may appear yet. It mounts last: after the window `load`
  * event, then an idle callback, then QUIET_MS with no typing, tapping,
  * clicking or scrolling (any of them restarts the wait), so it never appears
- * while someone is filling in the form. A sign-in submit cancels it for good.
+ * while someone is filling in the form; a placeholder holds its spot meanwhile.
+ * A sign-in submit shows the player at once (poster only) and stops any download.
  */
 function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
+  // `enabled`: this placement shows here at all (a placeholder holds the spot
+  // until `ready`). `ready`: the player itself may mount.
+  const enabled = useSyncExternalStore(
+    subscribeMedia,
+    () => !shouldSkip(placement),
+    () => false
+  );
   const [ready, setReady] = useState(false);
-  const [signingIn, setSigningIn] = useState(false);
   const onSubmitRef = useRef(onSubmit);
   useEffect(() => {
     onSubmitRef.current = onSubmit;
@@ -115,11 +126,14 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
     };
 
     const onActivity = () => arm();
+    // Signing in stops any download so the sign-in request goes first, but
+    // the player stays on screen (its poster) rather than leaving a hole.
     const handleSubmit = () => {
       submitted = true;
       clearTimeout(quietTimer);
+      stopListening();
       onSubmitRef.current();
-      setSigningIn(true);
+      if (!cancelled) setReady(true);
     };
     const activity = ["keydown", "pointerdown", "input", "wheel", "touchstart"] as const;
     const stopListening = () => {
@@ -148,7 +162,21 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
     };
   }, [placement]);
 
-  return ready && !signingIn;
+  return { enabled, ready };
+}
+
+/** Holds the video's spot, same size and frame, until the player mounts. */
+function VideoLoader({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <div
+      role="status"
+      aria-label="Loading video"
+      className={`flex items-center justify-center rounded-2xl bg-black/50 shadow-2xl ring-1 ring-white/70 backdrop-blur-md ${className}`}
+      style={style}
+    >
+      <Loader2 className="size-8 animate-spin text-white/90" aria-hidden />
+    </div>
+  );
 }
 
 /**
@@ -157,15 +185,14 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
  * speaker to mute) and full screen, plus a close button. Controls show while
  * paused, while the pointer is over the video, or for a moment after a tap.
  *
- * Desktop shows it under the title (`brand`), sized so its bottom lines up
- * with the legal line under the sign-in card; phones and tablets show it under
- * that legal line (`card`). It never autoplays and uses `preload="none"`:
- * only the poster loads until someone presses play. Closing it hides it for
- * the rest of the browser session. Skipped with Data Saver on.
+ * Desktop shows it right under the tagline (`brand`); phones and tablets show
+ * it under the legal line below the sign-in card (`card`). It never autoplays
+ * and uses `preload="none"`: only the poster loads until someone presses play.
+ * Closing it hides it until the page is loaded again. Skipped with Data Saver on.
  */
 export function LoginAdReel({ placement }: { placement: AdPlacement }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const visible = useDeferredReveal(placement, () => stopVideo(videoRef.current));
+  const { enabled, ready } = useDeferredReveal(placement, () => stopVideo(videoRef.current));
   const [closed, setClosed] = useState(false);
   const [box, setBox] = useState<Box | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -173,7 +200,7 @@ export function LoginAdReel({ placement }: { placement: AdPlacement }) {
   // Brand placement: keep the box fitted as the window or the sign-in card
   // changes size (a message appears, the School Head tab opens).
   useLayoutEffect(() => {
-    if (!visible || placement !== "brand") return;
+    if (!enabled || placement !== "brand") return;
     const anchor = anchorRef.current;
     if (!anchor) return;
     const update = () => {
@@ -194,36 +221,36 @@ export function LoginAdReel({ placement }: { placement: AdPlacement }) {
       observer.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [visible, placement]);
+  }, [enabled, placement]);
 
-  if (!visible || closed) return null;
+  if (!enabled || closed) return null;
 
   const close = () => {
     stopVideo(videoRef.current);
     setClosed(true);
-    try {
-      sessionStorage.setItem(DISMISS_KEY, "1");
-    } catch {
-      // Storage blocked: closed for this page only.
-    }
   };
 
   if (placement === "card") {
     return (
       <div className="mt-6 lg:hidden">
-        <Player videoRef={videoRef} onClose={close} className="aspect-video w-full" />
+        {ready ? (
+          <Player videoRef={videoRef} onClose={close} className="aspect-video w-full" />
+        ) : (
+          <VideoLoader className="aspect-video w-full" />
+        )}
       </div>
     );
   }
 
+  const boxStyle = box ? { width: box.width, height: box.height, marginTop: box.offset } : undefined;
   return (
     <div ref={anchorRef} className="hidden w-full lg:block">
       {box ? (
-        <Player
-          videoRef={videoRef}
-          onClose={close}
-          style={{ width: box.width, height: box.height, marginTop: box.offset }}
-        />
+        ready ? (
+          <Player videoRef={videoRef} onClose={close} style={boxStyle} />
+        ) : (
+          <VideoLoader style={boxStyle} />
+        )
       ) : null}
     </div>
   );
