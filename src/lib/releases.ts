@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.69.0",
+    date: "2026-11-16",
+    title: "Privacy Policy, Terms and Conditions, and LITRACK videos on the sign-in page",
+    announce: false,
+    fixes: [
+      { text: "The sign-in page now links to the Privacy Policy and the Terms and Conditions. You can read both without signing in.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "On a computer, short videos about LITRACK appear in the bottom-left corner of the sign-in page once the page has finished loading. They never play by themselves, never show while you are typing or signing in, and you can close them.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.68.0",
     date: "2026-11-16",
     title: "Learners, Teachers and IP Learners for district admins",

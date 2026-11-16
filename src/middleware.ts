@@ -32,6 +32,8 @@ function isPublicPath(pathname: string) {
     pathname === "/login" ||
     pathname === "/admin/login" ||
     pathname === "/forgot-password" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
     pathname.startsWith("/auth/reset") ||
     pathname.startsWith("/auth/confirm") ||
     pathname.startsWith("/api/") ||
@@ -132,6 +134,6 @@ export const config = {
      *   otherwise be treated as a page and redirected to /login for anonymous
      *   visitors — which is exactly who sees the first-load intro.
      */
-    "/((?!_next/static|_next/image|favicon.ico|brand/|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|brand/|ads/|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)$).*)",
   ],
 };

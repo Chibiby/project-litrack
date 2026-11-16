@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 /**
  * The sign-in screens' frame (owner mockup, 2026-09-15): the school
@@ -57,6 +58,7 @@ export function LoginShell({
         <LoginBrand />
         <div className="w-full max-w-md lg:max-w-[32rem] lg:shrink-0 2xl:max-w-[38rem]">
           {children}
+          <LegalLinks />
         </div>
       </div>
     </main>
@@ -103,5 +105,24 @@ function LoginBrand() {
         <span className="lg:block">Together, we build a more literate Philippines.</span>
       </p>
     </section>
+  );
+}
+
+/** Under the sign-in card, on every sign-in screen. */
+function LegalLinks() {
+  const link =
+    "font-semibold text-indigo-950 underline decoration-indigo-950/30 underline-offset-2 hover:decoration-indigo-950 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+  return (
+    <p className="mt-4 text-balance text-center text-xs leading-relaxed text-slate-700 sm:text-sm">
+      By signing in, you agree to the{" "}
+      <Link href="/terms" className={link}>
+        Terms and Conditions
+      </Link>{" "}
+      and{" "}
+      <Link href="/privacy" className={link}>
+        Privacy Policy
+      </Link>
+      .
+    </p>
   );
 }

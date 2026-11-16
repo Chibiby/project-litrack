@@ -5,6 +5,7 @@ import { classifyError } from "@/lib/errors/classify";
 import { reportError } from "@/lib/errors/report";
 import { LoginForm } from "@/components/forms/login-form";
 import { LoginShell } from "@/components/auth/login-shell";
+import { LoginAdReel } from "@/components/auth/login-ad-reel";
 
 /**
  * Not ISR, despite being a public route. This page reads `searchParams`
@@ -56,6 +57,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         loginError={loginError}
         notice={schoolsUnavailable ?? undefined}
       />
+      <LoginAdReel />
     </LoginShell>
   );
 }
