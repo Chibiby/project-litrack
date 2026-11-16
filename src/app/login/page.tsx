@@ -51,7 +51,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   // Always light (ALWAYS_LIGHT_PATHS), so there is no theme switch here: dark
   // mode is chosen inside the app, and the stored choice returns after sign-in.
   return (
-    <LoginShell glass brandMedia={<LoginAdReel />}>
+    <LoginShell
+      glass
+      brandMedia={<LoginAdReel placement="brand" />}
+      cardMedia={<LoginAdReel placement="card" />}
+    >
       <LoginForm
         schools={schools}
         loginError={loginError}

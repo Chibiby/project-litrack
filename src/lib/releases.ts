@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.71.0",
+    date: "2026-11-16",
+    title: "A proper video player on the sign-in page, on phones too",
+    announce: false,
+    fixes: [
+      { text: "The sign-in video is now a normal video player: a play button in the middle, and a timeline, volume (click the speaker to mute), full screen and a close button when you point at or tap the video.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+      { text: "On a computer the video sits under the title and lines up with the bottom of the Privacy Policy line. On phones and tablets it appears under the sign-in card. It still never plays by itself or shows while you are typing or signing in.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.70.0",
     date: "2026-11-16",
     title: "One LITRACK video under the sign-in title",

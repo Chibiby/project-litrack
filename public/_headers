@@ -17,8 +17,3 @@
 
 /favicon.ico
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
-
-# Login-page ad videos and posters. Range requests are served by Workers
-# Static Assets, so the player can seek without downloading the whole file.
-/ads/*
-  Cache-Control: public, max-age=86400, stale-while-revalidate=604800

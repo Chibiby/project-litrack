@@ -14,12 +14,15 @@ export function LoginShell({
   children,
   glass = false,
   brandMedia,
+  cardMedia,
 }: {
   children: React.ReactNode;
   /** Frosted-glass sign-in card (see AuthCard's `.login-glass` styles). */
   glass?: boolean;
-  /** Shown under the title and tagline (the sign-in page's video). */
+  /** Shown under the title and tagline (the sign-in page's video, desktop). */
   brandMedia?: React.ReactNode;
+  /** Shown under the legal line below the card (the video, phones and tablets). */
+  cardMedia?: React.ReactNode;
 }) {
   return (
     <main
@@ -62,6 +65,7 @@ export function LoginShell({
         <div className="w-full max-w-md lg:max-w-[32rem] lg:shrink-0 2xl:max-w-[38rem]">
           {children}
           <LegalLinks />
+          {cardMedia}
         </div>
       </div>
     </main>
@@ -118,7 +122,7 @@ function LegalLinks() {
     "font-semibold text-indigo-950 underline decoration-indigo-950/30 underline-offset-2 hover:decoration-indigo-950 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
   return (
     // On a frosted pill: bare text over the illustration's trees was unreadable.
-    <p className="mx-auto mt-4 w-fit max-w-full text-balance rounded-2xl bg-background/80 px-4 py-1.5 text-center text-xs leading-relaxed text-slate-700 shadow-sm backdrop-blur-md sm:text-sm">
+    <p data-login-legal="" className="mx-auto mt-4 w-fit max-w-full text-balance rounded-2xl bg-background/80 px-4 py-1.5 text-center text-xs leading-relaxed text-slate-700 shadow-sm backdrop-blur-md sm:text-sm">
       By signing in, you agree to the{" "}
       <Link href="/terms" className={link}>
         Terms and Conditions
