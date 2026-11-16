@@ -5,7 +5,7 @@ import { PageSlide } from "@/components/ui/page-slide";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { SummaryFacetIndex } from "@/components/summary/summary-facet-index";
 import { describeScope } from "@/components/district/scope-label";
-import { DISTRICT_SUMMARY_GROUPS, SUMMARY_FACET_META } from "@/lib/summary/facet-meta";
+import { DISTRICT_ROUTES } from "@/lib/routes/district";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function DistrictSummaryIndexPage() {
   return (
     <AppShell
       title="District Summary"
-      subtitle="Learners, reading and compliance across your schools"
+      subtitle="Every school in your districts, overall and by school"
       role={user.role}
       userName={user.fullName || user.email}
       hideTitle
@@ -26,26 +26,12 @@ export default async function DistrictSummaryIndexPage() {
             eyebrow="District summary"
             eyebrowIcon={BarChart3}
             title="District Summary"
-            subtitle="Learners, reading and compliance across your schools, overall and by school."
+            subtitle="Every school in your districts, overall and by school."
             meta={describeScope(scope)}
           />
         </div>
-        <div className="space-y-6">
-          {DISTRICT_SUMMARY_GROUPS.map((group, i) => (
-            <section key={group.label} aria-labelledby={`summary-group-${i}`} className="min-w-0">
-              <h2
-                id={`summary-group-${i}`}
-                className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
-              >
-                {group.label}
-              </h2>
-              <SummaryFacetIndex
-                basePath="/district/summary"
-                facets={group.facetIds.map((id) => SUMMARY_FACET_META[id])}
-              />
-            </section>
-          ))}
-        </div>
+        {/* Same flat card grid as the Division Summary. */}
+        <SummaryFacetIndex basePath={DISTRICT_ROUTES.summaryIndex} />
       </PageSlide>
     </AppShell>
   );

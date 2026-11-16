@@ -17,6 +17,11 @@ export const DISTRICT_ROUTES = {
   /** A single in-scope school's detail page. */
   school: (schoolId: string) => `/district/schools/${schoolId}`,
 
+  /** Read-only learner, teacher and IP learner lists, inside the admin's districts. */
+  learners: "/district/learners",
+  teachers: "/district/teachers",
+  ipLearners: "/district/ip-learners",
+
   support: "/district/support",
   announcements: "/district/announcements",
   transfers: "/district/transfers",

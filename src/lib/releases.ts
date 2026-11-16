@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.68.0",
+    date: "2026-11-16",
+    title: "Learners, Teachers and IP Learners for district admins",
+    announce: true,
+    fixes: [
+      { text: "The Schools group is now Management, with three new pages: Learners, Teachers and IP Learners. Each shows only the schools in your districts, with filters by school, grade and section.", roles: ["DISTRICT_ADMIN"] },
+      { text: "The side menu is shorter: Dashboard at the top, then Management, Monitoring and Operations. Settings moved to your account menu (your name or picture).", roles: ["DISTRICT_ADMIN"] },
+      { text: "District Summary is back to the same card layout as the Division Summary. Each summary still covers only your schools, Overall or By school.", roles: ["DISTRICT_ADMIN"] },
+      { text: "District admins now have read-only Learners, Teachers and IP Learners pages for their own schools, under a Management group. Division pages are unchanged.", roles: ["SUPER_ADMIN"] },
+      { text: "Your district office can now see your school's learner, teacher and IP learner lists. They cannot change anything; what you enter stays the same.", roles: ["TEACHER", "SCHOOL_HEAD"] },
+    ],
+  },
+  {
     version: "2.67.0",
     date: "2026-11-16",
     title: "One District Summary, organized by topic",

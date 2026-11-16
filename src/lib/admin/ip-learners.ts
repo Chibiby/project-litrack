@@ -9,6 +9,7 @@ import { ACTIVE_ENROLLED_LEARNER } from "@/lib/learners/population";
 import { IP_ETHNICITIES } from "@/lib/ip/ethnicity";
 import { shapeIpOverview, type IpOverview } from "@/lib/ip/overview";
 import { ACCOUNT_GRADE_VALUES, cleanFilterId, cleanFilterText } from "@/lib/admin/accounts";
+import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 
 /**
  * Super Admin: every IP figure for Management → IP Learners. Cross-tenant by
@@ -18,7 +19,15 @@ import { ACCOUNT_GRADE_VALUES, cleanFilterId, cleanFilterText } from "@/lib/admi
  * rows are loaded. Demo tenant scoped like the dashboard. Cached under the
  * tags learner create/archive/import and school changes already bust.
  */
-export type IpOverviewFilter = { district?: string; schoolId?: string };
+export type IpOverviewFilter = {
+  district?: string;
+  schoolId?: string;
+  /**
+   * A district admin's fence (`requireAdminScope`, never the request): only
+   * live schools in these districts. An empty list matches nothing.
+   */
+  districts?: readonly string[];
+};
 
 const IP_LEARNER: Prisma.LearnerWhereInput = {
   OR: [
@@ -28,11 +37,14 @@ const IP_LEARNER: Prisma.LearnerWhereInput = {
 };
 
 export async function getIpLearnersOverview(filter: IpOverviewFilter = {}): Promise<IpOverview> {
-  const demoVisible = await isDemoVisible();
+  // A fenced (district admin) view lets the fence decide the demo school.
+  const demoVisible = filter.districts !== undefined || (await isDemoVisible());
   const f = {
     district: cleanFilterText(filter.district),
     schoolId: cleanFilterId(filter.schoolId),
+    districts: filter.districts ? [...filter.districts].sort() : undefined,
   };
+  const fence = f.districts ? schoolWhereForScope({ kind: "districts", districts: f.districts }) : null;
   return cachedQuery(
     async () => {
       const { schoolScope, viaSchool } = adminPopulationScope(demoVisible);
@@ -41,6 +53,7 @@ export async function getIpLearnersOverview(filter: IpOverviewFilter = {}): Prom
         ...schoolScope,
         ...(f.district ? { district: f.district } : {}),
         ...(f.schoolId ? { id: f.schoolId } : {}),
+        ...(fence ? { AND: [fence] } : {}),
       };
       // The dashboard's enrolled population, narrowed to the filter.
       const enrolled: Prisma.LearnerWhereInput = {
@@ -50,6 +63,7 @@ export async function getIpLearnersOverview(filter: IpOverviewFilter = {}): Prom
           viaSchool,
           ...(f.district ? [{ school: { district: f.district } }] : []),
           ...(f.schoolId ? [{ schoolId: f.schoolId }] : []),
+          ...(fence ? [{ school: fence }] : []),
         ],
       };
 

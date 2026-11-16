@@ -703,18 +703,11 @@ describe("getNavGroups — school head", () => {
 });
 
 describe("getNavGroups — district admin", () => {
-  it("orders groups Overview, Schools, Operations, Monitoring, Settings", () => {
-    // Before this reorder, Operations sat under Summary's eight links and fell
-    // below the fold at 1920x1080 (sidebar scrollHeight 1173 vs 824 visible).
-    // Schools and Operations must come before the summary facet links.
+  it("opens with an unlabelled Dashboard row, then Management, Monitoring, Operations; no Settings", () => {
     const groups = getNavGroups("DISTRICT_ADMIN");
-    expect(groups.map((g) => g.label)).toEqual([
-      "Overview",
-      "Schools",
-      "Operations",
-      "Monitoring",
-      "Settings",
-    ]);
+    expect(groups.map((g) => g.label)).toEqual([undefined, "Management", "Monitoring", "Operations"]);
+    expect(groups[0].items.map((i) => [i.label, i.href])).toEqual([["Dashboard", "/district"]]);
+    expect(flattenNavGroups(groups).some((i) => i.href.startsWith("/district/settings"))).toBe(false);
   });
 
   it("orders Operations as Announcements, Transfers, Deleted learners, Revision access, Support", () => {
@@ -748,19 +741,14 @@ describe("getNavGroups — district admin", () => {
     expect(unlocks?.href).toBe("/district/unlocks");
   });
 
-  it("lists Schools and every Operations row before the District Summary row", () => {
-    const items = flattenNavGroups(getNavGroups("DISTRICT_ADMIN"));
-    const summaryStart = items.findIndex((i) => i.id === "district-summary");
-    expect(summaryStart).toBeGreaterThan(-1);
-    const schoolsIdx = items.findIndex((i) => i.id === "district-schools");
-    const operationsIds = ["district-announcements", "district-transfers", "district-unlocks", "district-support"];
-    expect(schoolsIdx).toBeGreaterThan(-1);
-    expect(schoolsIdx).toBeLessThan(summaryStart);
-    for (const id of operationsIds) {
-      const idx = items.findIndex((i) => i.id === id);
-      expect(idx).toBeGreaterThan(-1);
-      expect(idx).toBeLessThan(summaryStart);
-    }
+  it("lists Management as Schools, Learners, Teachers, IP Learners", () => {
+    const management = getNavGroups("DISTRICT_ADMIN").find((g) => g.label === "Management");
+    expect(management?.items.map((i) => [i.label, i.href])).toEqual([
+      ["Schools", "/district/schools"],
+      ["Learners", "/district/learners"],
+      ["Teachers", "/district/teachers"],
+      ["IP Learners", "/district/ip-learners"],
+    ]);
   });
 
   it("has one District Summary row under Monitoring, not a row per facet", () => {

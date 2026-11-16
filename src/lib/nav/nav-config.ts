@@ -16,7 +16,6 @@ import {
   FlaskConical,
   GraduationCap,
   HandHelping,
-  KeyRound,
   Layers,
   LayoutDashboard,
   LifeBuoy,
@@ -418,15 +417,27 @@ export function getNavGroups(
     case "DISTRICT_ADMIN":
       return [
         {
-          label: "Overview",
+          // No heading: Dashboard sits on its own above the groups.
           items: [
-            { id: "district-dashboard", label: "Overview", href: DISTRICT_ROUTES.home, icon: LayoutDashboard },
+            { id: "district-dashboard", label: "Dashboard", href: DISTRICT_ROUTES.home, icon: LayoutDashboard },
           ],
         },
         {
-          label: "Schools",
+          // Mirrors the division's Management group, inside the admin's districts.
+          label: "Management",
           items: [
             { id: "district-schools", label: "Schools", href: DISTRICT_ROUTES.schools, icon: School },
+            { id: "district-learners", label: "Learners", href: DISTRICT_ROUTES.learners, icon: GraduationCap },
+            { id: "district-teachers", label: "Teachers", href: DISTRICT_ROUTES.teachers, icon: Users },
+            { id: "district-ip-learners", label: "IP Learners", href: DISTRICT_ROUTES.ipLearners, icon: Feather },
+          ],
+        },
+        {
+          // One row, like the division's Monitoring → Division Summary: the
+          // summary index lists every facet, so the sidebar does not.
+          label: "Monitoring",
+          items: [
+            { id: "district-summary", label: "District Summary", href: DISTRICT_ROUTES.summaryIndex, icon: BarChart3 },
           ],
         },
         {
@@ -439,20 +450,7 @@ export function getNavGroups(
             { id: "district-support", label: "Support", href: DISTRICT_ROUTES.support, icon: LifeBuoy },
           ],
         },
-        {
-          // One row, like the division's Monitoring → Division Summary: the
-          // summary index lists every facet, grouped, so the sidebar does not.
-          label: "Monitoring",
-          items: [
-            { id: "district-summary", label: "District Summary", href: DISTRICT_ROUTES.summaryIndex, icon: BarChart3 },
-          ],
-        },
-        {
-          label: "Settings",
-          items: [
-            { id: "district-settings", label: "Settings", href: DISTRICT_ROUTES.settings, icon: KeyRound },
-          ],
-        },
+        // Settings lives in the account menu (avatar), not the side menu.
       ];
     default:
       return [];

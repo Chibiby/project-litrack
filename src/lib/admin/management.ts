@@ -10,6 +10,7 @@ import { IP_ETHNICITIES, isIpLearner } from "@/lib/ip/ethnicity";
 import { formatPercent, summarizeIpRows } from "@/lib/dashboard/ip-metrics";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { formatListingNameFromRecord } from "@/lib/names";
+import { schoolWhereForScope } from "@/lib/auth/admin-scope";
 import {
   ACCOUNTS_PAGE_SIZE,
   ACCOUNT_GRADE_VALUES,
@@ -47,6 +48,22 @@ import {
 /** Compact JSON key part — collision-proof for free-text filter values. */
 function keyOf(value: unknown): string {
   return JSON.stringify(value);
+}
+
+/**
+ * A district admin's tenancy fence, as a school filter: only live schools in
+ * `districts` (the demo district yields demo schools only, a real district
+ * never does). `undefined` means no fence (the division). An empty list
+ * matches no school at all, so a district admin with no assignment sees
+ * nothing rather than everything.
+ */
+function districtFence(districts: readonly string[] | undefined): Prisma.SchoolWhereInput | null {
+  return districts ? schoolWhereForScope({ kind: "districts", districts }) : null;
+}
+
+/** The fence as a cache-key part: sorted, so the same districts share one entry. */
+function fenceKey(districts: readonly string[] | undefined): readonly string[] | null {
+  return districts ? [...districts].sort() : null;
 }
 
 // ─── Teachers / School Heads / District Admins: params + pages ──────────────
@@ -277,11 +294,19 @@ export type PeopleSummaryFilter = Partial<
  */
 function peopleBase(
   role: "TEACHER" | "SCHOOL_HEAD",
-  f: { district?: string; schoolId?: string; grade?: GradeLevelType; section?: string },
+  f: {
+    district?: string;
+    schoolId?: string;
+    grade?: GradeLevelType;
+    section?: string;
+    districts?: readonly string[];
+  },
   demoVisible: boolean
 ): Prisma.UserWhereInput {
   const { viaSchool } = adminPopulationScope(demoVisible);
   const and: Prisma.UserWhereInput[] = [{ role, deletedAt: null }, viaSchool];
+  const fence = districtFence(f.districts);
+  if (fence) and.push({ school: fence });
   if (f.district) and.push({ school: { district: f.district } });
   if (f.schoolId) and.push({ schoolId: f.schoolId });
   if (f.grade || f.section) {
@@ -327,16 +352,18 @@ export type TeachersSummary = {
  * the dashboard's own cached counts.
  */
 export async function getTeachersSummary(
-  filter: PeopleSummaryFilter = {}
+  filter: PeopleSummaryFilter & { districts?: readonly string[] } = {}
 ): Promise<TeachersSummary> {
-  const demoVisible = await isDemoVisible();
+  // A fenced (district admin) summary lets the fence decide the demo school.
+  const demoVisible = filter.districts !== undefined || (await isDemoVisible());
   const f = {
     district: cleanFilterText(filter.district),
     schoolId: cleanFilterId(filter.schoolId),
     grade: filter.grade,
     section: cleanFilterId(filter.section),
+    districts: fenceKey(filter.districts) ?? undefined,
   };
-  const unfiltered = !f.district && !f.schoolId && !f.grade && !f.section;
+  const unfiltered = !f.district && !f.schoolId && !f.grade && !f.section && !f.districts;
   const [summary, dash] = await Promise.all([
     cachedQuery(
       async () => {
@@ -388,6 +415,99 @@ export async function getTeachersSummary(
     ...summary,
     activeTeachers: dash.teacherCount,
     pendingApproval: dash.pendingTeacherApprovals,
+  };
+}
+
+/** One row of a district admin's read-only teacher list. No credentials, no contact data. */
+export type DistrictTeacherRow = {
+  id: string;
+  listingName: string;
+  school: { id: string; name: string } | null;
+  isActive: boolean;
+  approvalStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
+  advisoryMode: "DEFAULT" | "FLOATING" | "MULTI_GRADE" | null;
+  /** Advisory sections, "Grade 3 – Rose" style, teaching order. */
+  advisory: string[];
+};
+
+/**
+ * A district admin's teacher list: live teachers of live schools inside
+ * `districts` (from `requireAdminScope`, never the request), plus the list
+ * filters. Selects no password, sign-in or contact field. Two Prisma calls.
+ */
+export async function getDistrictTeachersPage(
+  districts: readonly string[],
+  params: AccountsParams
+): Promise<{ rows: DistrictTeacherRow[]; totalCount: number }> {
+  const base = peopleBase(
+    "TEACHER",
+    {
+      district: params.district,
+      schoolId: params.schoolId,
+      grade: params.grade,
+      section: params.section,
+      districts,
+    },
+    true
+  );
+  const q = params.q.trim();
+  const where: Prisma.UserWhereInput = q
+    ? {
+        AND: [
+          base,
+          {
+            OR: [
+              { fullName: { contains: q, mode: "insensitive" } },
+              { school: { name: { contains: q, mode: "insensitive" } } },
+              { school: { schoolIdCode: { contains: q, mode: "insensitive" } } },
+            ],
+          },
+        ],
+      }
+    : base;
+  const [users, totalCount] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }, { id: "asc" }],
+      skip: params.skip,
+      take: params.take,
+      select: {
+        id: true,
+        fullName: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        isActive: true,
+        approvalStatus: true,
+        school: { select: { id: true, name: true } },
+        teacherProfile: { select: { advisoryMode: true } },
+        advisorySections: {
+          where: { deletedAt: null },
+          select: { name: true, gradeLevel: { select: { type: true } } },
+        },
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
+  const order = new Map(ACCOUNT_GRADE_VALUES.map((g, i) => [g, i]));
+  return {
+    totalCount,
+    rows: users.map((u) => ({
+      id: u.id,
+      listingName:
+        formatListingNameFromRecord(u) || u.fullName || `${u.firstName} ${u.lastName}`.trim(),
+      school: u.school,
+      isActive: u.isActive,
+      approvalStatus: u.approvalStatus,
+      advisoryMode: u.teacherProfile?.advisoryMode ?? null,
+      advisory: [...u.advisorySections]
+        .sort(
+          (a, b) =>
+            (order.get(a.gradeLevel.type) ?? 99) - (order.get(b.gradeLevel.type) ?? 99) ||
+            a.name.localeCompare(b.name)
+        )
+        .map((s) => `${GRADE_LEVEL_LABELS[s.gradeLevel.type] ?? s.gradeLevel.type} – ${s.name}`),
+    })),
   };
 }
 
@@ -722,13 +842,17 @@ const NOT_IP_LEARNER: Prisma.LearnerWhereInput = {
  * summary cards and the dashboard Learners card leave them out.
  */
 function learnersHubWhere(
-  f: Pick<LearnersHubParams, "q" | "district" | "schoolId" | "grade" | "section" | "ip" | "aral">,
+  f: Pick<LearnersHubParams, "q" | "district" | "schoolId" | "grade" | "section" | "ip" | "aral"> & {
+    districts?: readonly string[];
+  },
   demoVisible: boolean
 ): Prisma.LearnerWhereInput {
   const and: Prisma.LearnerWhereInput[] = [
     { deletedAt: null },
     adminPopulationScope(demoVisible).viaSchool,
   ];
+  const fence = districtFence(f.districts);
+  if (fence) and.push({ school: fence });
   if (f.district) and.push({ school: { district: f.district } });
   if (f.schoolId) and.push({ schoolId: f.schoolId });
   if (f.grade) and.push({ gradeLevel: { type: f.grade } });
@@ -810,8 +934,21 @@ export function getSchoolLearnersPage(
   return queryLearnersHub({ ...params, schoolId, district: undefined }, true);
 }
 
+/**
+ * A district admin's learner directory: every filter in `params`, always
+ * inside the admin's `districts` (from `requireAdminScope`, never the request).
+ * The demo exclusion is skipped because the fence already decides it: only
+ * the demo district yields the demo school.
+ */
+export function getDistrictLearnersPage(
+  districts: readonly string[],
+  params: LearnersHubParams
+): Promise<{ rows: LearnerHubRow[]; totalCount: number }> {
+  return queryLearnersHub({ ...params, districts }, true);
+}
+
 async function queryLearnersHub(
-  params: LearnersHubParams,
+  params: LearnersHubParams & { districts?: readonly string[] },
   demoVisible: boolean
 ): Promise<{ rows: LearnerHubRow[]; totalCount: number }> {
   const where = learnersHubWhere(params, demoVisible);
@@ -891,7 +1028,12 @@ export type LearnersSummary = {
 };
 
 /** Optional scope for the learner summary; no filter means the whole division. */
-export type LearnersSummaryFilter = { district?: string; schoolId?: string };
+export type LearnersSummaryFilter = {
+  district?: string;
+  schoolId?: string;
+  /** A district admin's fence (see `districtFence`); never from the request. */
+  districts?: readonly string[];
+};
 
 /**
  * Six `groupBy`/`count` calls plus one small grade lookup (about 13 rows per
@@ -906,12 +1048,15 @@ export async function getLearnersSummary(
   filter: LearnersSummaryFilter = {},
   opts: { includeDemo?: boolean } = {}
 ): Promise<LearnersSummary> {
-  const demoVisible = opts.includeDemo === true || (await isDemoVisible());
+  // A fenced (district admin) summary lets the fence decide the demo school.
+  const demoVisible =
+    opts.includeDemo === true || filter.districts !== undefined || (await isDemoVisible());
   const f = {
     district: cleanFilterText(filter.district),
     schoolId: cleanFilterId(filter.schoolId),
+    districts: fenceKey(filter.districts) ?? undefined,
   };
-  const unfiltered = !f.district && !f.schoolId;
+  const unfiltered = !f.district && !f.schoolId && !f.districts;
   const [summary, counts, ipDash] = await Promise.all([
     cachedQuery(
       async () => {
