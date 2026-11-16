@@ -72,11 +72,13 @@ export function LoginShell({
   );
 }
 
+// Laptop screens (a 1366×768 display leaves about 650px inside the browser):
+// a tighter header leaves room under the tagline for the sign-in video.
 function LoginBrand({ media }: { media?: React.ReactNode }) {
   return (
     <section
       aria-label="LITRACK"
-      className="flex w-full flex-col items-center text-center lg:max-w-2xl lg:items-start lg:self-start lg:pt-4 lg:text-left xl:max-w-[46rem]"
+      className="flex w-full flex-col items-center text-center lg:max-w-2xl lg:items-start lg:self-start lg:pt-4 lg:text-left xl:max-w-[46rem] lg:[@media(max-height:820px)]:pt-0"
     >
       <div className="flex items-center gap-3 sm:gap-5">
         <Image
@@ -86,9 +88,9 @@ function LoginBrand({ media }: { media?: React.ReactNode }) {
           height={512}
           priority
           sizes="(min-width: 1024px) 128px, 80px"
-          className="h-16 w-auto sm:h-24 lg:h-40"
+          className="h-16 w-auto sm:h-24 lg:h-40 lg:[@media(max-height:820px)]:h-28"
         />
-        <span aria-hidden className="h-11 w-px bg-muted-foreground/40 sm:h-16 lg:h-24" />
+        <span aria-hidden className="h-11 w-px bg-muted-foreground/40 sm:h-16 lg:h-24 lg:[@media(max-height:820px)]:h-16" />
         <Image
           src="/partner-logos.webp"
           alt="Partner organizations: DepEd, Bagong Pilipinas, and Division of Sarangani"
@@ -96,18 +98,18 @@ function LoginBrand({ media }: { media?: React.ReactNode }) {
           height={216}
           priority
           sizes="(min-width: 1024px) 352px, 220px"
-          className="h-auto w-[9rem] sm:w-[14rem] lg:w-[22rem]"
+          className="h-auto w-[9rem] sm:w-[14rem] lg:w-[22rem] lg:[@media(max-height:820px)]:w-[15.5rem]"
         />
       </div>
 
-      <h1 className="mt-5 text-[3.5rem] font-black leading-none tracking-tight sm:text-7xl lg:mt-14 lg:text-[6.5rem] xl:text-[7.5rem]">
+      <h1 className="mt-5 text-[3.5rem] font-black leading-none tracking-tight sm:text-7xl lg:mt-14 lg:text-[6.5rem] xl:text-[7.5rem] lg:[@media(max-height:820px)]:mt-6 lg:[@media(max-height:820px)]:text-[5.5rem]">
         <span className="text-indigo-950">LIT</span>
         <span className="text-aral-600">RACK</span>
       </h1>
       <p className="mt-1 text-balance text-sm font-semibold text-slate-700 sm:text-base lg:mt-2 lg:text-xl xl:text-2xl">
         School reading-profiling system for the ARAL Program
       </p>
-      <p className="mt-2 max-w-xl text-balance text-xs leading-relaxed text-slate-700 sm:text-sm lg:mt-6 lg:max-w-none lg:text-base xl:text-lg">
+      <p className="mt-2 max-w-xl text-balance text-xs leading-relaxed text-slate-700 sm:text-sm lg:mt-6 lg:max-w-none lg:text-base xl:text-lg lg:[@media(max-height:820px)]:mt-3">
         Track progress. Empower teachers. Support every learner.{" "}
         <span className="lg:block">Together, we build a more literate Philippines.</span>
       </p>

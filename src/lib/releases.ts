@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.71.1",
+    date: "2026-11-16",
+    title: "The sign-in video now shows on laptop screens",
+    announce: false,
+    fixes: [
+      { text: "On laptop screens (such as 1366×768) the sign-in video did not appear because there was no room under the title. The logos and title are now a little smaller on short screens, so the video fits.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.71.0",
     date: "2026-11-16",
     title: "A proper video player on the sign-in page, on phones too",
