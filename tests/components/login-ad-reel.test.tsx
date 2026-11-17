@@ -1,12 +1,29 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  AD_CLIPS,
-  ENGAGED_VOLUME,
-  LoginAdReel,
-  QUIET_VOLUME,
-  shuffleClips,
-} from "@/components/auth/login-ad-reel";
+import { AD_CLIPS, DEFAULT_VOLUME, LoginAdReel, shuffleClips } from "@/components/auth/login-ad-reel";
+
+/** Presses the overlay that starts the video. */
+function start() {
+  fireEvent.click(screen.getByRole("button", { name: "Click to play the LITRACK ad" }));
+}
+
+/** play() and pause() that keep `paused` true to life. */
+let pausedState = true;
+function playable() {
+  pausedState = true;
+  vi.spyOn(HTMLMediaElement.prototype, "paused", "get").mockImplementation(() => pausedState);
+  const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
+    pausedState = false;
+    this.dispatchEvent(new Event("play"));
+    return Promise.resolve();
+  });
+  vi.mocked(HTMLMediaElement.prototype.pause).mockImplementation(function (this: HTMLMediaElement) {
+    pausedState = true;
+    this.dispatchEvent(new Event("pause"));
+  });
+  return { play };
+}
+const isPaused = () => pausedState;
 
 function mockPlay() {
   return vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
@@ -74,7 +91,10 @@ describe("LoginAdReel", () => {
     // jsdom does not implement media playback.
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
-    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
+      this.dispatchEvent(new Event("play"));
+      return Promise.resolve();
+    });
     stubLayout();
   });
   afterEach(() => {
@@ -84,7 +104,7 @@ describe("LoginAdReel", () => {
     vi.useRealTimers();
   });
 
-  it("appears on desktop after the page has been quiet and plays one of the three clips on its own, quietly", () => {
+  it("appears on desktop after the page has been quiet, waiting behind a Click to play overlay", () => {
     setDesktop(true);
     const play = mockPlay();
     render(<Page />);
@@ -99,43 +119,75 @@ describe("LoginAdReel", () => {
       "litrack-ad-2.mp4",
       "litrack-ad-3.mp4",
     ]);
+    expect(v.getAttribute("preload")).toBe("none");
     expect(v.loop).toBe(false);
     expect(v.controls).toBe(false);
+    expect(play).not.toHaveBeenCalled();
+    expect(screen.getByText("LITRACK ad")).toBeTruthy();
+    expect(screen.getByText("Click to play")).toBeTruthy();
+    // Only "Click to play" until it starts: no control bar yet.
+    expect(screen.queryByRole("slider", { name: "Seek" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Full screen" })).toBeNull();
+
+    start();
     expect(play).toHaveBeenCalledTimes(1);
-    expect(v.volume).toBeCloseTo(QUIET_VOLUME);
+    expect(screen.queryByText("Click to play")).toBeNull();
+    expect(screen.getByRole("slider", { name: "Seek" })).toBeTruthy();
+    expect(v.volume).toBeCloseTo(DEFAULT_VOLUME);
   });
 
-  it("rises to half volume the first time the player is pointed at, and stays there", () => {
+  it("pauses when the pointer leaves, without a play button over it, and carries on when it comes back", () => {
     setDesktop(true);
-    mockPlay();
+    const { play } = playable();
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
-    const v = video() as HTMLVideoElement;
-    const frame = v.closest("figure") as HTMLElement;
-    expect(v.volume).toBeCloseTo(QUIET_VOLUME);
+    const frame = (video() as HTMLVideoElement).closest("figure") as HTMLElement;
     fireEvent.pointerEnter(frame, { pointerType: "mouse" });
-    expect(v.volume).toBeCloseTo(ENGAGED_VOLUME);
-    v.volume = 0.2;
+    start();
+    expect(play).toHaveBeenCalledTimes(1);
+
+    fireEvent.pointerLeave(frame, { pointerType: "mouse" });
+    expect(isPaused()).toBe(true);
+    const centre = screen.getByRole("button", { name: "Play video" }).querySelector("span") as HTMLElement;
+    expect(centre.className).toContain("opacity-0");
+
+    fireEvent.pointerEnter(frame, { pointerType: "mouse" });
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(isPaused()).toBe(false);
+  });
+
+  it("keeps a pause the person chose when the pointer comes back", () => {
+    setDesktop(true);
+    const { play } = playable();
+    render(<Page />);
+    act(() => vi.advanceTimersByTime(4100));
+    const frame = (video() as HTMLVideoElement).closest("figure") as HTMLElement;
+    fireEvent.pointerEnter(frame, { pointerType: "mouse" });
+    start();
+    fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
     fireEvent.pointerLeave(frame, { pointerType: "mouse" });
     fireEvent.pointerEnter(frame, { pointerType: "mouse" });
-    expect(v.volume).toBeCloseTo(0.2);
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(isPaused()).toBe(true);
   });
 
-  it("plays muted when the browser refuses sound, and turns the sound on at the first click", async () => {
+  it("fills the window when the browser will not go full screen, and Escape leaves", () => {
     setDesktop(true);
-    let calls = 0;
-    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => {
-      calls += 1;
-      return calls === 1 ? Promise.reject(new Error("NotAllowedError")) : Promise.resolve();
-    });
+    playable();
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
-    const v = video() as HTMLVideoElement;
-    await act(async () => {});
-    expect(v.muted).toBe(true);
-    expect(calls).toBe(2);
-    fireEvent.pointerDown(document.body);
-    expect(v.muted).toBe(false);
+    const frame = (video() as HTMLVideoElement).closest("figure") as HTMLElement;
+    fireEvent.pointerEnter(frame, { pointerType: "mouse" });
+    start();
+    // jsdom never goes full screen: the request stays unanswered.
+    Object.defineProperty(frame, "requestFullscreen", { configurable: true, value: () => new Promise(() => {}) });
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+    act(() => vi.advanceTimersByTime(900));
+    expect(frame.className).toContain("!fixed");
+    expect(screen.getByRole("button", { name: "Exit full screen" })).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(frame.className).not.toContain("!fixed");
+    expect(screen.getByRole("button", { name: "Full screen" })).toBeTruthy();
   });
 
   it("plays every clip once, in random order, before any clip repeats", () => {
@@ -144,6 +196,8 @@ describe("LoginAdReel", () => {
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
     const v = video() as HTMLVideoElement;
+    fireEvent.pointerEnter(v.closest("figure") as HTMLElement, { pointerType: "mouse" });
+    start();
     const seen: string[] = [v.getAttribute("src") as string];
     for (let i = 0; i < 5; i++) {
       fireEvent.ended(v);
@@ -164,7 +218,7 @@ describe("LoginAdReel", () => {
     }
   });
 
-  it("does not autoplay or preload on phones and tablets", () => {
+  it("does not autoplay or preload on phones and tablets either", () => {
     setDesktop(true);
     const play = mockPlay();
     render(<LoginAdReel placement="card" />);
@@ -174,15 +228,15 @@ describe("LoginAdReel", () => {
     expect(play).not.toHaveBeenCalled();
   });
 
-  it("sits right under the tagline, no wider than 85% of the column", () => {
+  it("sits right under the tagline, no wider than 60% of the column", () => {
     setDesktop(true);
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
     const frame = (video() as HTMLVideoElement).closest("figure") as HTMLElement;
-    // Room: 720 - 400 - 24 = 296px tall. The video may use 85% of the 600px
-    // column (510px), so the width wins: 286.9 tall, 24px under the tagline.
-    expect(parseFloat(frame.style.height)).toBeCloseTo(510 * (9 / 16), 0);
-    expect(parseFloat(frame.style.width)).toBeCloseTo(510, 0);
+    // Room: 720 - 400 - 24 = 296px tall. The video may use 60% of the 600px
+    // column (360px), so the width wins: 202.5 tall, 24px under the tagline.
+    expect(parseFloat(frame.style.height)).toBeCloseTo(360 * (9 / 16), 0);
+    expect(parseFloat(frame.style.width)).toBeCloseTo(360, 0);
     expect(parseFloat(frame.style.marginTop)).toBeCloseTo(24, 0);
   });
 
@@ -203,8 +257,8 @@ describe("LoginAdReel", () => {
     const v = video() as HTMLVideoElement;
     Object.defineProperty(v, "paused", { configurable: true, get: () => paused });
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Play video" }), { pointerType: "mouse" });
-    fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Click to play the LITRACK ad" }), { pointerType: "mouse" });
+    fireEvent.click(screen.getByRole("button", { name: "Click to play the LITRACK ad" }));
     expect(play).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Pause video" })).toBeTruthy();
 
@@ -217,6 +271,7 @@ describe("LoginAdReel", () => {
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
     const v = video() as HTMLVideoElement;
+    start();
     fireEvent.click(screen.getByRole("button", { name: "Mute" }));
     expect(v.muted).toBe(true);
     fireEvent.volumeChange(v);
@@ -245,6 +300,7 @@ describe("LoginAdReel", () => {
     render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
     const v = video() as HTMLVideoElement;
+    start();
     Object.defineProperty(v, "duration", { configurable: true, value: 445 });
     fireEvent.loadedMetadata(v);
     fireEvent.change(screen.getByRole("slider", { name: "Seek" }), { target: { value: "200" } });

@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.73.1",
+    date: "2026-11-17",
+    title: "A calmer video on the sign-in page",
+    announce: false,
+    fixes: [
+      "The sign-in video no longer starts on its own. It waits behind a \"Click to play\" button, so it does not distract you while you sign in.",
+      "The video is smaller and grows when you point at it. It pauses when you move away and carries on when you come back.",
+      "The video's full screen button now works in browsers that block full screen, by filling the window instead.",
+    ],
+  },
+  {
     version: "2.73.0",
     date: "2026-11-17",
     title: "Three short videos on the sign-in page",

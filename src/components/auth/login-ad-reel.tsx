@@ -16,10 +16,8 @@ export const AD_CLIPS = [1, 2, 3].map((n) => ({
   poster: `${MEDIA_BASE}/site/litrack-ad-${n}.webp`,
 }));
 
-/** Volume while nobody has touched the player: on, but barely. */
-export const QUIET_VOLUME = 0.05;
-/** Volume once the person has pointed at or focused the player. */
-export const ENGAGED_VOLUME = 0.5;
+/** Volume each page load starts at. */
+export const DEFAULT_VOLUME = 0.5;
 
 /**
  * One round of the playlist: every clip once, in random order. `last` is the
@@ -52,9 +50,13 @@ const GAP_PX = 24;
 /** Below this height the brand-column video is too small to be worth showing. */
 const MIN_HEIGHT_PX = 150;
 /** The video never spans more than this share of the brand column. */
-const MAX_WIDTH_SHARE = 0.85;
+const MAX_WIDTH_SHARE = 0.6;
 /** While playing, the controls hide after this long without the pointer moving. */
 const IDLE_MS = 2500;
+/** While playing, how long the centre play/pause button shows after the pointer arrives or a click. */
+const CENTRE_FLASH_MS = 700;
+/** How long to wait for the browser to go full screen before filling the window instead. */
+const FULLSCREEN_WAIT_MS = 800;
 
 type Connection = { saveData?: boolean };
 type Box = { width: number; height: number; offset: number };
@@ -76,6 +78,15 @@ function stopVideo(v: HTMLVideoElement | null) {
   v.pause();
   v.removeAttribute("src");
   v.load();
+}
+
+/** Whether focus came from the keyboard (where the browser can tell). */
+function isKeyboardFocus(el: EventTarget): boolean {
+  try {
+    return (el as Element).matches(":focus-visible");
+  } catch {
+    return true;
+  }
 }
 
 function clock(seconds: number): string {
@@ -125,7 +136,6 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
     () => false
   );
   const [ready, setReady] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const onSubmitRef = useRef(onSubmit);
   useEffect(() => {
     onSubmitRef.current = onSubmit;
@@ -158,10 +168,7 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
       clearTimeout(quietTimer);
       stopListening();
       onSubmitRef.current();
-      if (!cancelled) {
-        setSubmitted(true);
-        setReady(true);
-      }
+      if (!cancelled) setReady(true);
     };
     const activity = ["keydown", "pointerdown", "input", "wheel", "touchstart"] as const;
     const stopListening = () => {
@@ -190,7 +197,7 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
     };
   }, [placement]);
 
-  return { enabled, ready, submitted };
+  return { enabled, ready };
 }
 
 /** Holds the video's spot, same size and frame, until the player mounts. */
@@ -199,7 +206,7 @@ function VideoLoader({ className = "", style }: { className?: string; style?: Re
     <div
       role="status"
       aria-label="Loading video"
-      className={`flex items-center justify-center rounded-2xl bg-black/50 shadow-2xl ring-1 ring-white/70 backdrop-blur-md ${className}`}
+      className={`flex items-center justify-center rounded-2xl bg-black/30 shadow-lg ring-1 ring-white/40 backdrop-blur-md ${className}`}
       style={style}
     >
       <Loader2 className="size-8 animate-spin text-white/90" aria-hidden />
@@ -216,17 +223,17 @@ function VideoLoader({ className = "", style }: { className?: string; style?: Re
  * The three clips play one after another in random order; a clip plays again
  * only after the other two have, then a new round starts (shuffleClips).
  *
- * Desktop shows it right under the tagline (`brand`) and starts it on its own
- * at QUIET_VOLUME; the first time someone points at or focuses the player it
- * rises to ENGAGED_VOLUME. Every page load starts quiet again. Phones and
- * tablets show it under the legal line below the sign-in card (`card`), never
- * autoplay, and use `preload="none"`: only the poster loads until someone
- * presses play. Closing it hides it until the page is loaded again. Skipped
- * with Data Saver on.
+ * It never starts on its own: a "Click to play" overlay sits on the poster
+ * until someone presses it, and `preload="none"` keeps the download for then.
+ * It plays only while someone is with it (pointer over it, focus inside it,
+ * or full screen) and pauses when they leave. Desktop shows it right
+ * under the tagline (`brand`); phones and tablets show it under the legal line
+ * below the sign-in card (`card`). Closing it hides it until the page is
+ * loaded again. Skipped with Data Saver on.
  */
 export function LoginAdReel({ placement }: { placement: AdPlacement }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { enabled, ready, submitted } = useDeferredReveal(placement, () => stopVideo(videoRef.current));
+  const { enabled, ready } = useDeferredReveal(placement, () => stopVideo(videoRef.current));
   const [closed, setClosed] = useState(false);
   const [box, setBox] = useState<Box | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -281,7 +288,15 @@ export function LoginAdReel({ placement }: { placement: AdPlacement }) {
     <div ref={anchorRef} className="hidden w-full lg:block">
       {box ? (
         ready ? (
-          <Player videoRef={videoRef} onClose={close} style={boxStyle} autoPlay={!submitted} />
+          <Player
+            videoRef={videoRef}
+            onClose={close}
+            style={boxStyle}
+            // Small while nobody is looking at it; pointing at it or tabbing
+            // into it grows it to the earlier size (85% of the column), from
+            // its top-left corner so nothing around it moves.
+            className="origin-top-left transition-transform duration-slow ease-out has-[:focus-visible]:scale-[1.42] hover:scale-[1.42] motion-reduce:transition-none [&:fullscreen]:!scale-100"
+          />
         ) : (
           <VideoLoader style={boxStyle} />
         )
@@ -295,14 +310,11 @@ function Player({
   onClose,
   className = "",
   style,
-  autoPlay = false,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onClose: () => void;
   className?: string;
   style?: React.CSSProperties;
-  /** Start on its own, quietly (desktop). */
-  autoPlay?: boolean;
 }) {
   const frameRef = useRef<HTMLElement>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -312,54 +324,28 @@ function Player({
   const [active, setActive] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(QUIET_VOLUME);
+  const [volume, setVolume] = useState(DEFAULT_VOLUME);
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  // The fallback when the browser will not go full screen: fill the window.
+  const [windowFull, setWindowFull] = useState(false);
+  const windowFullRef = useRef(false);
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const big = fullscreen || windowFull;
   // The playlist: a shuffled round of clip indexes and the place in it.
   const [round, setRound] = useState(() => shuffleClips(AD_CLIPS.length));
   const [pos, setPos] = useState(0);
   const clip = AD_CLIPS[round[pos]];
   // Set when a clip ends, so the next one starts as soon as React swaps it in.
   const continueRef = useRef(false);
-  // The volume rises once per page load, the first time the player is engaged.
-  const engagedRef = useRef(false);
-  // The browser refused sound before any click or key: playing muted until one.
-  const autoMutedRef = useRef(false);
-
-  // Start quiet; desktop also starts playing. Browsers refuse sound until the
-  // person has clicked or typed on the page, so then it plays muted and the
-  // sound comes on at the first click or key press anywhere.
+  // Whether the mouse is over the player, and whether focus is inside it.
+  const hoverRef = useRef(false);
+  const focusRef = useRef(false);
+  // Every page load starts at the default volume.
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
-    v.volume = QUIET_VOLUME;
-    if (!autoPlay) return;
-    const gestures = ["pointerdown", "keydown"] as const;
-    const stop = () => {
-      for (const type of gestures) window.removeEventListener(type, unmute, true);
-    };
-    function unmute() {
-      const el = videoRef.current;
-      if (el && autoMutedRef.current) {
-        autoMutedRef.current = false;
-        el.muted = false;
-      }
-      stop();
-    }
-    let cancelled = false;
-    Promise.resolve(v.play()).catch(() => {
-      const el = videoRef.current;
-      if (cancelled || !el || !el.getAttribute("src")) return;
-      autoMutedRef.current = true;
-      el.muted = true;
-      for (const type of gestures) window.addEventListener(type, unmute, true);
-      Promise.resolve(el.play()).catch(() => {});
-    });
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [autoPlay, videoRef]);
+    if (v) v.volume = DEFAULT_VOLUME;
+  }, [videoRef]);
 
   // A finished clip hands over to the next one in the round.
   useEffect(() => {
@@ -379,11 +365,29 @@ function Player({
     }
   };
 
-  const engage = useCallback(() => {
-    if (engagedRef.current) return;
-    engagedRef.current = true;
+  // The video plays only while someone is with it: the mouse over it, focus
+  // inside it, or full screen. When they leave it pauses (quietly: no play
+  // button over it) and carries on when they come back. A pause they chose
+  // themselves stays a pause.
+  const [awayPaused, setAwayPaused] = useState(false);
+  const awayPausedRef = useRef(false);
+  const applyEngagement = useCallback(() => {
     const v = videoRef.current;
-    if (v && v.volume < ENGAGED_VOLUME) v.volume = ENGAGED_VOLUME;
+    if (!v) return;
+    const engaged =
+      hoverRef.current ||
+      focusRef.current ||
+      windowFullRef.current ||
+      document.fullscreenElement === frameRef.current;
+    if (!engaged && !v.paused) {
+      awayPausedRef.current = true;
+      setAwayPaused(true);
+      v.pause();
+    } else if (engaged && awayPausedRef.current) {
+      awayPausedRef.current = false;
+      setAwayPaused(false);
+      if (v.getAttribute("src")) Promise.resolve(v.play()).catch(() => {});
+    }
   }, [videoRef]);
 
   const wake = useCallback(() => {
@@ -392,21 +396,53 @@ function Player({
     idleTimer.current = setTimeout(() => setActive(false), IDLE_MS);
   }, []);
 
+  // While playing, the round play/pause button in the middle only blinks in
+  // (pointer arrives, a click plays or pauses) and fades on its own after
+  // CENTRE_FLASH_MS, even while the control bar stays up.
+  const [centreFlash, setCentreFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flashCentre = useCallback(() => {
+    setCentreFlash(true);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setCentreFlash(false), CENTRE_FLASH_MS);
+  }, []);
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+
   useEffect(() => {
-    const onChange = () =>
-      setFullscreen(document.fullscreenElement !== null && document.fullscreenElement === frameRef.current);
+    const onChange = () => {
+      const real = document.fullscreenElement !== null && document.fullscreenElement === frameRef.current;
+      setFullscreen(real);
+      if (real) setWindowFull(false);
+      // Leaving full screen with the pointer elsewhere counts as leaving.
+      applyEngagement();
+    };
     document.addEventListener("fullscreenchange", onChange);
     return () => {
       document.removeEventListener("fullscreenchange", onChange);
       clearTimeout(idleTimer.current);
+      clearTimeout(fallbackTimer.current);
     };
-  }, []);
+  }, [applyEngagement]);
 
-  const showChrome = !playing || active;
+  // Escape leaves the window-filling fallback, as it leaves real full screen.
+  useEffect(() => {
+    windowFullRef.current = windowFull;
+    if (!windowFull) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setWindowFull(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [windowFull]);
+
+  const showChrome = (!playing && !awayPaused) || active;
+  const showCentre = (!playing && !awayPaused) || centreFlash;
 
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v) return;
+    awayPausedRef.current = false;
+    setAwayPaused(false);
     if (v.paused) void v.play().catch(() => setPlaying(false));
     else v.pause();
   };
@@ -416,10 +452,12 @@ function Player({
   const onSurface = () => {
     if (lastPointer.current === "touch" && !showChrome) {
       wake();
+      flashCentre();
       return;
     }
     togglePlay();
     wake();
+    flashCentre();
   };
 
   const toggleMute = () => {
@@ -450,17 +488,31 @@ function Player({
 
   // The frame goes full screen, not the <video>, so these controls keep
   // working there. iOS Safari can only make the video itself full screen.
+  // Where the browser refuses or never answers (some embedded browsers leave
+  // the request pending forever), the frame fills the window instead.
   const toggleFullscreen = () => {
+    if (windowFullRef.current) {
+      setWindowFull(false);
+      return;
+    }
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {});
       return;
     }
     const frame = frameRef.current;
     if (frame && typeof frame.requestFullscreen === "function") {
-      void frame.requestFullscreen().catch(() => {});
+      const fallback = () => {
+        clearTimeout(fallbackTimer.current);
+        if (document.fullscreenElement !== frameRef.current) setWindowFull(true);
+      };
+      clearTimeout(fallbackTimer.current);
+      fallbackTimer.current = setTimeout(fallback, FULLSCREEN_WAIT_MS);
+      frame.requestFullscreen().then(() => clearTimeout(fallbackTimer.current), fallback);
       return;
     }
-    (videoRef.current as IosVideo | null)?.webkitEnterFullscreen?.();
+    const v = videoRef.current as IosVideo | null;
+    if (v?.webkitEnterFullscreen) v.webkitEnterFullscreen();
+    else setWindowFull(true);
   };
 
   const silent = muted || volume === 0;
@@ -472,17 +524,32 @@ function Player({
     <figure
       ref={frameRef}
       aria-label="LITRACK at work, video"
-      className={`group relative isolate m-0 overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/70 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-slow [&:fullscreen]:!m-0 [&:fullscreen]:!h-screen [&:fullscreen]:!w-screen [&:fullscreen]:rounded-none [&:fullscreen]:ring-0 ${className}`}
-      style={style}
+      className={`group relative isolate m-0 overflow-hidden rounded-2xl bg-black shadow-lg ring-1 ring-white/40 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-slow [&:fullscreen]:!m-0 [&:fullscreen]:!h-screen [&:fullscreen]:!w-screen [&:fullscreen]:rounded-none [&:fullscreen]:ring-0 ${className} ${
+        windowFull ? "!fixed !inset-0 !z-[100] !m-0 !h-dvh !w-screen !scale-100 !rounded-none !ring-0" : ""
+      }`}
+      style={windowFull ? undefined : style}
       onPointerEnter={(e) => {
         lastPointer.current = e.pointerType;
-        engage();
-        if (e.pointerType === "mouse") wake();
+        // A finger has no hover: a tap focuses a control instead.
+        if (e.pointerType !== "touch") {
+          hoverRef.current = true;
+          applyEngagement();
+        }
+        if (e.pointerType === "mouse") {
+          wake();
+          flashCentre();
+        }
       }}
       onPointerMove={(e) => {
         if (e.pointerType === "mouse") wake();
       }}
       onPointerLeave={(e) => {
+        if (e.pointerType !== "touch") {
+          hoverRef.current = false;
+          clearTimeout(flashTimer.current);
+          setCentreFlash(false);
+          applyEngagement();
+        }
         if (e.pointerType === "mouse") {
           clearTimeout(idleTimer.current);
           setActive(false);
@@ -490,19 +557,27 @@ function Player({
       }}
       onPointerDown={(e) => {
         lastPointer.current = e.pointerType;
-        engage();
       }}
-      onFocus={() => {
-        engage();
+      onFocus={(e) => {
+        // Keyboard focus only: a mouse click also focuses the button it hit,
+        // and that should not keep the video playing after the mouse leaves.
+        if (!isKeyboardFocus(e.target)) return;
+        focusRef.current = true;
+        applyEngagement();
         wake();
+      }}
+      onBlur={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        focusRef.current = false;
+        applyEngagement();
       }}
     >
       <video
         ref={videoRef}
-        className={`h-full w-full ${fullscreen ? "object-contain" : "object-cover"}`}
+        className={`h-full w-full ${big ? "object-contain" : "object-cover"}`}
         src={clip.src}
         poster={clip.poster}
-        preload={autoPlay ? "auto" : "none"}
+        preload="none"
         playsInline
         onEnded={onEnded}
         onPlay={() => {
@@ -525,13 +600,15 @@ function Player({
         type="button"
         variant="ghost"
         onClick={onSurface}
-        aria-label={playing ? "Pause video" : "Play video"}
+        aria-label={!started ? "Click to play the LITRACK ad" : playing ? "Pause video" : "Play video"}
         aria-pressed={playing}
-        className="absolute inset-0 z-0 h-full w-full rounded-none p-0 hover:bg-transparent focus-visible:ring-inset lg:h-full"
+        className={`absolute inset-0 z-0 h-full w-full flex-col gap-3 rounded-none p-0 focus-visible:ring-inset lg:h-full ${
+          started ? "hover:bg-transparent" : "bg-black/45 hover:bg-black/35"
+        }`}
       >
         <span
           className={`flex size-14 items-center justify-center rounded-full bg-background/90 text-foreground shadow-xl ring-4 ring-white/30 transition duration-base group-hover:scale-105 sm:size-16 ${
-            showChrome ? "opacity-100" : "opacity-0"
+            showCentre ? "opacity-100" : "opacity-0"
           }`}
         >
           {playing ? (
@@ -540,15 +617,19 @@ function Player({
             <Play className="ml-1 size-6 fill-current sm:size-7" aria-hidden />
           )}
         </span>
+        {/* Nothing plays until someone asks for it. */}
+        {!started ? (
+          <span className="rounded-full bg-black/50 px-3 py-1 text-sm font-semibold text-white drop-shadow">
+            Click to play
+          </span>
+        ) : null}
       </Button>
 
-      {/* Top: a title before the first play, and the close button. */}
+      {/* Top: the video's name and the close button. */}
       <div
         className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 bg-gradient-to-b from-black/60 to-transparent p-2 pl-3 ${fade}`}
       >
-        <p className={`pt-1.5 text-xs font-semibold text-white drop-shadow sm:text-sm ${started ? "invisible" : ""}`}>
-          LITRACK in action{duration ? ` · ${clock(duration)}` : ""}
-        </p>
+        <p className="pt-1.5 text-xs font-semibold text-white drop-shadow sm:text-sm">LITRACK ad</p>
         <Button
           type="button"
           variant="ghost"
@@ -561,8 +642,10 @@ function Player({
         </Button>
       </div>
 
-      {/* Bottom: the control bar. */}
+      {/* Bottom: the control bar, once the video has been started. Before
+          that "Click to play" is the only control. */}
       <div
+        hidden={!started}
         className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-2 pb-1.5 pt-8 ${fade}`}
       >
         <input
@@ -617,10 +700,10 @@ function Player({
             variant="ghost"
             size="icon"
             onClick={toggleFullscreen}
-            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+            aria-label={big ? "Exit full screen" : "Full screen"}
             className={`ml-auto ${iconButton}`}
           >
-            {fullscreen ? <Minimize className="size-4" aria-hidden /> : <Maximize className="size-4" aria-hidden />}
+            {big ? <Minimize className="size-4" aria-hidden /> : <Maximize className="size-4" aria-hidden />}
           </Button>
         </div>
       </div>
