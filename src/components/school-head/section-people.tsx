@@ -73,13 +73,14 @@ export function SectionPeoplePanel({
 
   return (
     <div className="w-full basis-full">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={`${open ? "Hide" : "Show"} teachers and learners of ${manage ? `${manage.gradeLabel} ` : ""}section ${name}`}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-auto w-full justify-start whitespace-normal px-1 py-1.5 text-left text-xs font-normal text-muted-foreground lg:h-auto"
       >
         <ChevronDown
           aria-hidden
@@ -91,7 +92,7 @@ export function SectionPeoplePanel({
           {learners.length === 1 ? "learner" : "learners"}
           {aralCount > 0 ? ` (${aralCount} in ARAL)` : ""}
         </span>
-      </button>
+      </Button>
 
       <div id={panelId} hidden={!open} className="mt-2 space-y-4">
         {canManage && manage ? (

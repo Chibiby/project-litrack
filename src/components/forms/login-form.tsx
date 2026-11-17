@@ -158,9 +158,11 @@ function focusStepField(step: HTMLElement | null) {
 const ROLE_SWITCH =
   "grid grid-cols-2 gap-1 rounded-lg border border-white/60 bg-card/45 p-1 shadow-highlight-soft";
 const ROLE_OPTION =
-  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base 2xl:h-12 [&_svg]:size-4 sm:[&_svg]:size-5";
-const ROLE_PICKED = AUTH_PILL;
+  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base 2xl:h-12 [&_svg]:size-4 sm:[&_svg]:size-5 p-0 disabled:pointer-events-auto";
+const ROLE_PICKED = cn(AUTH_PILL, "hover:text-white");
 const ROLE_UNPICKED = "text-slate-700 hover:bg-card/45 hover:text-indigo-950";
+/** A text link inside a sentence, drawn by Button (link variant) at the sentence's size. */
+const INLINE_LINK_BUTTON = "h-auto p-0 align-baseline text-[length:inherit] disabled:opacity-50 lg:h-auto";
 
 /** The tall, icon-led trigger both pickers share on the first step. */
 const PICKER_TRIGGER = cn(
@@ -489,8 +491,9 @@ export function LoginForm({
 
           <div className="mt-6 space-y-2 2xl:mt-7">
             <div role="group" aria-label="Sign in as" className={ROLE_SWITCH}>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 aria-pressed={role === "teacher"}
                 disabled={teachersLocked}
                 title={teachersLocked ? TEACHERS_UNLOCK_HELP : undefined}
@@ -500,9 +503,10 @@ export function LoginForm({
               >
                 <GraduationCap aria-hidden />
                 Teachers
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="ghost"
                 aria-pressed={role === "school-head"}
                 onClick={() => setRole("school-head")}
                 data-press="light"
@@ -510,7 +514,7 @@ export function LoginForm({
               >
                 <School aria-hidden />
                 School Head
-              </button>
+              </Button>
             </div>
             {teachersLocked ? (
               <p className="text-sm text-slate-600">{TEACHERS_UNLOCK_HELP}</p>
@@ -721,14 +725,15 @@ export function LoginForm({
                   <span aria-hidden className="text-slate-400">
                     ·
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
                     disabled={pending}
                     onClick={() => switchTeacherIntent("register")}
-                    className={cn(AUTH_LINK, "disabled:opacity-50")}
+                    className={cn(AUTH_LINK, INLINE_LINK_BUTTON)}
                   >
                     Create account
-                  </button>
+                  </Button>
                 </p>
               </form>
             ) : (
@@ -876,14 +881,15 @@ export function LoginForm({
                 </Button>
                 <p className="text-center text-sm text-slate-600">
                   Already have an account?{" "}
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
                     disabled={pending}
                     onClick={() => switchTeacherIntent("login")}
-                    className={cn(AUTH_LINK, "disabled:opacity-50")}
+                    className={cn(AUTH_LINK, INLINE_LINK_BUTTON)}
                   >
                     Sign in
-                  </button>
+                  </Button>
                 </p>
               </form>
             )}

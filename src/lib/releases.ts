@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.72.1",
+    date: "2026-11-17",
+    title: "Easier-to-tap section controls",
+    announce: false,
+    fixes: [
+      { text: "On a phone, the arrow that shows a section's controls on the Grade and Section page is bigger and easier to tap.", roles: ["SCHOOL_HEAD", "SUPER_ADMIN"] },
+      { text: "Buttons on the sign-in page and the Grade and Section page now behave the same as every other button in LITRACK.", roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"] },
+    ],
+  },
+  {
     version: "2.72.0",
     date: "2026-11-16",
     title: "A blue, tidier sign-in page",

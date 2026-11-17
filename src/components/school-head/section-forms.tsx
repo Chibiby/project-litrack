@@ -466,19 +466,21 @@ function CollapsibleSectionRow({
             {learnerCount} {learnerCount === 1 ? "learner" : "learners"}
           </p>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-expanded={open}
           aria-controls={panelId}
           aria-label={`${open ? "Hide" : "Show"} controls for section ${name}`}
           onClick={() => setOpen((o) => !o)}
-          className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="shrink-0 text-muted-foreground"
         >
           <ChevronDown
             aria-hidden
             className={cn("size-4 transition-transform duration-base", open && "rotate-180")}
           />
-        </button>
+        </Button>
       </div>
       {/* `hidden` hides it on a phone until opened; `lg:block` always shows it. */}
       <div id={panelId} hidden={!open} className="mt-2 lg:mt-0 lg:block">
