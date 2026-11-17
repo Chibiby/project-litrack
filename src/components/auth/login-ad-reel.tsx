@@ -5,14 +5,38 @@ import { Loader2, Maximize, Minimize, Pause, Play, Volume1, Volume2, VolumeX, X 
 import { Button } from "@/components/ui/button";
 
 /**
- * The three LITRACK videos joined end to end (7:25, 720p). Served from the
- * public R2 domain rather than the Worker's static assets: R2 answers byte-range
- * requests (206), which the timeline needs to seek, and Workers Static Assets
- * does not.
+ * The three LITRACK videos (720p): Juan's Year 3:49, One School Day 2:01,
+ * Four Desks 1:35. Served from the public R2 domain rather than the Worker's
+ * static assets: R2 answers byte-range requests (206), which the timeline needs
+ * to seek, and Workers Static Assets does not.
  */
 const MEDIA_BASE = process.env.NEXT_PUBLIC_AVATAR_BASE_URL || "https://avatars.arallitrack.com";
-export const AD_VIDEO_SRC = `${MEDIA_BASE}/site/litrack-ads.mp4`;
-const POSTER = `${MEDIA_BASE}/site/litrack-ads.webp`;
+export const AD_CLIPS = [1, 2, 3].map((n) => ({
+  src: `${MEDIA_BASE}/site/litrack-ad-${n}.mp4`,
+  poster: `${MEDIA_BASE}/site/litrack-ad-${n}.webp`,
+}));
+
+/** Volume while nobody has touched the player: on, but barely. */
+export const QUIET_VOLUME = 0.05;
+/** Volume once the person has pointed at or focused the player. */
+export const ENGAGED_VOLUME = 0.5;
+
+/**
+ * One round of the playlist: every clip once, in random order. `last` is the
+ * clip that just finished; it never opens the next round, so no clip plays
+ * twice in a row.
+ */
+export function shuffleClips(count: number, last?: number, random: () => number = Math.random): number[] {
+  const order = Array.from({ length: count }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  if (last !== undefined && order.length > 1 && order[0] === last) {
+    [order[0], order[order.length - 1]] = [order[order.length - 1], order[0]];
+  }
+  return order;
+}
 
 /** `brand`: under the title, desktop. `card`: under the sign-in card, phones and tablets. */
 export type AdPlacement = "brand" | "card";
@@ -101,6 +125,7 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
     () => false
   );
   const [ready, setReady] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const onSubmitRef = useRef(onSubmit);
   useEffect(() => {
     onSubmitRef.current = onSubmit;
@@ -133,7 +158,10 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
       clearTimeout(quietTimer);
       stopListening();
       onSubmitRef.current();
-      if (!cancelled) setReady(true);
+      if (!cancelled) {
+        setSubmitted(true);
+        setReady(true);
+      }
     };
     const activity = ["keydown", "pointerdown", "input", "wheel", "touchstart"] as const;
     const stopListening = () => {
@@ -162,7 +190,7 @@ function useDeferredReveal(placement: AdPlacement, onSubmit: () => void) {
     };
   }, [placement]);
 
-  return { enabled, ready };
+  return { enabled, ready, submitted };
 }
 
 /** Holds the video's spot, same size and frame, until the player mounts. */
@@ -180,19 +208,25 @@ function VideoLoader({ className = "", style }: { className?: string; style?: Re
 }
 
 /**
- * LITRACK's video on the sign-in page, as an ordinary embedded player: play
+ * LITRACK's videos on the sign-in page, as an ordinary embedded player: play
  * button in the middle, then a control bar with a timeline, volume (click the
  * speaker to mute) and full screen, plus a close button. Controls show while
  * paused, while the pointer is over the video, or for a moment after a tap.
  *
- * Desktop shows it right under the tagline (`brand`); phones and tablets show
- * it under the legal line below the sign-in card (`card`). It never autoplays
- * and uses `preload="none"`: only the poster loads until someone presses play.
- * Closing it hides it until the page is loaded again. Skipped with Data Saver on.
+ * The three clips play one after another in random order; a clip plays again
+ * only after the other two have, then a new round starts (shuffleClips).
+ *
+ * Desktop shows it right under the tagline (`brand`) and starts it on its own
+ * at QUIET_VOLUME; the first time someone points at or focuses the player it
+ * rises to ENGAGED_VOLUME. Every page load starts quiet again. Phones and
+ * tablets show it under the legal line below the sign-in card (`card`), never
+ * autoplay, and use `preload="none"`: only the poster loads until someone
+ * presses play. Closing it hides it until the page is loaded again. Skipped
+ * with Data Saver on.
  */
 export function LoginAdReel({ placement }: { placement: AdPlacement }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { enabled, ready } = useDeferredReveal(placement, () => stopVideo(videoRef.current));
+  const { enabled, ready, submitted } = useDeferredReveal(placement, () => stopVideo(videoRef.current));
   const [closed, setClosed] = useState(false);
   const [box, setBox] = useState<Box | null>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -247,7 +281,7 @@ export function LoginAdReel({ placement }: { placement: AdPlacement }) {
     <div ref={anchorRef} className="hidden w-full lg:block">
       {box ? (
         ready ? (
-          <Player videoRef={videoRef} onClose={close} style={boxStyle} />
+          <Player videoRef={videoRef} onClose={close} style={boxStyle} autoPlay={!submitted} />
         ) : (
           <VideoLoader style={boxStyle} />
         )
@@ -261,11 +295,14 @@ function Player({
   onClose,
   className = "",
   style,
+  autoPlay = false,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onClose: () => void;
   className?: string;
   style?: React.CSSProperties;
+  /** Start on its own, quietly (desktop). */
+  autoPlay?: boolean;
 }) {
   const frameRef = useRef<HTMLElement>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -275,9 +312,79 @@ function Player({
   const [active, setActive] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(QUIET_VOLUME);
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  // The playlist: a shuffled round of clip indexes and the place in it.
+  const [round, setRound] = useState(() => shuffleClips(AD_CLIPS.length));
+  const [pos, setPos] = useState(0);
+  const clip = AD_CLIPS[round[pos]];
+  // Set when a clip ends, so the next one starts as soon as React swaps it in.
+  const continueRef = useRef(false);
+  // The volume rises once per page load, the first time the player is engaged.
+  const engagedRef = useRef(false);
+  // The browser refused sound before any click or key: playing muted until one.
+  const autoMutedRef = useRef(false);
+
+  // Start quiet; desktop also starts playing. Browsers refuse sound until the
+  // person has clicked or typed on the page, so then it plays muted and the
+  // sound comes on at the first click or key press anywhere.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.volume = QUIET_VOLUME;
+    if (!autoPlay) return;
+    const gestures = ["pointerdown", "keydown"] as const;
+    const stop = () => {
+      for (const type of gestures) window.removeEventListener(type, unmute, true);
+    };
+    function unmute() {
+      const el = videoRef.current;
+      if (el && autoMutedRef.current) {
+        autoMutedRef.current = false;
+        el.muted = false;
+      }
+      stop();
+    }
+    let cancelled = false;
+    Promise.resolve(v.play()).catch(() => {
+      const el = videoRef.current;
+      if (cancelled || !el || !el.getAttribute("src")) return;
+      autoMutedRef.current = true;
+      el.muted = true;
+      for (const type of gestures) window.addEventListener(type, unmute, true);
+      Promise.resolve(el.play()).catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [autoPlay, videoRef]);
+
+  // A finished clip hands over to the next one in the round.
+  useEffect(() => {
+    if (!continueRef.current) return;
+    continueRef.current = false;
+    const v = videoRef.current;
+    if (v) Promise.resolve(v.play()).catch(() => setPlaying(false));
+  }, [round, pos, videoRef]);
+
+  const onEnded = () => {
+    continueRef.current = true;
+    if (pos + 1 < round.length) {
+      setPos(pos + 1);
+    } else {
+      setRound(shuffleClips(AD_CLIPS.length, round[pos]));
+      setPos(0);
+    }
+  };
+
+  const engage = useCallback(() => {
+    if (engagedRef.current) return;
+    engagedRef.current = true;
+    const v = videoRef.current;
+    if (v && v.volume < ENGAGED_VOLUME) v.volume = ENGAGED_VOLUME;
+  }, [videoRef]);
 
   const wake = useCallback(() => {
     setActive(true);
@@ -369,6 +476,7 @@ function Player({
       style={style}
       onPointerEnter={(e) => {
         lastPointer.current = e.pointerType;
+        engage();
         if (e.pointerType === "mouse") wake();
       }}
       onPointerMove={(e) => {
@@ -382,17 +490,21 @@ function Player({
       }}
       onPointerDown={(e) => {
         lastPointer.current = e.pointerType;
+        engage();
       }}
-      onFocus={wake}
+      onFocus={() => {
+        engage();
+        wake();
+      }}
     >
       <video
         ref={videoRef}
         className={`h-full w-full ${fullscreen ? "object-contain" : "object-cover"}`}
-        src={AD_VIDEO_SRC}
-        poster={POSTER}
-        preload="none"
-        loop
+        src={clip.src}
+        poster={clip.poster}
+        preload={autoPlay ? "auto" : "none"}
         playsInline
+        onEnded={onEnded}
         onPlay={() => {
           setPlaying(true);
           setStarted(true);
@@ -435,7 +547,7 @@ function Player({
         className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 bg-gradient-to-b from-black/60 to-transparent p-2 pl-3 ${fade}`}
       >
         <p className={`pt-1.5 text-xs font-semibold text-white drop-shadow sm:text-sm ${started ? "invisible" : ""}`}>
-          LITRACK in action · {duration ? clock(duration) : "7:25"}
+          LITRACK in action{duration ? ` · ${clock(duration)}` : ""}
         </p>
         <Button
           type="button"

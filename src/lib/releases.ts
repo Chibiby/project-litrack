@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.73.0",
+    date: "2026-11-17",
+    title: "Three short videos on the sign-in page",
+    announce: false,
+    fixes: [
+      "The sign-in page now plays three short LITRACK videos in random order, one after another, and each one plays before any repeats.",
+      "On a computer the videos start on their own, very quietly. They get louder the first time you point at the video, and you can still mute them or change the volume.",
+    ],
+  },
+  {
     version: "2.72.1",
     date: "2026-11-17",
     title: "Easier-to-tap section controls",
