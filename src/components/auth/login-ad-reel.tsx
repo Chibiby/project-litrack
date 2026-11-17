@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Loader2, Maximize, Minimize, Pause, Play, Volume1, Volume2, VolumeX, X } from "lucide-react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
+import { ChevronDown, Loader2, Maximize, Minimize, Pause, Play, PlayCircle, Volume1, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -18,6 +19,8 @@ export const AD_CLIPS = [1, 2, 3].map((n) => ({
 
 /** Volume each page load starts at. */
 export const DEFAULT_VOLUME = 0.5;
+/** Phones and tablets start at full volume: their speakers are quiet and the hardware buttons set the level. */
+export const PHONE_VOLUME = 1;
 
 /**
  * One round of the playlist: every clip once, in random order. `last` is the
@@ -271,17 +274,7 @@ export function LoginAdReel({ placement }: { placement: AdPlacement }) {
     setClosed(true);
   };
 
-  if (placement === "card") {
-    return (
-      <div className="mt-6 lg:hidden">
-        {ready ? (
-          <Player videoRef={videoRef} onClose={close} className="aspect-video w-full" />
-        ) : (
-          <VideoLoader className="aspect-video w-full" />
-        )}
-      </div>
-    );
-  }
+  if (placement === "card") return <CardAd videoRef={videoRef} />;
 
   const boxStyle = box ? { width: box.width, height: box.height, marginTop: box.offset } : undefined;
   return (
@@ -305,16 +298,71 @@ export function LoginAdReel({ placement }: { placement: AdPlacement }) {
   );
 }
 
+/**
+ * Phones and tablets: a "LITRACK ad" bar above the sign-in card, closed by
+ * default. Opening it shows the player and starts it (the tap is the
+ * person's request to watch); closing it stops the video and its download.
+ */
+function CardAd({ videoRef }: { videoRef: React.RefObject<HTMLVideoElement | null> }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const collapse = () => {
+    stopVideo(videoRef.current);
+    setOpen(false);
+  };
+  // Mount the player and press play inside the tap itself: phone browsers
+  // only allow sound from a play() made during the tap, and a later one
+  // (an effect after render) can come back silent or refused. Phone
+  // speakers are quiet, so it starts at full volume.
+  const expand = () => {
+    flushSync(() => setOpen(true));
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = false;
+    v.volume = PHONE_VOLUME;
+    Promise.resolve(v.play()).catch(() => {});
+  };
+  return (
+    <div className="mb-3 w-full lg:hidden">
+      <Button
+        type="button"
+        variant="ghost"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => (open ? collapse() : expand())}
+        className="h-auto w-full justify-between rounded-xl border border-white/70 bg-card/55 px-4 py-2.5 text-sm font-semibold text-indigo-950 shadow-highlight backdrop-blur-md hover:bg-card/90 hover:text-indigo-950 lg:h-auto"
+      >
+        <span className="flex items-center gap-2">
+          <PlayCircle aria-hidden className="size-5 text-blue-700" />
+          {open ? "LITRACK ad" : "Open to play the LITRACK ad"}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={`size-4 transition-transform duration-base ${open ? "rotate-180" : ""}`}
+        />
+      </Button>
+      <div id={panelId} hidden={!open} className="mt-2">
+        {open ? (
+          <Player videoRef={videoRef} onClose={collapse} initialVolume={PHONE_VOLUME} className="aspect-video w-full" />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function Player({
   videoRef,
   onClose,
   className = "",
   style,
+  initialVolume = DEFAULT_VOLUME,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onClose: () => void;
   className?: string;
   style?: React.CSSProperties;
+  /** The volume it starts at. */
+  initialVolume?: number;
 }) {
   const frameRef = useRef<HTMLElement>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -324,7 +372,7 @@ function Player({
   const [active, setActive] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(DEFAULT_VOLUME);
+  const [volume, setVolume] = useState(initialVolume);
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   // The fallback when the browser will not go full screen: fill the window.
@@ -341,10 +389,11 @@ function Player({
   // Whether the mouse is over the player, and whether focus is inside it.
   const hoverRef = useRef(false);
   const focusRef = useRef(false);
-  // Every page load starts at the default volume.
+  // Every page load starts at the same volume (set once, on mount).
+  const initialVolumeRef = useRef(initialVolume);
   useEffect(() => {
     const v = videoRef.current;
-    if (v) v.volume = DEFAULT_VOLUME;
+    if (v) v.volume = initialVolumeRef.current;
   }, [videoRef]);
 
   // A finished clip hands over to the next one in the round.

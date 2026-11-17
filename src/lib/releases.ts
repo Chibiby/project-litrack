@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.73.2",
+    date: "2026-11-18",
+    title: "The sign-in video on phones",
+    announce: false,
+    fixes: [
+      "On phones and tablets, the sign-in video now sits in a bar above the sign-in card. It stays closed until you tap \"Open to play the LITRACK ad\".",
+      "On phones, the sign-in video now plays with sound, at full volume.",
+    ],
+  },
+  {
     version: "2.73.1",
     date: "2026-11-17",
     title: "A calmer video on the sign-in page",

@@ -218,15 +218,6 @@ describe("LoginAdReel", () => {
     }
   });
 
-  it("does not autoplay or preload on phones and tablets either", () => {
-    setDesktop(true);
-    const play = mockPlay();
-    render(<LoginAdReel placement="card" />);
-    act(() => vi.advanceTimersByTime(4100));
-    const v = video() as HTMLVideoElement;
-    expect(v.getAttribute("preload")).toBe("none");
-    expect(play).not.toHaveBeenCalled();
-  });
 
   it("sits right under the tagline, no wider than 60% of the column", () => {
     setDesktop(true);
@@ -252,7 +243,7 @@ describe("LoginAdReel", () => {
       paused = true;
       this.dispatchEvent(new Event("pause"));
     });
-    render(<LoginAdReel placement="card" />);
+    render(<Page />);
     act(() => vi.advanceTimersByTime(4100));
     const v = video() as HTMLVideoElement;
     Object.defineProperty(v, "paused", { configurable: true, get: () => paused });
@@ -307,11 +298,26 @@ describe("LoginAdReel", () => {
     expect(v.currentTime).toBe(200);
   });
 
-  it("shows under the sign-in card on phones and tablets", () => {
+  it("on phones and tablets is a closed bar that plays when opened and stops when closed", () => {
     setDesktop(true);
+    const play = mockPlay();
     render(<LoginAdReel placement="card" />);
-    act(() => vi.advanceTimersByTime(4100));
-    expect(video()).not.toBeNull();
+    act(() => vi.advanceTimersByTime(10000));
+    const bar = screen.getByRole("button", { name: "Open to play the LITRACK ad" });
+    expect(bar.getAttribute("aria-expanded")).toBe("false");
+    expect(video()).toBeNull();
+    expect(play).not.toHaveBeenCalled();
+
+    fireEvent.click(bar);
+    expect(bar.getAttribute("aria-expanded")).toBe("true");
+    const v = video() as HTMLVideoElement;
+    expect(v).not.toBeNull();
+    expect(v.getAttribute("preload")).toBe("none");
+    expect(play).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "LITRACK ad" }));
+    expect(video()).toBeNull();
+    expect(screen.getByRole("button", { name: "Open to play the LITRACK ad" }).getAttribute("aria-expanded")).toBe("false");
   });
 
   it("holds the spot with a loader while the person is typing, then shows the player", () => {

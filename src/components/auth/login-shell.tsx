@@ -21,7 +21,7 @@ export function LoginShell({
   glass?: boolean;
   /** Shown under the title and tagline (the sign-in page's video, desktop). */
   brandMedia?: React.ReactNode;
-  /** Shown under the legal line below the card (the video, phones and tablets). */
+  /** Shown above the card (the video's open-to-play bar, phones and tablets). */
   cardMedia?: React.ReactNode;
 }) {
   return (
@@ -70,6 +70,7 @@ export function LoginShell({
       <div className="mx-auto flex min-h-dvh w-full max-w-[96rem] flex-col items-center gap-6 px-4 py-8 sm:px-6 md:max-lg:justify-center md:max-lg:gap-10 lg:grid lg:grid-cols-[minmax(0,1fr)_32rem] lg:content-center lg:items-start lg:gap-x-16 lg:gap-y-0 xl:gap-x-20 lg:px-10 xl:px-16 2xl:grid-cols-[minmax(0,1fr)_38rem] 2xl:px-24 lg:[@media(max-height:820px)]:py-3">
         <LoginBrand media={brandMedia} />
         <div className="w-full max-w-md lg:contents">
+          {cardMedia}
           {/* The desktop video lines its bottom up with this card's. */}
           <div data-login-card="" className="lg:col-start-2 lg:row-start-2">
             {children}
@@ -77,7 +78,6 @@ export function LoginShell({
           <div className="lg:col-start-2 lg:row-start-3">
             <LegalLinks />
           </div>
-          {cardMedia}
         </div>
       </div>
     </main>
