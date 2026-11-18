@@ -372,6 +372,7 @@ export const AUDIT_ACTIONS = {
    * locked, so a flip to open is the row that explains why teachers could save.
    */
   MOSY_SUBMISSION_LOCK_SET: "MOSY_SUBMISSION_LOCK_SET",
+  TEACHER_AUTO_APPROVE_WINDOW_SET: "TEACHER_AUTO_APPROVE_WINDOW_SET",
 
   /**
    * District admin accounts (`docs/specs/district-admin.md`).
@@ -502,6 +503,7 @@ export const SECURITY_AUDIT_ACTIONS = [
   AUDIT_ACTIONS.SUBMISSION_LOCKING_SET,
   AUDIT_ACTIONS.READING_LEVEL_UNLOCK_ALL_SET,
   AUDIT_ACTIONS.MOSY_SUBMISSION_LOCK_SET,
+  AUDIT_ACTIONS.TEACHER_AUTO_APPROVE_WINDOW_SET,
   AUDIT_ACTIONS.TERM_WINDOW_OVERRIDE_SET,
   AUDIT_ACTIONS.TERM_SUBJECT_RESET_ALL_SCHOOLS,
 ] as const satisfies readonly AuditAction[];

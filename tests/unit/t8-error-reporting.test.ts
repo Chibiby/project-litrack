@@ -42,6 +42,8 @@ vi.mock("@/lib/audit", async () => {
   return { ...actual, writeAudit: (...a: unknown[]) => writeAudit(...a) };
 });
 vi.mock("@/lib/auth/last-login", () => ({ recordLastLogin: vi.fn() }));
+// No approval window: sign-ups stay PENDING, as these tests expect.
+vi.mock("@/lib/settings/system-settings", () => ({ getAutoApproveWindow: async () => null }));
 vi.mock("@/lib/cache/revalidate", () => ({
   revalidateAdminDashboard: vi.fn(),
   revalidateSchoolDashboard: vi.fn(),

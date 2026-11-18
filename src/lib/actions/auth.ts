@@ -374,6 +374,12 @@ export type TeacherRegisterResult = { ok: true; redirectTo: string } | ActionFai
 const REGISTER_PENDING_PATH = "/account/created";
 
 /**
+ * Success page for a teacher approved by the automatic approval window. The
+ * page tells them to sign in again, which takes them on to profiling.
+ */
+const REGISTER_AUTO_APPROVED_PATH = "/account/created?approved=1";
+
+/**
  * Create or link the LITRACK row for a teacher whose identity exists. Runs
  * BEFORE any session is created, so a refusal leaves nothing to sign out.
  * Returns the page the client should navigate to on success.
@@ -430,7 +436,12 @@ async function finishTeacherRegister(params: {
 
   return {
     ok: true,
-    redirectTo: result.outcome === "approved" ? "/teacher" : REGISTER_PENDING_PATH,
+    redirectTo:
+      result.outcome === "approved"
+        ? "/teacher"
+        : result.outcome === "auto_approved"
+          ? REGISTER_AUTO_APPROVED_PATH
+          : REGISTER_PENDING_PATH,
   };
 }
 

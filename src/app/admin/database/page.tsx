@@ -10,6 +10,7 @@ import {
 import { currentCounts } from "@/lib/db/snapshot";
 import { accountCounts, accountCountsBySchool } from "@/lib/db/account-reset";
 import { EXCLUDED_TABLES } from "@/lib/db/schema-order";
+import { getAutoApproveWindow } from "@/lib/settings/system-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function DatabasePage() {
 
   const storeReady = isBackupStoreConfigured();
 
-  const [counts, accounts, schools, backups, safety] = await Promise.all([
+  const [counts, accounts, schools, backups, safety, autoApprove] = await Promise.all([
     currentCounts().catch((err) => {
       console.error("[DatabasePage] counts failed:", err);
       return {} as Record<string, number>;
@@ -43,6 +44,11 @@ export default async function DatabasePage() {
         })
       : Promise.resolve([]),
     storeReady ? latestSafetyBackup().catch(() => null) : Promise.resolve(null),
+    // A failed read shows the window as off; saving a new one still works.
+    getAutoApproveWindow().catch((err) => {
+      console.error("[DatabasePage] approval window read failed:", err);
+      return null;
+    }),
   ]);
 
   const data: ConsoleData = {
@@ -52,6 +58,9 @@ export default async function DatabasePage() {
     totalRows: Object.values(counts).reduce((a, b) => a + b, 0),
     accounts,
     schools,
+    autoApprove: autoApprove
+      ? { start: autoApprove.start.toISOString(), end: autoApprove.end.toISOString() }
+      : null,
     backups: backups.map((b) => ({
       kind: b.kind,
       pathname: b.pathname,

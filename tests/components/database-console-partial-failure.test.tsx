@@ -51,6 +51,7 @@ const DATA = {
   totalRows: 0,
   accounts: { schoolHeads: 0, teachers: 4 },
   schools: [],
+  autoApprove: null,
 };
 
 beforeEach(() => {

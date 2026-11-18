@@ -21,6 +21,8 @@ import {
 import { AppError, fieldError } from "@/lib/errors/app-error";
 import { classifyError } from "@/lib/errors/classify";
 import { reportError } from "@/lib/errors/report";
+import { getAutoApproveWindow } from "@/lib/settings/system-settings";
+import { isWithinAutoApproveWindow } from "@/lib/teachers/auto-approve";
 
 export type TeacherAuthIntent = "login" | "register";
 
@@ -59,7 +61,7 @@ export type CompleteTeacherAuthParams = {
 };
 
 export type CompleteTeacherAuthResult =
-  | { ok: true; outcome: "pending" | "approved" }
+  | { ok: true; outcome: "pending" | "approved" | "auto_approved" }
   | { ok: false; error: AppError; signOut: boolean };
 
 // buildFullName and the casing rules that feed it live in @/lib/names.
@@ -116,6 +118,26 @@ async function linkAuthIdIfNeeded(user: User, authId: string): Promise<User> {
 }
 
 /**
+ * Is a new sign-up inside the automatic approval window right now?
+ *
+ * Never throws. A failed settings read answers no, so the account is created
+ * PENDING and the School Head approves it as usual: a database hiccup must not
+ * approve anyone, and it must not fail a sign-up either.
+ */
+async function signUpIsAutoApproved(schoolId: string): Promise<boolean> {
+  try {
+    return isWithinAutoApproveWindow(await getAutoApproveWindow());
+  } catch (err) {
+    if (err instanceof AppError) {
+      reportError(err, { route: "teacher-registration/auto-approve", schoolId });
+    } else {
+      console.error("[teacher-registration] auto-approve window read failed:", err);
+    }
+    return false;
+  }
+}
+
+/**
  * Once the sign-in identity and session exist: create/link the Prisma TEACHER user and
  * decide pending vs approved vs rejected. Callers handle redirects / sign-out.
  */
@@ -142,6 +164,9 @@ export async function completeTeacherAuthAfterVerify(
     const lastName = formatPersonName(names.lastName);
     const fullName = buildFullName(firstName, middleName, lastName);
 
+    const autoApproved = await signUpIsAutoApproved(schoolId);
+    const now = new Date();
+
     let created: User | null = null;
     try {
       created = await prisma.user.create({
@@ -154,8 +179,12 @@ export async function completeTeacherAuthAfterVerify(
           middleName: middleName ?? null,
           lastName,
           fullName,
-          isActive: false,
-          approvalStatus: "PENDING" satisfies TeacherApprovalStatus,
+          // Inside the automatic approval window the account is approved into
+          // the school picked at sign-up, as if its School Head had approved it.
+          // approvedById stays null: no person approved it.
+          isActive: autoApproved,
+          approvalStatus: (autoApproved ? "APPROVED" : "PENDING") satisfies TeacherApprovalStatus,
+          approvedAt: autoApproved ? now : null,
           mustChangePassword: false,
           profileCompleted: false,
           registeredAsAralVolunteer: params.isAralVolunteer === true,
@@ -206,6 +235,18 @@ export async function completeTeacherAuthAfterVerify(
         revalidateAdminDashboard();
       } catch (err) {
         console.error("[teacher-registration] revalidate after create failed:", err);
+      }
+
+      if (autoApproved) {
+        await writeAudit({
+          userId: created.id,
+          schoolId,
+          action: AUDIT_ACTIONS.TEACHER_APPROVE,
+          resource: "User",
+          resourceId: created.id,
+          metadata: { schoolId, teacherId: created.id, method: "auto_approve_window" },
+        });
+        return { ok: true, outcome: "auto_approved" };
       }
 
       return { ok: true, outcome: "pending" };

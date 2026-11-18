@@ -51,6 +51,10 @@ import {
 } from "@/lib/actions/database";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
+import {
+  AutoApproveWindowPanel,
+  type AutoApproveWindowData,
+} from "@/components/admin/auto-approve-window-panel";
 
 export type BackupRow = {
   kind: "daily" | "weekly" | "safety";
@@ -77,6 +81,8 @@ export type ConsoleData = {
   totalRows: number;
   accounts: { schoolHeads: number; teachers: number };
   schools: SchoolOption[];
+  /** The automatic teacher approval window, or null when none is set. */
+  autoApprove: AutoApproveWindowData;
 };
 
 function formatBytes(n: number): string {
@@ -381,6 +387,8 @@ export function DatabaseConsole({ data }: { data: ConsoleData }) {
             </Button>
           </div>
         </Surface>
+
+      <AutoApproveWindowPanel value={data.autoApprove} />
 
       {/* Current contents */}
       <Surface as="section" className="min-w-0 rounded-lg p-4 sm:p-6 space-y-4">

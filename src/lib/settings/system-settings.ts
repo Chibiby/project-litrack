@@ -8,6 +8,11 @@ import {
   READING_LEVEL_UNLOCK_ALL_KEY,
   SUBMISSION_LOCKING_KEY,
 } from "@/lib/unlock/constants";
+import {
+  AUTO_APPROVE_WINDOW_KEY,
+  parseAutoApproveWindow,
+  type AutoApproveWindow,
+} from "@/lib/teachers/auto-approve";
 
 /**
  * Read one global switch. Returns `null` when the row does not exist, which is
@@ -172,4 +177,15 @@ export const isMosySubmissionLockedForDisplay = cache(
  */
 export function demoSchoolFilter(demoVisible: boolean): { isDemo?: false } {
   return demoVisible ? {} : { isDemo: false };
+}
+
+/**
+ * The automatic teacher approval window, or null when none is set.
+ *
+ * Throws on a failed read like every reader here. The sign-up path catches it
+ * and creates a PENDING account, so a database hiccup can only fall back to
+ * School Head approval, never approve someone outside a window.
+ */
+export async function getAutoApproveWindow(): Promise<AutoApproveWindow | null> {
+  return parseAutoApproveWindow(await readSetting(AUTO_APPROVE_WINDOW_KEY));
 }

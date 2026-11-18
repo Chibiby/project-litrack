@@ -14,8 +14,18 @@ export const dynamic = "force-dynamic";
 /**
  * Post–self-register success for teachers. Session required; pending teachers
  * must use allowPending so session.ts does not bounce them to /pending-approval.
+ *
+ * `?approved=1` is where a sign-up inside the automatic approval window lands.
+ * The account is already approved, so the page says so and sends the teacher
+ * back to sign in, which takes them on to profiling. Without the flag an
+ * approved teacher goes straight to /teacher as before.
  */
-export default async function AccountCreatedPage() {
+export default async function AccountCreatedPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ approved?: string }>;
+}) {
+  const { approved: approvedParam } = await searchParams;
   const user = await getCurrentUser({ allowPending: true });
   if (!user) {
     redirect("/login");
@@ -35,7 +45,8 @@ export default async function AccountCreatedPage() {
     redirect(loginPath("school", "deactivated"));
   }
 
-  if (user.approvalStatus === "APPROVED" && user.isActive) {
+  const approved = user.approvalStatus === "APPROVED" && user.isActive;
+  if (approved && approvedParam !== "1") {
     redirect("/teacher");
   }
 
@@ -74,12 +85,22 @@ export default async function AccountCreatedPage() {
 
         <Card className="rounded-xl border border-border/80 shadow-sm">
           <CardHeader>
-            <CardTitle>Account created</CardTitle>
+            <CardTitle>{approved ? "Account created and approved" : "Account created"}</CardTitle>
             <CardDescription>
-              Your teacher account was created successfully and needs School Head approval at{" "}
-              {school?.name ?? "your school"} before you can use LITRACK. Contact your School Head
-              if this takes longer than expected. After approval, sign in with your email and
-              password.
+              {approved ? (
+                <>
+                  Your teacher account at {school?.name ?? "your school"} is ready. No School Head
+                  approval is needed. Go back to the sign-in page and sign in with your email and
+                  password to set up your profile.
+                </>
+              ) : (
+                <>
+                  Your teacher account was created successfully and needs School Head approval at{" "}
+                  {school?.name ?? "your school"} before you can use LITRACK. Contact your School
+                  Head if this takes longer than expected. After approval, sign in with your email
+                  and password.
+                </>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.74.0",
+    date: "2026-11-18",
+    title: "Automatic teacher approval for a set time",
+    announce: false,
+    fixes: [
+      "The Database console can now turn on automatic teacher approval between a start and an end time. Teachers who create an account in that time are approved into the school they pick, with no School Head approval.",
+      "A teacher approved this way sees \"Account created and approved\", goes back to the sign-in page, and signs in to set up their profile.",
+    ],
+  },
+  {
     version: "2.73.2",
     date: "2026-11-18",
     title: "The sign-in video on phones",

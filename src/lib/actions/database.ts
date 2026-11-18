@@ -32,6 +32,13 @@ import {
 } from "@/lib/db/snapshot";
 import { SnapshotFormatError } from "@/lib/db/snapshot-format";
 import { removeAllTeacherAccounts, resetAllSchoolHeadPasswords } from "@/lib/db/account-reset";
+import { writeSetting } from "@/lib/settings/system-settings";
+import { parseInput } from "@/lib/errors/validation";
+import {
+  AUTO_APPROVE_WINDOW_KEY,
+  serializeAutoApproveWindow,
+  validateAutoApproveWindow,
+} from "@/lib/teachers/auto-approve";
 
 /**
  * Super Admin database console.
@@ -722,4 +729,72 @@ export const removeBackup = action(
     return { ok: true as const };
   },
   { verb: "delete that backup" }
+);
+
+const autoApproveWindowSchema = z.object({
+  start: z.string().datetime({ offset: true }),
+  end: z.string().datetime({ offset: true }),
+});
+
+/**
+ * Developer Admin: open the automatic teacher approval window.
+ *
+ * Between `start` and `end`, every teacher who creates an account is approved
+ * into the school they picked, with no School Head step. The times arrive as
+ * ISO strings, converted from the admin's local time in the browser.
+ *
+ * Global, no tenant. Audited because this row is the only explanation for
+ * why a teacher was approved with no approver.
+ */
+export const setAutoApproveWindow = action(
+  "setAutoApproveWindow",
+  async (formData: FormData): Promise<{ ok: true }> => {
+    const admin = await requireDeveloperAdmin("the database console");
+
+    const input = parseInput(autoApproveWindowSchema, {
+      start: formData.get("start"),
+      end: formData.get("end"),
+    });
+    const window = { start: new Date(input.start), end: new Date(input.end) };
+    const problem = validateAutoApproveWindow(window);
+    if (problem) throw refuse(problem);
+
+    await writeSetting(AUTO_APPROVE_WINDOW_KEY, serializeAutoApproveWindow(window));
+
+    await writeAudit({
+      userId: admin.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.TEACHER_AUTO_APPROVE_WINDOW_SET,
+      resource: "SystemSetting",
+      resourceId: AUTO_APPROVE_WINDOW_KEY,
+      metadata: { start: window.start.toISOString(), end: window.end.toISOString() },
+    });
+    revalidatePath("/admin/database");
+    return { ok: true };
+  },
+  { verb: "save the approval window" }
+);
+
+/** Developer Admin: turn the automatic teacher approval window off. */
+export const clearAutoApproveWindow = action(
+  "clearAutoApproveWindow",
+  async (): Promise<{ ok: true }> => {
+    const admin = await requireDeveloperAdmin("the database console");
+
+    // An empty value parses as "no window". Writing it rather than deleting
+    // the row keeps this a plain update.
+    await writeSetting(AUTO_APPROVE_WINDOW_KEY, "");
+
+    await writeAudit({
+      userId: admin.id,
+      schoolId: null,
+      action: AUDIT_ACTIONS.TEACHER_AUTO_APPROVE_WINDOW_SET,
+      resource: "SystemSetting",
+      resourceId: AUTO_APPROVE_WINDOW_KEY,
+      metadata: { start: null, end: null },
+    });
+    revalidatePath("/admin/database");
+    return { ok: true };
+  },
+  { verb: "turn off the approval window" }
 );
