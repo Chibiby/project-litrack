@@ -27,6 +27,24 @@ type WindowEntry = {
 
 const store = new Map<string, WindowEntry>();
 
+/**
+ * TEMPORARY (owner request, 2026-11-19): every rate limit is paused so a large
+ * group can create accounts from one shared network at once. While this is
+ * true, checkRateLimit and peekRateLimit allow every attempt and record none.
+ * That includes the sign-in limits, so password guessing is not slowed down.
+ * Set it back to false to restore every limit.
+ *
+ * Tests keep the real limiter (NODE_ENV is "test" under Vitest), so the
+ * limit behaviour stays covered while the pause is on.
+ */
+export const RATE_LIMITS_PAUSED = true;
+
+const ALLOWED: RateLimitResult = { ok: true, retryAfterMs: 0 };
+
+function rateLimitsPaused(): boolean {
+  return RATE_LIMITS_PAUSED && process.env.NODE_ENV !== "test";
+}
+
 export type RateLimitOptions = {
   /** Max attempts allowed inside the window. */
   limit: number;
@@ -131,6 +149,7 @@ export async function checkRateLimit(
   key: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
+  if (rateLimitsPaused()) return { ...ALLOWED };
   const now = Date.now();
 
   const shared = (await redisCheck(key, options, now)) ?? (await d1Check(key, options, now));
@@ -152,6 +171,7 @@ export async function peekRateLimit(
   key: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
+  if (rateLimitsPaused()) return { ...ALLOWED };
   const now = Date.now();
 
   const shared = (await redisPeek(key, options, now)) ?? (await d1Peek(key, options, now));

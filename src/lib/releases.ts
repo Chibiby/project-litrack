@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.74.1",
+    date: "2026-11-19",
+    title: "Many accounts from one network",
+    announce: false,
+    fixes: [
+      "Many people on the same Wi-Fi or school network can now create accounts and sign in at the same time without being told to wait.",
+    ],
+  },
+  {
     version: "2.74.0",
     date: "2026-11-18",
     title: "Automatic teacher approval for a set time",
