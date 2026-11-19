@@ -37,7 +37,7 @@ const store = new Map<string, WindowEntry>();
  * Tests keep the real limiter (NODE_ENV is "test" under Vitest), so the
  * limit behaviour stays covered while the pause is on.
  */
-export const RATE_LIMITS_PAUSED = true;
+export const RATE_LIMITS_PAUSED = false;
 
 const ALLOWED: RateLimitResult = { ok: true, retryAfterMs: 0 };
 

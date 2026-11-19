@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.74.2",
+    date: "2026-11-19",
+    title: "Sign-in protection is back on",
+    announce: false,
+    fixes: [
+      "Limits on repeated sign-in and account-creation attempts are back on, to protect accounts from password guessing.",
+    ],
+  },
+  {
     version: "2.74.1",
     date: "2026-11-19",
     title: "Many accounts from one network",
