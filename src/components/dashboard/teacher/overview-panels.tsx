@@ -103,18 +103,18 @@ function PanelShell({
 }) {
   return (
     <Surface as="section" className="relative flex min-w-0 flex-col rounded-lg">
-      <div className="flex items-start gap-3 px-3 pt-4 sm:px-5 sm:pt-5">
+      <div className="flex items-start gap-2 px-3 pt-4 sm:gap-3 sm:px-5 sm:pt-5">
         <span
           aria-hidden
-          className={cn("flex size-10 shrink-0 items-center justify-center rounded-md sm:size-11", iconTile)}
+          className={cn("flex size-8 shrink-0 items-center justify-center rounded-md sm:size-11", iconTile)}
         >
           <Icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
+          <h2 className="line-clamp-2 break-words text-sm font-semibold tracking-tight text-foreground sm:text-base">
             {title}
           </h2>
-          <p className="truncate text-xs text-muted-foreground sm:text-sm" title={subtitle}>
+          <p className="line-clamp-2 text-xs text-muted-foreground sm:text-sm" title={subtitle}>
             {/* Narrow panels (phone up to xl) show the period here instead of
                 the chip, so the title never has to share its line. */}
             <span className="2xl:hidden">{period}</span>

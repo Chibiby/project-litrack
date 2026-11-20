@@ -9,6 +9,7 @@ import { canonicalAppUrl } from "@/lib/app-url";
 import { prismaFresh } from "@/lib/prisma";
 import { AppError } from "@/lib/errors/app-error";
 import { hashPassword, verifyPassword } from "@/lib/auth/password-hash";
+import { seedBetterAuthAsyncStorage } from "@/lib/auth/better-auth-async-storage";
 import {
   AUTH_COOKIE_CACHE_SECONDS,
   AUTH_COOKIE_CACHE_VERSION,
@@ -150,6 +151,7 @@ const getCloudflareAuth = cache((secret: string) => createAuth(secret));
  * Throws `CONFIG_MISSING` (variable name only) when the secret is absent.
  */
 export function getAuth(): LitrackAuth {
+  seedBetterAuthAsyncStorage();
   if (instance) return instance;
   const secret = readSecret();
   if (!secret) {

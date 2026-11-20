@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.76.1",
+    date: "2026-11-20",
+    title: "Fewer failed saves",
+    announce: false,
+    fixes: [
+      "Saving attendance, reading levels and MOSY decisions no longer fails now and then with a general error.",
+      "On phones, the Attendance and Reading panels on the teacher dashboard show their full titles.",
+    ],
+  },
+  {
     version: "2.76.0",
     date: "2026-11-20",
     title: "Smoother pages on phones",
