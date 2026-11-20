@@ -168,12 +168,12 @@ describe("Teachers list — sort survives URL round trips", () => {
     const list = await listPropFor({ sort: "date-added" });
     render(<TeachersActiveTable rows={[ROW]} list={list} />);
 
-    fireEvent.click(screen.getByRole("combobox", { name: "Filter teachers" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Advisory" }));
     fireEvent.click(await screen.findByRole("option", { name: "Floating" }));
 
     expect(push).toHaveBeenCalledTimes(1);
     expect(push.mock.calls[0][0]).toContain("sort=date-added");
-    expect(push.mock.calls[0][0]).toContain("filter=floating");
+    expect(push.mock.calls[0][0]).toContain("advisory=floating");
   });
 
   it("picks a grade, then a section, keeping sort and clearing section on grade change", async () => {

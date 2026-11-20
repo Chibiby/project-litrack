@@ -5,6 +5,15 @@ import type {
   SectionOption,
 } from "@/lib/admin/management";
 import type { ListFilterField } from "@/components/admin/management/list-filter-bar";
+import {
+  ADVISORY_FILTERS,
+  ADVISORY_FILTER_LABELS,
+  TEACHER_STATUS_FILTERS,
+  TEACHER_STATUS_FILTER_LABELS,
+  TEACHER_TYPE_FILTERS,
+  TEACHER_TYPE_FILTER_LABELS,
+  type TeacherFacets,
+} from "@/lib/teachers/teacher-filters";
 
 /**
  * Builders for the Management pages' contextual filters. The cascade is
@@ -130,4 +139,35 @@ export function scopeLabel(opts: {
   }
   parts.push(...(opts.extra ?? []));
   return parts.length > 0 ? parts.join(" · ") : "Whole division";
+}
+
+function facetField<T extends string>(
+  key: string,
+  label: string,
+  allLabel: string,
+  values: readonly T[],
+  labels: Record<T, string>,
+  value: T | undefined
+): ListFilterField {
+  return {
+    key,
+    label,
+    allLabel,
+    value: value ?? "",
+    options: values.map((v) => ({ value: v, label: labels[v] })),
+  };
+}
+
+/** Advisory, teacher type and (where the page has no status tabs) status. */
+export function teacherFacetFields(
+  facets: TeacherFacets,
+  opts: { status: boolean }
+): ListFilterField[] {
+  return [
+    facetField("advisory", "Advisory", "Any advisory", ADVISORY_FILTERS, ADVISORY_FILTER_LABELS, facets.advisory),
+    facetField("type", "Teacher type", "All teachers", TEACHER_TYPE_FILTERS, TEACHER_TYPE_FILTER_LABELS, facets.teacherType),
+    ...(opts.status
+      ? [facetField("status", "Status", "Any status", TEACHER_STATUS_FILTERS, TEACHER_STATUS_FILTER_LABELS, facets.status)]
+      : []),
+  ];
 }

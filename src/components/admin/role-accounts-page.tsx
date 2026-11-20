@@ -13,7 +13,9 @@ import {
   schoolField,
   scopeLabel,
   sectionField,
+  teacherFacetFields,
 } from "@/components/admin/management/filter-fields";
+import { TEACHER_FACET_KEYS, facetScopeLabels } from "@/lib/teachers/teacher-filters";
 import {
   DistrictAdminsSummaryCards,
   SchoolHeadsSummaryCards,
@@ -63,10 +65,11 @@ export const ACCOUNTS_LIST_KEYS = [
   "grade",
   "district",
   "section",
+  ...TEACHER_FACET_KEYS,
 ] as const;
 
 /** Params the summary cards honour; paging and sorting never re-suspend them. */
-const SUMMARY_KEYS = ["district", "schoolId", "grade", "section"] as const;
+const SUMMARY_KEYS = ["district", "schoolId", "grade", "section", ...TEACHER_FACET_KEYS] as const;
 
 export type AccountsSearchParams = PeopleSearchParams & { role?: string };
 
@@ -179,6 +182,7 @@ async function filtersFor(role: ManagedAccountRole, params: AccountsParams): Pro
     schoolField(schools, params.schoolId, ["section"]),
     gradeField(listGradeOptions(), params.grade, ["section"]),
     sectionField(sections, params.section, { schoolId: params.schoolId, grade: params.grade }),
+    ...teacherFacetFields(params.facets ?? {}, { status: true }),
   ];
 }
 
@@ -254,9 +258,11 @@ async function SummaryBody({
       district: params.district,
       schoolId: params.schoolId,
       schools,
-      extra: [gradeLabel, sectionName ? `Section ${sectionName}` : undefined].filter(
-        (v): v is string => Boolean(v)
-      ),
+      extra: [
+        gradeLabel,
+        sectionName ? `Section ${sectionName}` : undefined,
+        ...facetScopeLabels(params.facets),
+      ].filter((v): v is string => Boolean(v)),
     });
     loaded = { scope, data };
   } catch (err) {
@@ -287,6 +293,7 @@ async function loadSummary(
         schoolId: params.schoolId,
         grade: params.grade,
         section: params.section,
+        facets: params.facets,
       }),
     };
   }

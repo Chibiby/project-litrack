@@ -17,8 +17,6 @@ import {
   TEACHER_ROSTER_STATE,
   managedTeacherSelect,
   teacherRosterScope,
-  teacherRosterFilterWhere,
-  multiAdvisoryTeacherIds,
   teacherTabCounts,
   toManagedRow,
 } from "@/lib/teachers/roster";
@@ -41,6 +39,7 @@ import {
 import { TableSectionSkeleton } from "@/components/loading";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { listKey } from "@/lib/nav/list-params";
+import { teacherFacetWhere } from "@/lib/teachers/teacher-filters";
 
 /**
  * Only the params that change which active-teacher rows are shown. `schoolId`
@@ -54,6 +53,7 @@ export const ACTIVE_TEACHERS_LIST_KEYS = [
   "page",
   "sort",
   "filter",
+  "advisory",
   "grade",
   "section",
 ] as const;
@@ -66,6 +66,7 @@ interface TeachersPageProps {
     page?: string;
     q?: string;
     filter?: string;
+    advisory?: string;
     sort?: string;
     grade?: string;
     section?: string;
@@ -106,29 +107,24 @@ async function ActiveTeachersBody({
       },
     },
   });
-  const multiIdsPromise =
-    list.filter === "multi-advisory" ? multiAdvisoryTeacherIds(schoolId) : null;
-  const [gradeSections, multiIds] = await Promise.all([
-    gradeSectionsPromise,
-    multiIdsPromise,
-  ]);
+  const gradeSections = await gradeSectionsPromise;
 
   const gradesWithSections = gradeSections.filter((g) => g.sections.length > 0);
   const facet = resolveAdvisoryFacet(gradesWithSections, list.grade, list.section);
   const facetWhere = teacherAdvisoryFacetWhere(schoolId, facet);
 
-  const filterWhere =
-    list.filter === "all"
-      ? {}
-      : list.filter === "multi-advisory"
-        ? { id: { in: multiIds ?? [] } }
-        : teacherRosterFilterWhere(list.filter);
+  const kindWhere = teacherFacetWhere({
+    teacherType: list.filter === "all" ? undefined : list.filter,
+    advisory: list.advisory === "all" ? undefined : list.advisory,
+  });
+  const narrowed = list.filter !== "all" || list.advisory !== "all";
 
   const activeWhere: Prisma.UserWhereInput = {
     ...teacherRosterScope(schoolId),
     ...TEACHER_ROSTER_STATE.active,
-    ...filterWhere,
-    ...(facetWhere ? { AND: [facetWhere] } : {}),
+    ...(facetWhere || kindWhere.length > 0
+      ? { AND: [...(facetWhere ? [facetWhere] : []), ...kindWhere] }
+      : {}),
     ...(list.q
       ? {
           OR: [
@@ -149,7 +145,7 @@ async function ActiveTeachersBody({
     }),
     // The tab badge is unfiltered. Count again whenever search, a roster
     // filter or a grade/section facet narrows the rows shown on this page.
-    list.q || list.filter !== "all" || facetWhere
+    list.q || narrowed || facetWhere
       ? prismaFresh.user.count({ where: activeWhere })
       : null,
   ]);
@@ -254,6 +250,7 @@ async function ActiveTeachersBody({
           totalCount: activeCount,
           q: list.q,
           filter: list.filter,
+          advisory: list.advisory,
           grade: facet.gradeId ?? "",
           section: facet.sectionId ?? "",
           gradeOptions: gradeFacetOptions,
@@ -264,6 +261,7 @@ async function ActiveTeachersBody({
             schoolId: isSuperAdminView ? schoolId : undefined,
             q: list.q || undefined,
             filter: list.filter === "all" ? undefined : list.filter,
+            advisory: list.advisory === "all" ? undefined : list.advisory,
             grade: facet.gradeId ?? undefined,
             section: facet.sectionId ?? undefined,
             // Default sort stays out of the URL (clean links); every other

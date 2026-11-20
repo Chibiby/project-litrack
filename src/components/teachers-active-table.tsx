@@ -47,7 +47,17 @@ import {
   type RowSignatures,
 } from "@/lib/teachers/row-resync";
 import { TeacherRoleDialog } from "@/components/school-head/teacher-role-dialog";
-import type { TeacherListFilter, TeacherListSort } from "@/lib/teachers/pagination";
+import type {
+  TeacherAdvisoryFilter,
+  TeacherListFilter,
+  TeacherListSort,
+} from "@/lib/teachers/pagination";
+import {
+  ADVISORY_FILTERS,
+  ADVISORY_FILTER_LABELS,
+  TEACHER_TYPE_FILTERS,
+  TEACHER_TYPE_FILTER_LABELS,
+} from "@/lib/teachers/teacher-filters";
 import { SortSelect } from "@/components/ui/sort-select";
 import type { SortOption } from "@/lib/sort/registry";
 import { RefreshCw, X } from "lucide-react";
@@ -116,6 +126,8 @@ export type TeachersListPagination = {
   totalCount: number;
   q: string;
   filter: TeacherListFilter;
+  /** The advisory kind; optional so older callers default to all. */
+  advisory?: TeacherAdvisoryFilter;
   /** Validated GradeLevel id, "" for all grades. */
   grade?: string;
   /** Validated Section id, "" for all sections. */
@@ -591,6 +603,9 @@ function TeachersManagedTable({
   const [filterValue, setFilterValue] = useState<TeacherListFilter>(
     list?.filter ?? "all"
   );
+  const [advisoryValue, setAdvisoryValue] = useState<TeacherAdvisoryFilter>(
+    list?.advisory ?? "all"
+  );
   /**
    * Rows hidden by an in-flight (or just-confirmed) deactivate/remove.
    *
@@ -651,6 +666,14 @@ function TeachersManagedTable({
     setPrevListFilter(list?.filter ?? "all");
     setFilterValue(list?.filter ?? "all");
   }
+  const [prevListAdvisory, setPrevListAdvisory] = useState<TeacherAdvisoryFilter>(
+    list?.advisory ?? "all"
+  );
+  if ((list?.advisory ?? "all") !== prevListAdvisory) {
+    setPrevListAdvisory(list?.advisory ?? "all");
+    setAdvisoryValue(list?.advisory ?? "all");
+  }
+  const listAdvisory = list?.advisory ?? "all";
   const [gradeValue, setGradeValue] = useState(list?.grade ?? "");
   const [sectionValue, setSectionValue] = useState(list?.section ?? "");
   const [prevListGrade, setPrevListGrade] = useState(list?.grade ?? "");
@@ -756,6 +779,7 @@ function TeachersManagedTable({
     page?: number;
     q?: string;
     filter?: TeacherListFilter;
+    advisory?: TeacherAdvisoryFilter;
     grade?: string;
     section?: string;
   }) => {
@@ -768,6 +792,7 @@ function TeachersManagedTable({
         k !== "page" &&
         k !== "q" &&
         k !== "filter" &&
+        k !== "advisory" &&
         k !== "grade" &&
         k !== "section"
       ) {
@@ -777,11 +802,13 @@ function TeachersManagedTable({
     const q = next.q !== undefined ? next.q : list.q;
     const page = next.page !== undefined ? next.page : list.page;
     const filter = next.filter !== undefined ? next.filter : list.filter;
+    const advisory = next.advisory !== undefined ? next.advisory : listAdvisory;
     const grade = next.grade !== undefined ? next.grade : (list.grade ?? "");
     const section =
       next.section !== undefined ? next.section : (list.section ?? "");
     if (q) params.set("q", q);
     if (filter !== "all") params.set("filter", filter);
+    if (advisory !== "all") params.set("advisory", advisory);
     if (grade) params.set("grade", grade);
     if (grade && section) params.set("section", section);
     if (page > 1) params.set("page", String(page));
@@ -894,7 +921,7 @@ function TeachersManagedTable({
             <div className="sm:w-52">
               <ToolbarFacet
                 id="teachers-filter"
-                label="Filter teachers"
+                label="Teacher type"
                 value={filterValue}
                 onValueChange={(v) => {
                   const nextFilter = v as TeacherListFilter;
@@ -902,14 +929,31 @@ function TeachersManagedTable({
                   pushListQuery({ page: 1, filter: nextFilter });
                 }}
               >
-                <SelectItem value="all">All active teachers</SelectItem>
-                <SelectItem value="non-deped-aral-volunteer">
-                  Non-DepEd ARAL Teacher
-                </SelectItem>
-                <SelectItem value="teacher">Teacher</SelectItem>
-                <SelectItem value="floating">Floating</SelectItem>
-                <SelectItem value="multi-advisory">Multi advisory</SelectItem>
-                <SelectItem value="with-advisory">With advisory</SelectItem>
+                <SelectItem value="all">All types</SelectItem>
+                {TEACHER_TYPE_FILTERS.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {TEACHER_TYPE_FILTER_LABELS[t]}
+                  </SelectItem>
+                ))}
+              </ToolbarFacet>
+            </div>
+            <div className="sm:w-52">
+              <ToolbarFacet
+                id="teachers-advisory"
+                label="Advisory"
+                value={advisoryValue}
+                onValueChange={(v) => {
+                  const nextAdvisory = v as TeacherAdvisoryFilter;
+                  setAdvisoryValue(nextAdvisory);
+                  pushListQuery({ page: 1, advisory: nextAdvisory });
+                }}
+              >
+                <SelectItem value="all">All advisory kinds</SelectItem>
+                {ADVISORY_FILTERS.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {ADVISORY_FILTER_LABELS[a]}
+                  </SelectItem>
+                ))}
               </ToolbarFacet>
             </div>
             {list.gradeOptions ? (
@@ -971,11 +1015,16 @@ function TeachersManagedTable({
                     ...list.searchParams,
                     q: list.q || undefined,
                     filter: list.filter === "all" ? undefined : list.filter,
+                    advisory: listAdvisory === "all" ? undefined : listAdvisory,
                   }}
                 />
               </div>
             ) : null}
-            {list.q || list.filter !== "all" || list.grade || list.section ? (
+            {list.q ||
+            list.filter !== "all" ||
+            listAdvisory !== "all" ||
+            list.grade ||
+            list.section ? (
               <Button
                 type="button"
                 size="sm"
@@ -985,12 +1034,14 @@ function TeachersManagedTable({
                   setSearchValue("");
                   setPushedQ("");
                   setFilterValue("all");
+                  setAdvisoryValue("all");
                   setGradeValue("");
                   setSectionValue("");
                   pushListQuery({
                     page: 1,
                     q: "",
                     filter: "all",
+                    advisory: "all",
                     grade: "",
                     section: "",
                   });
@@ -1301,7 +1352,7 @@ function TeachersActiveTablePanel({
     <TeachersManagedTable
       title="Active teachers"
       emptyLabel={
-        list?.q || (list && list.filter !== "all") || list?.grade
+        list?.q || (list && (list.filter !== "all" || (list.advisory ?? "all") !== "all")) || list?.grade
           ? "No active teachers match your search or filters."
           : "No active teachers yet."
       }

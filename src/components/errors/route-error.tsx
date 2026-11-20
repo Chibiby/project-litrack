@@ -127,6 +127,22 @@ export function RouteError({
     console.error(`${scope} route error:`, error);
   }, [aborted, error, reset, scope]);
 
+  // A page that failed only because a newer version went live loads that
+  // version by itself, once per minute at most so a broken deploy cannot loop.
+  const updated = failure.code === "APP_UPDATED" && !aborted;
+  useEffect(() => {
+    if (!updated) return;
+    const key = "litrack:update-reload-at";
+    try {
+      const last = Number(window.sessionStorage.getItem(key) ?? 0);
+      if (Date.now() - last < 60_000) return;
+      window.sessionStorage.setItem(key, String(Date.now()));
+    } catch {
+      return;
+    }
+    window.location.reload();
+  }, [updated]);
+
   useEffect(() => {
     if (!offline || aborted) return;
     const onOnline = () => retry();

@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { SparkIntro } from "@/components/brand/spark-intro";
 import { SparkIntroScript } from "@/components/brand/spark-intro-script";
 import { ClientErrorListener } from "@/components/errors/client-error-listener";
+import { SilentUpdater } from "@/components/app-update/silent-updater";
 import { OfflineBanner } from "@/components/errors/offline-banner";
 import { PressFeedback } from "@/components/press-feedback";
 import { ThemeProvider } from "@/components/theme/theme-provider";
@@ -95,6 +96,7 @@ export default function RootLayout({
           <Toaster richColors position="top-right" />
           <OfflineBanner />
           <ClientErrorListener />
+          <SilentUpdater />
           <PressFeedback />
         </ThemeProvider>
       </body>

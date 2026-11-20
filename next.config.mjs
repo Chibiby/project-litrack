@@ -1,6 +1,14 @@
 import { builtinModules } from "node:module";
 
 const isCloudflareWorkersBuild = process.env.WORKERS_CI === "1";
+/**
+ * Set by scripts/build-platform.mjs for every production build, unset in dev.
+ * With it, a tab still running the previous version turns its next navigation
+ * into a full page load instead of failing, and SilentUpdater compares it with
+ * public/litrack-version.json to refresh quietly. OpenNext also uses it as the
+ * build ID in its cache keys, so caches stay per deploy.
+ */
+const deploymentId = process.env.LITRACK_DEPLOYMENT_ID || undefined;
 const cloudflareNodeExternals = Object.fromEntries(
   builtinModules
     .filter((name) => !name.startsWith("node:"))
@@ -13,12 +21,14 @@ const nextConfig = {
   // git worktrees (where a parent checkout has another lockfile) and is a
   // no-op in Cloudflare's single-repository build environment.
   outputFileTracingRoot: process.cwd(),
+  deploymentId,
   /**
    * Expose only a non-sensitive deployment target marker. Next inlines values
    * declared in `env`, which lets server instrumentation dead-code-eliminate
    * Vercel-only imports from the Cloudflare/OpenNext production bundle.
    */
   env: {
+    ...(deploymentId ? { NEXT_PUBLIC_LITRACK_DEPLOYMENT_ID: deploymentId } : {}),
     LITRACK_DEPLOY_TARGET: isCloudflareWorkersBuild
       ? "cloudflare"
       : process.env.VERCEL === "1"

@@ -1,7 +1,12 @@
 import { execSync } from "node:child_process";
+import { resolveDeploymentId, writeVersionFile } from "./deployment-id.mjs";
 
 const isCloudflareWorkersBuild = process.env.WORKERS_CI === "1";
 const isOpenNextInnerBuild = process.env.OPENNEXT_INNER_BUILD === "1";
+
+// Fixed here, before any child build starts, so next.config and the version
+// file agree on one value (see scripts/deployment-id.mjs).
+const deploymentId = resolveDeploymentId();
 
 if (isCloudflareWorkersBuild && !isOpenNextInnerBuild) {
   console.log("Building LITRACK for Cloudflare Workers with OpenNext...");
@@ -18,7 +23,8 @@ if (isCloudflareWorkersBuild && !isOpenNextInnerBuild) {
   // build. `--turbopack` is explicit on purpose: Next 16 refuses a bare
   // `next build` while next.config.mjs still defines `webpack()`, and that hook
   // is kept so rolling back is a single flag change to `--webpack`.
-  console.log("Building LITRACK with the standard Next.js build...");
+  console.log(`Building LITRACK with the standard Next.js build (${deploymentId})...`);
+  writeVersionFile(deploymentId);
   execSync("prisma generate && next build --turbopack", {
     stdio: "inherit",
     env: process.env,

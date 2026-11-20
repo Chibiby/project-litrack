@@ -26,21 +26,29 @@ import {
   schoolField,
   scopeLabel,
   sectionField,
+  teacherFacetFields,
 } from "@/components/admin/management/filter-fields";
+import { TEACHER_FACET_KEYS, facetScopeLabels } from "@/lib/teachers/teacher-filters";
 import { SummaryUnavailable, TeachersSummaryCards } from "@/components/admin/management/summary-cards";
 import { DistrictTeachersList } from "@/components/district/district-teachers-list";
 import { describeScope } from "@/components/district/scope-label";
 
 export const dynamic = "force-dynamic";
 
-const LIST_KEYS = ["page", "district", "schoolId", "grade", "section"] as const;
-const SUMMARY_KEYS = ["district", "schoolId", "grade", "section"] as const;
+const LIST_KEYS = ["page", "district", "schoolId", "grade", "section", ...TEACHER_FACET_KEYS] as const;
+const SUMMARY_KEYS = ["district", "schoolId", "grade", "section", ...TEACHER_FACET_KEYS] as const;
 
-function scopeOf(ctx: DistrictListContext): string {
+function scopeOf(ctx: DistrictListContext, params: AccountsParams): string {
+  const facets = facetScopeLabels(params.facets);
   if (ctx.district || ctx.schoolId) {
-    return scopeLabel({ district: ctx.district, schoolId: ctx.schoolId, schools: ctx.schoolOptions });
+    return scopeLabel({
+      district: ctx.district,
+      schoolId: ctx.schoolId,
+      schools: ctx.schoolOptions,
+      extra: facets,
+    });
   }
-  return "Your schools";
+  return ["Your schools", ...facets].join(" · ");
 }
 
 async function TeacherCards({ ctx, params }: { ctx: DistrictListContext; params: AccountsParams }) {
@@ -52,12 +60,13 @@ async function TeacherCards({ ctx, params }: { ctx: DistrictListContext; params:
       schoolId: ctx.schoolId,
       grade: params.grade,
       section: params.section,
+      facets: params.facets,
     });
   } catch (err) {
     console.error("[DistrictTeachersPage] failed to load summary:", err);
     return <SummaryUnavailable what="teacher" />;
   }
-  return <TeachersSummaryCards summary={summary} scope={scopeOf(ctx)} />;
+  return <TeachersSummaryCards summary={summary} scope={scopeOf(ctx, params)} />;
 }
 
 async function TeacherList({ ctx, params }: { ctx: DistrictListContext; params: AccountsParams }) {
@@ -77,6 +86,7 @@ async function TeacherList({ ctx, params }: { ctx: DistrictListContext; params: 
       schoolField(ctx.schoolOptions, ctx.schoolId, ["section"]),
       gradeField(listGradeOptions(), params.grade, ["section"]),
       sectionField(sections, params.section, { schoolId: ctx.schoolId, grade: params.grade }),
+      ...teacherFacetFields(params.facets ?? {}, { status: true }),
     ];
   } catch (err) {
     console.error("[DistrictTeachersPage] failed to load list:", err);

@@ -17,3 +17,8 @@
 
 /favicon.ico
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+# Open tabs check this file to learn a newer version is live
+# (src/components/app-update/silent-updater.tsx). Always revalidate.
+/litrack-version.json
+  Cache-Control: no-cache

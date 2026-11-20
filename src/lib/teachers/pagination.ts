@@ -1,18 +1,33 @@
 import type { Prisma } from "@prisma/client";
+import {
+  ADVISORY_FILTERS,
+  TEACHER_TYPE_FILTERS,
+  type AdvisoryFilter,
+  type TeacherTypeFilter,
+} from "@/lib/teachers/teacher-filters";
 import { assertOrderByCoversOptions, defineSort } from "@/lib/sort/registry";
 
 export const TEACHERS_PAGE_SIZE = 20;
 
-export const TEACHER_LIST_FILTERS = [
-  "all",
-  "non-deped-aral-volunteer",
-  "teacher",
-  "floating",
-  "multi-advisory",
-  "with-advisory",
-] as const;
+/** `?filter=`: the teacher type (see teacher-filters), or all. */
+export const TEACHER_LIST_FILTERS = ["all", ...TEACHER_TYPE_FILTERS] as const;
+export type TeacherListFilter = "all" | TeacherTypeFilter;
 
-export type TeacherListFilter = (typeof TEACHER_LIST_FILTERS)[number];
+/** `?advisory=`: the advisory kind (see teacher-filters), or all. */
+export const TEACHER_ADVISORY_FILTERS = ["all", ...ADVISORY_FILTERS] as const;
+export type TeacherAdvisoryFilter = "all" | AdvisoryFilter;
+
+/**
+ * Values the single "Filter teachers" select wrote before it split into
+ * Teacher type and Advisory, so a bookmarked link still narrows the list.
+ */
+const LEGACY_FILTERS: Record<string, { filter?: TeacherTypeFilter; advisory?: AdvisoryFilter }> = {
+  "non-deped-aral-volunteer": { filter: "volunteer" },
+  teacher: { filter: "deped" },
+  floating: { advisory: "no-section" },
+  "multi-advisory": { advisory: "multi" },
+  "with-advisory": { advisory: "with-section" },
+};
 
 /**
  * "Sort by" for the School Head teachers list. Alphabetical is the default —
@@ -64,6 +79,7 @@ export type TeachersListParams = {
   take: number;
   q: string;
   filter: TeacherListFilter;
+  advisory: TeacherAdvisoryFilter;
   sort: TeacherListSort;
   /** Raw, unvalidated GradeLevel id ("" when absent) — see `resolveAdvisoryFacet`. */
   grade: string;
@@ -131,6 +147,7 @@ export function parseTeachersListParams(
     page?: string;
     q?: string;
     filter?: string;
+    advisory?: string;
     sort?: string;
     grade?: string;
     section?: string;
@@ -140,17 +157,23 @@ export function parseTeachersListParams(
   const rawPage = Number.parseInt(searchParams.page ?? "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
   const q = (searchParams.q ?? "").trim();
-  const filter = TEACHER_LIST_FILTERS.includes(
-    searchParams.filter as TeacherListFilter
-  )
-    ? (searchParams.filter as TeacherListFilter)
-    : "all";
+  const legacy = searchParams.filter ? LEGACY_FILTERS[searchParams.filter] : undefined;
+  const filter: TeacherListFilter =
+    legacy?.filter ??
+    ((TEACHER_LIST_FILTERS as readonly string[]).includes(searchParams.filter ?? "")
+      ? (searchParams.filter as TeacherListFilter)
+      : "all");
+  const advisory: TeacherAdvisoryFilter =
+    legacy?.advisory ??
+    ((TEACHER_ADVISORY_FILTERS as readonly string[]).includes(searchParams.advisory ?? "")
+      ? (searchParams.advisory as TeacherAdvisoryFilter)
+      : "all");
   const sort = TEACHER_LIST_SORTS.parse(searchParams.sort);
   const size = pageSize > 0 ? pageSize : TEACHERS_PAGE_SIZE;
   const skip = (page - 1) * size;
   const grade = parseFacetId(searchParams.grade);
   const section = grade ? parseFacetId(searchParams.section) : "";
-  return { page, pageSize: size, skip, take: size, q, filter, sort, grade, section };
+  return { page, pageSize: size, skip, take: size, q, filter, advisory, sort, grade, section };
 }
 
 export function teachersTotalPages(

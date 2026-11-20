@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   managedTeacherSelect,
-  teacherRosterFilterWhere,
   toManagedRow,
   type ManagedTeacher,
 } from "@/lib/teachers/roster";
@@ -112,30 +111,6 @@ describe("toManagedRow — advisory sections", () => {
     });
   });
 });
-
-describe("teacherRosterFilterWhere", () => {
-  it("uses the shared volunteer designation", () => {
-    expect(teacherRosterFilterWhere("non-deped-aral-volunteer")).toEqual({
-      teacherProfile: { is: { designation: "Non-DepEd ARAL Volunteer" } },
-    });
-  });
-
-  it("distinguishes floating from teachers with a live advisory", () => {
-    expect(teacherRosterFilterWhere("floating")).toEqual({
-      advisorySections: { none: { deletedAt: null } },
-    });
-    expect(teacherRosterFilterWhere("with-advisory")).toEqual({
-      advisorySections: { some: { deletedAt: null } },
-    });
-  });
-
-  it("filters the exact Teacher designation", () => {
-    expect(teacherRosterFilterWhere("teacher")).toEqual({
-      teacherProfile: { is: { designation: "Teacher" } },
-    });
-  });
-});
-
 
 describe("toManagedRow — designation and advisory setting", () => {
   it("maps the teacher's designation and advisory mode from their profile", () => {

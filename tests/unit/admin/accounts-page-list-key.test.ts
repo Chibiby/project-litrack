@@ -58,7 +58,18 @@ beforeEach(() => {
 
 describe("Management accounts pages — Suspense boundary key", () => {
   it("declares exactly the list-affecting params", () => {
-    expect(ACCOUNTS_LIST_KEYS).toEqual(["page", "sort", "role", "schoolId", "grade", "district", "section"]);
+    expect(ACCOUNTS_LIST_KEYS).toEqual([
+      "page",
+      "sort",
+      "role",
+      "schoolId",
+      "grade",
+      "district",
+      "section",
+      "advisory",
+      "type",
+      "status",
+    ]);
   });
 
   it("does not change when the search text (q) changes, so the search box is not remounted", async () => {

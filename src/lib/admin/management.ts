@@ -11,6 +11,7 @@ import { formatPercent, summarizeIpRows } from "@/lib/dashboard/ip-metrics";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 import { formatListingNameFromRecord } from "@/lib/names";
 import { schoolWhereForScope } from "@/lib/auth/admin-scope";
+import { teacherFacetWhere, type TeacherFacets } from "@/lib/teachers/teacher-filters";
 import {
   ACCOUNTS_PAGE_SIZE,
   ACCOUNT_GRADE_VALUES,
@@ -80,6 +81,10 @@ export type PeopleSearchParams = {
   section?: string;
   district?: string;
   sort?: string;
+  /** Teachers only: advisory, teacher type and status filters (see teacher-filters). */
+  advisory?: string;
+  type?: string;
+  status?: string;
 };
 
 /**
@@ -285,7 +290,7 @@ export async function listSectionOptions(opts: {
 
 /** Filters the people summaries honour — a subset of the list's `AccountsParams`. */
 export type PeopleSummaryFilter = Partial<
-  Pick<AccountsParams, "district" | "schoolId" | "grade" | "section">
+  Pick<AccountsParams, "district" | "schoolId" | "grade" | "section" | "facets">
 >;
 
 /**
@@ -300,6 +305,7 @@ function peopleBase(
     grade?: GradeLevelType;
     section?: string;
     districts?: readonly string[];
+    facets?: TeacherFacets;
   },
   demoVisible: boolean
 ): Prisma.UserWhereInput {
@@ -320,6 +326,7 @@ function peopleBase(
       },
     });
   }
+  if (f.facets) and.push(...teacherFacetWhere(f.facets));
   return { AND: and };
 }
 
@@ -362,8 +369,10 @@ export async function getTeachersSummary(
     grade: filter.grade,
     section: cleanFilterId(filter.section),
     districts: fenceKey(filter.districts) ?? undefined,
+    facets: filter.facets,
   };
-  const unfiltered = !f.district && !f.schoolId && !f.grade && !f.section && !f.districts;
+  const unfiltered =
+    !f.district && !f.schoolId && !f.grade && !f.section && !f.districts && !f.facets;
   const [summary, dash] = await Promise.all([
     cachedQuery(
       async () => {
@@ -447,6 +456,7 @@ export async function getDistrictTeachersPage(
       grade: params.grade,
       section: params.section,
       districts,
+      facets: params.facets,
     },
     true
   );

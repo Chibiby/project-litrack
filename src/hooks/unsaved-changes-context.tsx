@@ -48,6 +48,11 @@ function subscribeStore(listener: () => void) {
   };
 }
 
+/** Whether a guarded form on this page holds unsaved changes. Readable outside React. */
+export function isUnsavedChangesDirty(): boolean {
+  return storeSnapshot.isDirty;
+}
+
 export function setUnsavedChangesDirty(dirty: boolean, message?: string) {
   const next: Snapshot = {
     isDirty: dirty,

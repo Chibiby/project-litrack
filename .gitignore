@@ -56,3 +56,6 @@ e2e/.auth/
 # One-time district admin credentials CSV (scripts/create-district-admins.ts).
 # Hand each row to its person, then delete the file — never committed.
 .credentials/
+
+# Written by scripts/build-platform.mjs on every build
+public/litrack-version.json

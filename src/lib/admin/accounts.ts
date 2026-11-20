@@ -1,3 +1,4 @@
+import { parseTeacherFacets, teacherFacetWhere, type TeacherFacets } from "@/lib/teachers/teacher-filters";
 import "server-only";
 import type {
   GradeLevelType,
@@ -160,6 +161,8 @@ export type AccountsParams = {
    * matches either.
    */
   district?: string;
+  /** Advisory / teacher type / status filters; only ever set with role TEACHER. */
+  facets?: TeacherFacets;
   sort: AccountListSort;
 };
 
@@ -227,6 +230,9 @@ export function parseAccountsParams(
     section?: string;
     district?: string;
     sort?: string;
+    advisory?: string;
+    type?: string;
+    status?: string;
   },
   pageSize: number = ACCOUNTS_PAGE_SIZE
 ): AccountsParams {
@@ -242,6 +248,7 @@ export function parseAccountsParams(
     role === "TEACHER" && schoolId ? cleanFilterId(searchParams.section) : undefined;
   const district = cleanFilterText(searchParams.district);
   const sort = ACCOUNT_LIST_SORTS.parse(searchParams.sort);
+  const facets = role === "TEACHER" ? parseTeacherFacets(searchParams) : undefined;
   return {
     page,
     pageSize: size,
@@ -253,6 +260,7 @@ export function parseAccountsParams(
     grade,
     section,
     district,
+    ...(facets && (facets.advisory || facets.teacherType || facets.status) ? { facets } : {}),
     sort,
   };
 }
@@ -313,6 +321,7 @@ export function accountsWhere(params: {
   grade?: GradeLevelType;
   section?: string;
   district?: string;
+  facets?: TeacherFacets;
 }): Prisma.UserWhereInput {
   const and: Prisma.UserWhereInput[] = [
     { OR: [{ schoolId: null }, { school: { deletedAt: null } }] },
@@ -339,6 +348,7 @@ export function accountsWhere(params: {
     else if (params.role) and.push(viaSchool);
     else and.push({ OR: [viaSchool, viaAssignment] });
   }
+  if (params.facets) and.push(...teacherFacetWhere(params.facets));
   const q = params.q?.trim();
   if (q) {
     where.OR = [

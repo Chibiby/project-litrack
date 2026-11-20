@@ -95,13 +95,34 @@ describe("RouteError", () => {
       configurable: true,
     });
     try {
+      window.sessionStorage.clear();
       const { retry } = setup(make("ChunkLoadError", "Loading chunk 12 failed."));
       expect(screen.getByRole("heading", { name: "LITRACK was updated" })).not.toBeNull();
       expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-      fireEvent.click(screen.getByRole("button", { name: "Reload page" }));
+      // The newer version loads by itself once; the button stays as a fallback.
       expect(reload).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole("button", { name: "Reload page" }));
+      expect(reload).toHaveBeenCalledTimes(2);
       expect(retry).not.toHaveBeenCalled();
     } finally {
+      window.sessionStorage.clear();
+      Object.defineProperty(window, "location", { value: original, configurable: true });
+    }
+  });
+
+  it("does not reload by itself again within a minute, so a broken deploy cannot loop", () => {
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", {
+      value: { ...original, reload },
+      configurable: true,
+    });
+    try {
+      window.sessionStorage.setItem("litrack:update-reload-at", String(Date.now()));
+      setup(make("ChunkLoadError", "Loading chunk 12 failed."));
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      window.sessionStorage.clear();
       Object.defineProperty(window, "location", { value: original, configurable: true });
     }
   });

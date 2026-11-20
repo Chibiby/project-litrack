@@ -69,16 +69,31 @@ describe("advisory grade/section facet", () => {
 });
 
 describe("parseTeachersListParams", () => {
-  it("accepts each School Head teacher roster filter", () => {
-    for (const filter of [
-      "non-deped-aral-volunteer",
-      "teacher",
-      "floating",
-      "multi-advisory",
-      "with-advisory",
-    ]) {
+  it("accepts each teacher type and advisory kind", () => {
+    for (const filter of ["aral", "not-aral", "deped", "deped-aral", "volunteer", "not-answered"]) {
       expect(parseTeachersListParams({ filter }).filter).toBe(filter);
     }
+    for (const advisory of ["one", "multi", "floating", "with-section", "no-section"]) {
+      expect(parseTeachersListParams({ advisory }).advisory).toBe(advisory);
+    }
+  });
+
+  it("maps the old single-filter links onto the split filters", () => {
+    expect(parseTeachersListParams({ filter: "non-deped-aral-volunteer" })).toMatchObject({
+      filter: "volunteer",
+      advisory: "all",
+    });
+    expect(parseTeachersListParams({ filter: "teacher" }).filter).toBe("deped");
+    expect(parseTeachersListParams({ filter: "floating" })).toMatchObject({
+      filter: "all",
+      advisory: "no-section",
+    });
+    expect(parseTeachersListParams({ filter: "multi-advisory" }).advisory).toBe("multi");
+    expect(parseTeachersListParams({ filter: "with-advisory" }).advisory).toBe("with-section");
+  });
+
+  it("drops an unknown advisory kind", () => {
+    expect(parseTeachersListParams({ advisory: "bogus" }).advisory).toBe("all");
   });
 
   it("falls back to all for an unknown filter and preserves search paging", () => {

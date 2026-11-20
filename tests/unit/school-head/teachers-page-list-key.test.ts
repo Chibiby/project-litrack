@@ -45,6 +45,7 @@ describe("Teachers page — Suspense boundary key", () => {
       "page",
       "sort",
       "filter",
+      "advisory",
       "grade",
       "section",
     ]);

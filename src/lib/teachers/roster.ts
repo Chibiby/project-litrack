@@ -1,9 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prismaFresh } from "@/lib/prisma";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
-import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
 import { formatListingNameFromRecord } from "@/lib/names";
-import type { TeacherListFilter } from "@/lib/teachers/pagination";
 import type { ActiveTeacherRow } from "@/components/teachers-active-table";
 import type { TeacherTabCounts } from "@/components/school-head/workspace-tabs";
 
@@ -27,28 +25,6 @@ import type { TeacherTabCounts } from "@/components/school-head/workspace-tabs";
  */
 export function teacherRosterScope(schoolId: string): Prisma.UserWhereInput {
   return { schoolId, role: "TEACHER", deletedAt: null };
-}
-
-/**
- * The non-search filters on the active teacher roster. All relation predicates
- * include live rows only, so an archived section cannot make a teacher look
- * assigned or multi-advisory.
- */
-export function teacherRosterFilterWhere(
-  filter: Exclude<TeacherListFilter, "all" | "multi-advisory">
-): Prisma.UserWhereInput {
-  switch (filter) {
-    case "non-deped-aral-volunteer":
-      return {
-        teacherProfile: { is: { designation: ARAL_VOLUNTEER_DESIGNATION } },
-      };
-    case "teacher":
-      return { teacherProfile: { is: { designation: "Teacher" } } };
-    case "floating":
-      return { advisorySections: { none: { deletedAt: null } } };
-    case "with-advisory":
-      return { advisorySections: { some: { deletedAt: null } } };
-  }
 }
 
 /** IDs of teachers holding at least two live advisory sections in this school. */

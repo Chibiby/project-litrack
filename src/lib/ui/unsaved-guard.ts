@@ -22,6 +22,11 @@ export function registerUnsavedGuard(guard: UnsavedGuard): () => void {
   };
 }
 
+/** Whether the active grid holds typed input that is not saved. */
+export function hasUnsavedGridInput(): boolean {
+  return active?.isDirty() ?? false;
+}
+
 /** Runs `proceed` now when nothing is unsaved, otherwise after the teacher's answer. */
 export function runGuarded(proceed: () => void): void {
   if (active?.isDirty()) active.request(proceed);

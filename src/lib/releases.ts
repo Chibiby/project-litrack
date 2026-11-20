@@ -135,6 +135,20 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.77.0",
+    date: "2026-11-20",
+    title: "Updates arrive quietly, and new teacher filters",
+    announce: false,
+    fixes: [
+      "When LITRACK is updated, an open page now loads the new version by itself while you are away or not typing, so you no longer have to reload.",
+      "LITRACK never reloads a page that has unsaved changes on it.",
+      "Moving to another page after an update no longer shows an \"LITRACK was updated\" message.",
+      "The Teachers pages for the division, the district and the School Head can now be filtered by teacher type: ARAL tutors, not ARAL tutors, DepEd teachers, DepEd ARAL tutors, Non-DepEd ARAL volunteers, or designation not answered.",
+      "The same pages can be filtered by advisory: one advisory, multi-advisory, floating, has an advisory section, or no advisory section.",
+      "The division and district Teachers pages can also be filtered by account status, such as waiting for approval or profile not finished.",
+    ],
+  },
+  {
     version: "2.76.2",
     date: "2026-11-20",
     title: "Banner and card touch-ups on phones",
