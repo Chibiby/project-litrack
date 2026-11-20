@@ -16,6 +16,7 @@ import { deletedOrExpiredFilter } from "@/lib/learners/deleted-learners";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { DISTRICT_ROUTES } from "@/lib/routes/district";
 import { assertSchoolYearOpen } from "@/lib/school-year/gate";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Restore a learner who was soft-deleted 30 days after teacher removal.
@@ -30,7 +31,7 @@ import { assertSchoolYearOpen } from "@/lib/school-year/gate";
  * the same NOT_FOUND.
  */
 
-const RESTORE_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+const RESTORE_RATE = RATE_LIMITS.deletedLearnerRestore;
 
 export type RestoreDeletedLearnerResult = {
   ok: true;

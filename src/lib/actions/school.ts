@@ -28,10 +28,11 @@ import { action } from "@/lib/errors/action";
 import { AppError, fieldError, resourceNotFound, tooManyAttempts } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
 import { z } from "zod";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
-const REGEN_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
+const REGEN_RATE = RATE_LIMITS.schoolHeadCredentialRegen;
 
 /**
  * Super-admin only: creates a School + School Head auth user whose initial password

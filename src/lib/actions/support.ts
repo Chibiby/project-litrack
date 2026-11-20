@@ -29,6 +29,7 @@ import {
   revokeGrantSchema,
   submitTicketSchema,
 } from "@/lib/validators/support.schema";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Support tickets and the unlock grants that answer them.
@@ -75,7 +76,7 @@ export type MySupportTicket = {
 };
 
 /** Five tickets an hour per person: enough for a bad day, not enough to flood the queue. */
-const SUBMIT_LIMIT = { limit: 5, windowMs: 60 * 60 * 1000 };
+const SUBMIT_LIMIT = RATE_LIMITS.supportTicket;
 
 /** Roles that may raise a ticket. Super Admin answers them; it does not file them. */
 const REQUESTER_ROLES: UserRole[] = ["TEACHER", "SCHOOL_HEAD"];

@@ -15,6 +15,7 @@ import {
   sendChatMessageSchema,
 } from "@/lib/validators/chat.schema";
 import type { ChatChannelKind, Prisma } from "@prisma/client";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * School chat, and the private line to the admin team.
@@ -38,7 +39,7 @@ type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: st
 const PAGE_SIZE = 50;
 
 /** Per person, per minute. A chat box does not need more and a loop does. */
-const SEND_LIMIT = { limit: 30, windowMs: 60 * 1000 };
+const SEND_LIMIT = RATE_LIMITS.chat;
 
 export type ChatAuthor = {
   id: string;

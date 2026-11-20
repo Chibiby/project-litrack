@@ -300,7 +300,7 @@ describe("loginSchoolHead", () => {
     const res = await run(() => loginSchoolHead(headForm()));
 
     expect(res).toMatchObject({ ok: false, code: "AUTH_TOO_MANY_ATTEMPTS" });
-    expect(peekRateLimit).toHaveBeenCalledWith(IP_KEY, { limit: 20, windowMs: 15 * 60 * 1000 });
+    expect(peekRateLimit).toHaveBeenCalledWith(IP_KEY, expect.objectContaining({ limit: 20, windowMs: 15 * 60 * 1000 }));
     expect(findSignInSchoolHead).not.toHaveBeenCalled();
     expect(signInWithPassword).not.toHaveBeenCalled();
   });
@@ -317,7 +317,7 @@ describe("loginSchoolHead", () => {
 
     expect(res).toMatchObject({ ok: false, code: "AUTH_INCORRECT_PASSWORD" });
     expect(res.fieldErrors).toEqual({ password: res.error });
-    expect(checkRateLimit).toHaveBeenCalledWith(IP_KEY, { limit: 20, windowMs: 15 * 60 * 1000 });
+    expect(checkRateLimit).toHaveBeenCalledWith(IP_KEY, expect.objectContaining({ limit: 20, windowMs: 15 * 60 * 1000 }));
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "LOGIN_DENIED",
@@ -502,7 +502,7 @@ describe("loginTeacher", () => {
 
     expect(res).toMatchObject({ ok: false, code: "AUTH_INCORRECT_PASSWORD" });
     expect(res.fieldErrors).toEqual({ password: res.error });
-    expect(checkRateLimit).toHaveBeenCalledWith(IP_KEY, { limit: 20, windowMs: 15 * 60 * 1000 });
+    expect(checkRateLimit).toHaveBeenCalledWith(IP_KEY, expect.objectContaining({ limit: 20, windowMs: 15 * 60 * 1000 }));
     expect(writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "LOGIN_DENIED",

@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Database,
+  Gauge,
   FileBarChart,
   FileCheck2,
   FileText,
@@ -235,6 +236,7 @@ export function getNavGroups(
                   { id: "admin-errors", label: "Error Log", href: ADMIN_ROUTES.errors, icon: TriangleAlert },
                   { id: "admin-test-lab", label: "Page Test Lab", href: ADMIN_ROUTES.testLab, icon: FlaskConical },
                   { id: "admin-database", label: "Database Console", href: ADMIN_ROUTES.database, icon: Database },
+                  { id: "admin-rate-limits", label: "Rate Limits", href: ADMIN_ROUTES.rateLimits, icon: Gauge },
                 ],
               },
             ]

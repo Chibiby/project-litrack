@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { checkRateLimit, peekRateLimit } from "@/lib/rate-limit";
 import { tooManyAttempts } from "@/lib/errors/app-error";
 import { clientIpFrom } from "@/lib/request-ip";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Makes guessing which email addresses exist expensive, without making signing
@@ -23,7 +24,7 @@ import { clientIpFrom } from "@/lib/request-ip";
  * question being asked.
  */
 
-export const LOOKUP_FAILURE_RATE = { limit: 10, windowMs: 10 * 60 * 1000 } as const;
+export const LOOKUP_FAILURE_RATE = RATE_LIMITS.lookupFailure;
 
 async function lookupKey(): Promise<string> {
   return `login:lookup-miss:ip:${clientIpFrom(await headers())}`;

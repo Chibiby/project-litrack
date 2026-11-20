@@ -39,6 +39,7 @@ import {
   serializeAutoApproveWindow,
   validateAutoApproveWindow,
 } from "@/lib/teachers/auto-approve";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Super Admin database console.
@@ -66,8 +67,8 @@ import {
  */
 
 /** Deliberately tight. These are not operations anyone should run in a loop. */
-const DESTRUCTIVE_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
-const BACKUP_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
+const DESTRUCTIVE_RATE = RATE_LIMITS.databaseDestructive;
+const BACKUP_RATE = RATE_LIMITS.databaseBackup;
 
 /**
  * Completes "Couldn't {verb}: …" when a restore fails in the database. A failed

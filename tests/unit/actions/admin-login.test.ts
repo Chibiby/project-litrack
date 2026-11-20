@@ -624,10 +624,10 @@ describe("loginAdmin — per-address failure limit", () => {
     const result = await run(form("admin", "s3cret"));
 
     expect(result).toMatchObject({ ok: false, code: "AUTH_TOO_MANY_ATTEMPTS" });
-    expect(peekRateLimit).toHaveBeenCalledWith("login:admin-fail:ip:198.51.100.7", {
+    expect(peekRateLimit).toHaveBeenCalledWith("login:admin-fail:ip:198.51.100.7", expect.objectContaining({
       limit: 20,
       windowMs: 15 * 60 * 1000,
-    });
+    }));
     expect(userFindFirst).not.toHaveBeenCalled();
     expect(signInWithPassword).not.toHaveBeenCalled();
   });

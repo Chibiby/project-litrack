@@ -2,6 +2,7 @@ import "server-only";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { canonicalAppUrl } from "@/lib/app-url";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Email an admin when something on our side fails.
@@ -24,7 +25,7 @@ export type AlertEvent = {
   at: Date;
 };
 
-const ALERT_WINDOW = { limit: 1, windowMs: 15 * 60 * 1000 } as const;
+const ALERT_WINDOW = RATE_LIMITS.errorAlertEmail;
 
 let warnedOff = false;
 

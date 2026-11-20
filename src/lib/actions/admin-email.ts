@@ -8,6 +8,7 @@ import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { adminEmailSchema } from "@/lib/validators/admin-email.schema";
 import { AUDIT_ACTIONS, writeAudit } from "@/lib/audit";
 import type { ActionResult } from "@/lib/errors/result";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 type AdminEmailResult = { sent: number; failed: { email: string; error: string }[] };
 
@@ -28,7 +29,7 @@ export const sendAdminEmail = action(
     }
 
     for (let index = 0; index < parsed.data.recipients.length; index += 1) {
-      const limit = await checkRateLimit(`admin-email:${admin.id}`, { limit: 100, windowMs: 60 * 60 * 1000 });
+      const limit = await checkRateLimit(`admin-email:${admin.id}`, RATE_LIMITS.adminEmail);
       if (!limit.ok) throw tooManyAttempts(limit.retryAfterMs, "RATE_LIMITED");
     }
 

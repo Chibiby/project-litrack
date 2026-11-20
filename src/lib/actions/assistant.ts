@@ -11,6 +11,7 @@ import { buildSystemInstruction } from "@/lib/assistant/prompt";
 import { action } from "@/lib/errors/action";
 import { AppError } from "@/lib/errors/app-error";
 import { parseInput } from "@/lib/errors/validation";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * The assistant's answer. There is no other one.
@@ -69,7 +70,7 @@ const RATE_LIMITED =
  * calling a metered API is the failure this exists to bound, and no teacher
  * types twenty genuine questions in an hour.
  */
-const RATE_LIMIT = { limit: 20, windowMs: 60 * 60 * 1000 };
+const RATE_LIMIT = RATE_LIMITS.assistant;
 
 /** How many links an answer carries. The panel has room for a couple. */
 const MAX_LINKS = 2;

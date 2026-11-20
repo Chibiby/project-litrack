@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { isAuthConfigured } from "@/lib/auth/better-auth";
 import { AppError, resourceNotFound } from "@/lib/errors/app-error";
 import { isDemoVisible } from "@/lib/demo/session";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /** Pre-flight checks shared by the server-side and browser-side sign-in halves. */
 
-export const LOGIN_RATE = { limit: 10, windowMs: 5 * 60 * 1000 } as const;
+export const LOGIN_RATE = RATE_LIMITS.login;
 
 /** Admin detail only; the variable names never reach the person. */
 export const AUTH_NOT_CONFIGURED_MESSAGE =

@@ -75,6 +75,7 @@ import {
   isPendingTeacherAtSchool,
   registerConflictCode,
 } from "@/lib/auth/teacher-registration-helpers";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Test Lab dry-run result shape for the four self-bound account saves. Never
@@ -87,18 +88,18 @@ type DryRunResult<TPreview> = { ok: true; data: { dryRun: true; preview: TPrevie
 export type PasswordDryRunPreview = { validated: true; changed: false };
 export type EmailDryRunPreview = { validated: true; changed: false; newEmail: string };
 
-const REGISTER_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
-const RECOVERY_RATE = { limit: 5, windowMs: 15 * 60 * 1000 } as const;
-const PASSWORD_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
-const EMAIL_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
+const REGISTER_RATE = RATE_LIMITS.register;
+const RECOVERY_RATE = RATE_LIMITS.passwordRecovery;
+const PASSWORD_RATE = RATE_LIMITS.password;
+const EMAIL_RATE = RATE_LIMITS.emailChange;
 // Failed admin sign-ins per client address: 20 per 15 minutes. Generous enough
 // for a school network behind one NAT, far below a credential-stuffing run.
-const ADMIN_FAILED_IP_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+const ADMIN_FAILED_IP_RATE = RATE_LIMITS.adminFailedSignIn;
 // Failed School Head and teacher sign-ins per client address, shared by both
 // forms: the same 20 per 15 minutes as the admin console. Sign-in now verifies
 // the password in-app, so this is the per-address backstop the hosted
 // provider's limiter used to be.
-const SCHOOL_FAILED_IP_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+const SCHOOL_FAILED_IP_RATE = RATE_LIMITS.schoolFailedSignIn;
 // A failed admin sign-in is never answered sooner than this after it began.
 const ADMIN_FAILURE_MIN_MS = 800;
 // Only one reset link is live per account (issuing one kills the older ones);

@@ -26,6 +26,7 @@ import {
   revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
 import { assertSchoolYearOpen } from "@/lib/school-year/gate";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * The four `/admin/archive` actions — restore or permanently delete one
@@ -47,7 +48,7 @@ import { assertSchoolYearOpen } from "@/lib/school-year/gate";
  */
 
 /** Matches `REMOVE_RATE` in `admin-school.ts` — deliberate work, not a hammer. */
-const ARCHIVE_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+const ARCHIVE_RATE = RATE_LIMITS.archive;
 
 async function rateLimitOrThrow(key: string): Promise<void> {
   const rate = await checkRateLimit(key, ARCHIVE_RATE);

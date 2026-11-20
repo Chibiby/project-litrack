@@ -307,7 +307,7 @@ describe("exportSummary scope (T9)", () => {
     const res = await exportSummary({ facet: "learners", format: "EXCEL" });
 
     expect(res).toMatchObject({ ok: false, code: "RATE_LIMITED" });
-    expect(checkRateLimit).toHaveBeenCalledWith("summary-export:da-1", { limit: 20, windowMs: 600_000 });
+    expect(checkRateLimit).toHaveBeenCalledWith("summary-export:da-1", expect.objectContaining({ limit: 20, windowMs: 600_000 }));
     expectNothingRead();
   });
 

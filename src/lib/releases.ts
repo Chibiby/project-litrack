@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.75.0",
+    date: "2026-11-20",
+    title: "Rate limits page for developers",
+    announce: false,
+    fixes: [
+      "Developer Controls has a new Rate Limits page. It lists every limit on repeated attempts, starting with the ones shared by everyone on the same network.",
+      "The page can pause every rate limit while a large group signs up from one network, and turn them back on, without a new release.",
+    ],
+  },
+  {
     version: "2.74.2",
     date: "2026-11-19",
     title: "Sign-in protection is back on",

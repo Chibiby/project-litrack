@@ -48,6 +48,7 @@ export const ADMIN_ROUTES = {
   errors: "/admin/errors",
   testLab: "/admin/test-lab",
   database: "/admin/database",
+  rateLimits: "/admin/rate-limits",
   adminAccounts: "/admin/admin-accounts",
 
   // Account pages — unchanged paths.

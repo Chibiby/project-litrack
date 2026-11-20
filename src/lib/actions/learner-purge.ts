@@ -16,11 +16,12 @@ import { normalizePersonName } from "@/lib/learners/normalize";
 import { teacherCanAccessLearner, teacherLearnerScope } from "@/lib/teachers/scope";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
 import { revalidateLearnerScoped } from "@/lib/cache/revalidate";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 type ActionResult = { ok: true };
 
 /** Same budget as the Developer Admin purge: deliberate work, not a hammer. */
-const PURGE_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+const PURGE_RATE = RATE_LIMITS.learnerPurge;
 
 const purgeArchivedLearnerSchema = z.object({
   id: z.string().uuid("Learner id required"),

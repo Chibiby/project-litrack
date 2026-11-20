@@ -5,13 +5,14 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { clientIpFrom } from "@/lib/request-ip";
 import { route } from "@/lib/errors/route";
 import { tooManyAttempts } from "@/lib/errors/app-error";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 // Must stay dynamic: prerendering this at build time requires a reachable
 // database, which is not guaranteed in the Vercel build environment.
 export const dynamic = "force-dynamic";
 
 /** Soft abuse protection for unauthenticated school enumeration (id + name only). */
-const PUBLIC_LIST_RATE = { limit: 60, windowMs: 60_000 };
+const PUBLIC_LIST_RATE = RATE_LIMITS.schoolsList;
 
 export const GET = route("GET /api/schools/list", async () => {
   const ip = clientIpFrom(await headers());

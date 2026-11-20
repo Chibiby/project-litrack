@@ -1,3 +1,4 @@
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 /**
  * Constants shared by every avatar module and by the upload/removal actions
  * that sit on top of them (`src/lib/actions/avatar.ts`).
@@ -40,7 +41,4 @@ export const AVATAR_THUMB_MAX_DIMENSION = 256;
 export const AVATAR_CACHE_CONTROL_SECONDS = 86400;
 
 /** At most 10 uploads per hour per user — shape matches `RateLimitOptions`. */
-export const AVATAR_UPLOAD_RATE_LIMIT = {
-  limit: 10,
-  windowMs: 60 * 60 * 1000,
-} as const;
+export const AVATAR_UPLOAD_RATE_LIMIT = RATE_LIMITS.avatarUpload;

@@ -286,10 +286,10 @@ describe("submitTicket", () => {
   it("rate limits per person, five an hour", async () => {
     await submitTicket(unlockRequest());
 
-    expect(checkRateLimit).toHaveBeenCalledWith("support-ticket:teacher-1", {
+    expect(checkRateLimit).toHaveBeenCalledWith("support-ticket:teacher-1", expect.objectContaining({
       limit: 5,
       windowMs: 60 * 60 * 1000,
-    });
+    }));
   });
 
   it("notifies every active admin, one row each", async () => {

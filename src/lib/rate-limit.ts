@@ -20,6 +20,8 @@
 
 import { upstashCommand, upstashPipeline } from "@/lib/cache/upstash";
 import { d1Check, d1Peek } from "@/lib/rate-limit-d1";
+import { prisma } from "@/lib/prisma";
+import { RATE_LIMITS_PAUSED_KEY } from "@/lib/rate-limits/catalog";
 
 type WindowEntry = {
   timestamps: number[];
@@ -28,21 +30,55 @@ type WindowEntry = {
 const store = new Map<string, WindowEntry>();
 
 /**
- * TEMPORARY (owner request, 2026-11-19): every rate limit is paused so a large
- * group can create accounts from one shared network at once. While this is
- * true, checkRateLimit and peekRateLimit allow every attempt and record none.
- * That includes the sign-in limits, so password guessing is not slowed down.
- * Set it back to false to restore every limit.
+ * Code-level pause: when true, every rate limit allows every attempt. Kept as a
+ * last resort for when the database is down and the setting below cannot be
+ * changed. The normal way to pause is the switch on Developer Controls ->
+ * Rate limits, which writes `RATE_LIMITS_PAUSED_KEY`.
  *
- * Tests keep the real limiter (NODE_ENV is "test" under Vitest), so the
- * limit behaviour stays covered while the pause is on.
+ * While paused, checkRateLimit and peekRateLimit allow every attempt and record
+ * none. That includes the sign-in limits, so password guessing is not slowed.
+ *
+ * Tests keep the real limiter (NODE_ENV is "test" under Vitest), so the limit
+ * behaviour stays covered either way.
  */
 export const RATE_LIMITS_PAUSED = false;
 
 const ALLOWED: RateLimitResult = { ok: true, retryAfterMs: 0 };
 
-function rateLimitsPaused(): boolean {
-  return RATE_LIMITS_PAUSED && process.env.NODE_ENV !== "test";
+/**
+ * How long one isolate trusts its last read of the pause switch. Flipping the
+ * switch reaches every isolate within this time, and a burst of sign-ins costs
+ * one settings read per isolate instead of one per attempt.
+ */
+const PAUSE_CACHE_MS = 10_000;
+let pauseCache: { value: boolean; at: number } | null = null;
+
+/** Forget the cached switch, so the next check reads it again. */
+export function forgetRateLimitPause(): void {
+  pauseCache = null;
+}
+
+async function rateLimitsPaused(): Promise<boolean> {
+  if (process.env.NODE_ENV === "test") return false;
+  if (RATE_LIMITS_PAUSED) return true;
+  const now = Date.now();
+  if (pauseCache && now - pauseCache.at < PAUSE_CACHE_MS) return pauseCache.value;
+  let value = false;
+  try {
+    // Read directly, not through system-settings: that module reports errors,
+    // and error reporting rate-limits its alert emails through this file.
+    const row = await prisma.systemSetting.findUnique({
+      where: { key: RATE_LIMITS_PAUSED_KEY },
+      select: { value: true },
+    });
+    value = row?.value === "true";
+  } catch (err) {
+    // A failed read keeps the limits ON: a database hiccup must never switch
+    // off sign-in protection.
+    console.error("[rate-limit] pause switch read failed:", err);
+  }
+  pauseCache = { value, at: now };
+  return value;
 }
 
 export type RateLimitOptions = {
@@ -149,7 +185,7 @@ export async function checkRateLimit(
   key: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
-  if (rateLimitsPaused()) return { ...ALLOWED };
+  if (await rateLimitsPaused()) return { ...ALLOWED };
   const now = Date.now();
 
   const shared = (await redisCheck(key, options, now)) ?? (await d1Check(key, options, now));
@@ -171,7 +207,7 @@ export async function peekRateLimit(
   key: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
-  if (rateLimitsPaused()) return { ...ALLOWED };
+  if (await rateLimitsPaused()) return { ...ALLOWED };
   const now = Date.now();
 
   const shared = (await redisPeek(key, options, now)) ?? (await d1Peek(key, options, now));

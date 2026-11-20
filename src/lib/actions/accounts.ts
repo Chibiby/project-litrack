@@ -45,6 +45,7 @@ import {
 import { assertTestableSchool, impersonationReturnPath } from "@/lib/auth/test-lab";
 import { DEMO_DISTRICT_NAME } from "@/lib/demo/constants";
 import type { AccountSignIn } from "@/lib/admin/accounts";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Super Admin accounts console (`/admin/accounts`).
@@ -86,14 +87,14 @@ import type { AccountSignIn } from "@/lib/admin/accounts";
 
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
-const RESET_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
-const IMPERSONATE_RATE = { limit: 10, windowMs: 15 * 60 * 1000 } as const;
+const RESET_RATE = RATE_LIMITS.accountReset;
+const IMPERSONATE_RATE = RATE_LIMITS.impersonate;
 /**
  * Deliberately tighter than a page of rows. Reading personal credentials is a
  * one-at-a-time, someone-called-for-help activity; a script walking all 333
  * schools to harvest passwords is not, and this is what stops it being cheap.
  */
-const REVEAL_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+const REVEAL_RATE = RATE_LIMITS.revealPassword;
 
 /**
  * Who `impersonateUser` may sign the Super Admin in as. Deliberately an

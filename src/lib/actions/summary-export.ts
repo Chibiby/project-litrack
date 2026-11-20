@@ -18,9 +18,10 @@ import { SUMMARY_FACETS } from "@/lib/summary/facets";
 import { resolveScopeSchools } from "@/lib/summary/scope-schools";
 import { frameForScope } from "@/lib/summary/export";
 import { complianceFlagSlug, filterComplianceResultForExport } from "@/lib/summary/shape/compliance";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /** Deliberate work, not a hammer: 20 exports per 10 minutes per admin (spec 3.6). */
-const EXPORT_RATE = { limit: 20, windowMs: 10 * 60 * 1000 } as const;
+const EXPORT_RATE = RATE_LIMITS.summaryExport;
 
 export type SummaryExportResult = { base64: string; filename: string };
 

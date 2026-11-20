@@ -17,6 +17,7 @@ import {
   revalidateSchoolsList,
   revalidateTeacherCaches,
 } from "@/lib/cache/revalidate";
+import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
 
 /**
  * Per-row removals from the Super Admin school page.
@@ -42,7 +43,7 @@ import {
 type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
 /** Bulk removal is deliberate work, not something to hammer. */
-const REMOVE_RATE = { limit: 20, windowMs: 15 * 60 * 1000 } as const;
+const REMOVE_RATE = RATE_LIMITS.removeFromSchool;
 
 /** One page of learners is 50, so a select-all submits at most that many. */
 const MAX_IDS = 200;
