@@ -218,9 +218,10 @@ export function StatCard({
           <p
             className={cn(
               "min-w-0 break-words pr-3 font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl @[14rem]/stat:pr-0",
-              // A word value ("Not chosen", "None selected") would break mid-word
-              // in the slot beside the icon; it takes its own full-width row.
-              typeof value === "string" && value.length > 7 && "col-span-full",
+              // A long value (a word such as "Not chosen", or a six-digit count)
+              // would break mid-word in the slot beside the icon; it takes its
+              // own full-width row.
+              String(value).length > 5 && "col-span-full",
               denseOnPhone ? "text-xl" : "text-2xl",
               valueClassName
             )}

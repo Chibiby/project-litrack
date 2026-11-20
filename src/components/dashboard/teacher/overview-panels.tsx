@@ -111,7 +111,7 @@ function PanelShell({
           <Icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="line-clamp-2 break-words text-sm font-semibold tracking-tight text-foreground sm:text-base">
+          <h2 className="line-clamp-3 break-words text-sm font-semibold sm:line-clamp-2 tracking-tight text-foreground sm:text-base">
             {title}
           </h2>
           <p className="line-clamp-2 text-xs text-muted-foreground sm:text-sm" title={subtitle}>

@@ -115,7 +115,7 @@ export function SchoolHeadGreetingHero({
           {resolvedSubtitle}
         </p>
         {meta ? (
-          <p className="mt-2 inline-flex w-fit items-center gap-2 rounded-md border border-border/80 bg-card/90 px-3 py-1.5 text-xs font-medium text-foreground sm:text-sm">
+          <p className="mt-2 inline-flex w-fit items-center max-[439px]:max-w-[62%] gap-2 rounded-md border border-border/80 bg-card/90 px-3 py-1.5 text-xs font-medium text-foreground sm:text-sm">
             <CalendarRange aria-hidden className="size-3.5 shrink-0 text-muted-foreground sm:size-4" />
             {meta}
           </p>

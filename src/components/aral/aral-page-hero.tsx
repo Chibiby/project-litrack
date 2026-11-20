@@ -36,7 +36,7 @@ export function AralPageHero({
             {eyebrow}
           </p>
         )}
-        <h1 className="mt-1.5 max-w-[56%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
+        <h1 className="mt-1.5 max-w-[52%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[55%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
           {title}
         </h1>
         <p className="mt-1 max-w-[52%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">

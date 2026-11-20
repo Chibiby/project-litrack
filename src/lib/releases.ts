@@ -135,6 +135,18 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.76.2",
+    date: "2026-11-20",
+    title: "Banner and card touch-ups on phones",
+    announce: false,
+    fixes: [
+      "On phones, banner titles such as \"Division Summary\" no longer run into the picture.",
+      "Large counts, such as a six-digit learner total, no longer split across two lines on dashboard cards.",
+      "The school count line on the greeting banner wraps beside the picture instead of covering it.",
+      "The Reading Level panel title on the teacher dashboard shows in full on phones.",
+    ],
+  },
+  {
     version: "2.76.1",
     date: "2026-11-20",
     title: "Fewer failed saves",
