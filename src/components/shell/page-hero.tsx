@@ -40,6 +40,7 @@ export function PageHero({
   className,
   contentClassName,
   topRight,
+  topRightInlineOnPhone = false,
   children,
 }: {
   bannerSrc: string;
@@ -58,6 +59,12 @@ export function PageHero({
    * narrowest phones so it never overlaps the title.
    */
   topRight?: React.ReactNode;
+  /**
+   * Phones only: put `topRight` under the text instead of over the art, where
+   * it would cover a character's face. Needs a hero whose height follows its
+   * content (`h-auto`), or the control can fall outside the band.
+   */
+  topRightInlineOnPhone?: boolean;
   children: React.ReactNode;
 }) {
   const art = (
@@ -113,8 +120,18 @@ export function PageHero({
         {children}
       </div>
       {topRight ? (
-        <div className="absolute right-3 top-3 z-20 sm:right-4 sm:top-4 lg:right-6 lg:top-6">
-          <div className="rounded-lg border border-border/70 bg-card/90 p-1 shadow-card backdrop-blur-md">
+        <div
+          className={cn(
+            "absolute right-3 top-3 z-20 sm:right-4 sm:top-4 lg:right-6 lg:top-6",
+            topRightInlineOnPhone && "max-sm:static max-sm:z-10 max-sm:-mt-1 max-sm:px-4 max-sm:pb-4"
+          )}
+        >
+          <div
+            className={cn(
+              "rounded-lg border border-border/70 bg-card/90 p-1 shadow-card backdrop-blur-md",
+              topRightInlineOnPhone && "max-sm:w-fit"
+            )}
+          >
             {topRight}
           </div>
         </div>

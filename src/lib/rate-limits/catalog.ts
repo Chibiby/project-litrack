@@ -286,3 +286,9 @@ export function formatRateWindow(windowMs: number): string {
   const m = Math.round(windowMs / MINUTE);
   return `${m} minute${m === 1 ? "" : "s"}`;
 }
+
+/** "5 min", "1 hr": the phone row's value slot has room for little else. */
+export function formatRateWindowShort(windowMs: number): string {
+  if (windowMs % HOUR === 0) return `${windowMs / HOUR} hr`;
+  return `${Math.round(windowMs / MINUTE)} min`;
+}

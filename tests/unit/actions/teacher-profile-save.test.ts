@@ -438,6 +438,18 @@ describe("saveTeacherProfile", () => {
     });
   });
 
+  it("answers a section another teacher already advises with the section-taken message", async () => {
+    // `setTeacherAdvisory` finds the adviser itself and throws SectionTakenError
+    // before any unique index is reached. It used to escape as INTERNAL_ERROR.
+    const section = sections.find((s) => s.id === SECTION_ID);
+    if (section) section.adviserId = "someone-else";
+
+    await expect(saveTeacherProfile(buildFormData())).resolves.toEqual({
+      ok: false,
+      error: "That section already has an adviser.",
+    });
+  });
+
   it("does not label an unrelated unique violation as a section conflict", async () => {
     // A P2002 on some other unique column must not tell the teacher their
     // section was taken — and must not echo the raw database text either.

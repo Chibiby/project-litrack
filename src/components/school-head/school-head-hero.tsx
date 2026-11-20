@@ -64,13 +64,14 @@ export function SchoolHeadHero({
       bannerSrc={bannerSrc}
       className="h-auto"
       topRight={topRight}
+      topRightInlineOnPhone
       // Phones: a top-right control (the Schools "+") would sit on the
       // girl's face, so the art is drawn smaller and further left, under it.
       artClassName={cn(
         "sm:right-[min(0px,calc(50%-375px))] lg:right-[min(0px,calc(100%-1291px))]",
-        topRight
-          ? "max-sm:!h-[112px] max-sm:right-[-38px]"
-          : "max-sm:!h-[140px] max-sm:right-[-112px]",
+        // Phones: the corner control moves under the text (see
+        // `topRightInlineOnPhone`), so the art keeps its full size either way.
+        "max-sm:!h-[140px] max-sm:right-[-112px]",
         // Stat tiles make the band tall; below lg the art keeps the height it
         // has without them instead of scaling up behind the title.
         stats && "sm:max-lg:!h-[10.5rem]"
@@ -93,21 +94,23 @@ export function SchoolHeadHero({
       headClassName={stats ? "hidden" : "max-lg:hidden"}
       contentClassName="justify-start gap-0 px-4 py-4 sm:px-5 sm:py-6 lg:min-h-[17rem] lg:justify-center lg:px-8"
     >
-      <div className="relative z-10">
+      {/* Phones: with stat tiles below, the text block is at least as tall as
+          the art pinned beside it, so no tile lands on the characters. */}
+      <div className={cn("relative z-10", stats && "max-sm:min-h-[7.5rem]")}>
         {eyebrowRepeatsTitle(eyebrow, title) ? null : (
           <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 sm:gap-2 sm:text-sm lg:text-base">
             <EyebrowIcon className="size-3.5 shrink-0 sm:size-4 lg:size-5" aria-hidden />
             {eyebrow}
           </p>
         )}
-        <h1 className="mt-1.5 max-w-[60%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[48%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
+        <h1 className="mt-1.5 max-w-[56%] text-balance text-[1.1875rem] font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:mt-2 sm:max-w-[48%] sm:text-3xl lg:max-w-[46%] lg:text-4xl">
           {title}
         </h1>
-        <p className="mt-1 max-w-[50%] text-xs leading-snug max-sm:line-clamp-2 text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
+        <p className="mt-1 max-w-[52%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%] lg:text-lg">
           {subtitle}
         </p>
         {meta ? (
-          <p className="mt-0.5 max-w-[50%] text-xs leading-snug max-sm:hidden text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%]">
+          <p className="mt-0.5 max-w-[52%] text-xs leading-snug text-slate-600 dark:text-slate-300 sm:max-w-[48%] sm:text-sm lg:max-w-[46%]">
             {meta}
           </p>
         ) : null}

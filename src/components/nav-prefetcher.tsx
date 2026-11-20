@@ -14,6 +14,20 @@ import { useRouter } from "next/navigation";
 const warmedAt = new Map<string, number>();
 
 /**
+ * Last warm per href, across every cacheKey. Two batches that share a route
+ * (the shell warm and a nested page's warm) used to fetch it twice in the
+ * same second; now the second one skips it.
+ */
+const hrefWarmedAt = new Map<string, number>();
+
+function hrefDue(href: string): boolean {
+  // The page already on screen needs no warm: its payload is what just loaded.
+  if (typeof window !== "undefined" && window.location.pathname === href) return false;
+  const at = hrefWarmedAt.get(href);
+  return at === undefined || Date.now() - at >= WARM_TTL_MS;
+}
+
+/**
  * Re-warm slightly before `experimental.staleTimes.static` (600s in next.config)
  * so idle prefetch replenishes Flight data before navigations go cold.
  */
@@ -64,6 +78,8 @@ export function invalidateNavWarm(cacheKey?: string): void {
   } else {
     warmedAt.clear();
   }
+  // A write wiped the router cache, so every route is cold again.
+  hrefWarmedAt.clear();
   if (typeof window !== "undefined") {
     window.dispatchEvent(
       new CustomEvent(INVALIDATE_EVENT, { detail: { cacheKey } })
@@ -107,6 +123,8 @@ export function NavPrefetcher({ cacheKey, hrefs }: NavPrefetcherProps) {
         const worker = async () => {
           while (!cancelled && cursor < routes.length) {
             const href = routes[cursor++];
+            if (!hrefDue(href)) continue;
+            hrefWarmedAt.set(href, Date.now());
             try {
               router.prefetch(href, PREFETCH_FULL);
             } catch {

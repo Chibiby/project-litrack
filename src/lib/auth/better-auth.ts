@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
@@ -130,10 +131,21 @@ export type LitrackAuth = ReturnType<typeof createAuth>;
 let instance: LitrackAuth | null = null;
 
 /**
+ * Cloudflare: one instance per request. Better Auth builds its context once
+ * per instance, as a promise. workerd ties a promise to the request that
+ * created it, so an isolate-wide instance whose first request ended early (a
+ * cancelled prefetch) left that promise pending, and every later getSession
+ * in the isolate failed with "This promise was created by a request that has
+ * since ended". React's request cache scopes the instance to one request;
+ * outside a React render it gives no reuse, which is still correct.
+ */
+const getCloudflareAuth = cache((secret: string) => createAuth(secret));
+
+/**
  * The instance, built on first call and never at import (the same reason as
  * `@/lib/prisma`: env and Cloudflare bindings are only readable inside a
- * request). `prismaFresh` is a lazy proxy, so one instance safely serves every
- * request — each query resolves the current request's client.
+ * request). Off Cloudflare one instance serves the process; on Cloudflare one
+ * per request (see `getCloudflareAuth`).
  *
  * Throws `CONFIG_MISSING` (variable name only) when the secret is absent.
  */
@@ -146,6 +158,7 @@ export function getAuth(): LitrackAuth {
       context: { reason: "auth_secret_missing" },
     });
   }
+  if (process.env.LITRACK_DEPLOY_TARGET === "cloudflare") return getCloudflareAuth(secret);
   instance = createAuth(secret);
   return instance;
 }

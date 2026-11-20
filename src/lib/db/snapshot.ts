@@ -282,7 +282,7 @@ export async function backUpDatabase(
   const total = await countAllRows();
   if (total > MAX_SNAPSHOT_ROWS) {
     throw new Error(
-      `Refusing to snapshot ${total.toLocaleString()} rows — over the ${MAX_SNAPSHOT_ROWS.toLocaleString()} row ceiling this in-app backup is designed for. Use Supabase's own backups for a database this size.`
+      `Refusing to snapshot ${total.toLocaleString()} rows — over the ${MAX_SNAPSHOT_ROWS.toLocaleString()} row ceiling this in-app backup is designed for. Use Neon's scheduled snapshots for a database this size.`
     );
   }
 

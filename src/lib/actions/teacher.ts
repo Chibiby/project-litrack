@@ -213,7 +213,10 @@ export const saveTeacherProfile = action("saveTeacherProfile", async (formData: 
     if (err instanceof AdvisoryCapError) {
       return { ok: false, error: err.message };
     }
-    if (isAdvisorySectionConflict(err)) {
+    // A section another teacher claimed while this one filled in the wizard.
+    // `setTeacherAdvisory` throws SectionTakenError when it sees the adviser
+    // itself, and P2002 when the race reaches the unique index.
+    if (err instanceof SectionTakenError || isAdvisorySectionConflict(err)) {
       return { ok: false, error: SECTION_TAKEN_ERROR };
     }
     if (

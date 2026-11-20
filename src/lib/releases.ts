@@ -135,6 +135,23 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.76.0",
+    date: "2026-11-20",
+    title: "Smoother pages on phones",
+    announce: true,
+    fixes: [
+      "Pages no longer fail to load with a \"something went wrong\" error after a slow or cancelled page change.",
+      "Saving your profile with a section another teacher already advises now says so, instead of showing a general error.",
+      "On phones, page banners show their full title and description beside the picture, without covering it.",
+      "The School Head greeting banner on phones no longer shows a white box over the picture.",
+      "The welcome animation plays once when you sign in, not again each time you reload.",
+      "Summary cards on phones keep their numbers and labels readable in narrow spaces.",
+      "Switches and list rows are easier to tap on phones.",
+      "The admin Audit Log and Error Log are easier to read on phones, and the Audit Log now loads in pages.",
+      "The app loads fewer pages in the background, so phones on slow data stay quicker.",
+    ],
+  },
+  {
     version: "2.75.0",
     date: "2026-11-20",
     title: "Rate limits page for developers",

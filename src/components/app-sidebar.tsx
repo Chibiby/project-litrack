@@ -527,7 +527,7 @@ export function AppSidebar({
           <Button
             variant="ghost"
             size="icon"
-            className="fixed left-4 top-[calc(var(--app-chrome-header-height)/2)] z-50 -translate-y-1/2 lg:hidden"
+            className="fixed left-4 top-[calc(var(--impersonation-banner-height,0px)+var(--app-chrome-header-height)/2)] z-50 -translate-y-1/2 lg:hidden"
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />

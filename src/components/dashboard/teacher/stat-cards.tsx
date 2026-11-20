@@ -189,45 +189,60 @@ export function StatCard({
           the full width instead of breaking mid-word. From 14rem (measured inside
           the padding, so a 17rem STAT_GRID card qualifies) the icon
           moves beside the text as a square tile; from 18rem it is full size. */}
-      <div className="relative flex flex-col items-start gap-2 @[14rem]/stat:flex-row @[14rem]/stat:items-center @[14rem]/stat:gap-4">
+      {/* Narrow card (phone, two-up): a small icon sits beside the figure and
+          the title and hint run the card's full width underneath, so a row of
+          cards takes about half the height it did with the icon stacked on
+          top. The text block is `display: contents` there, so its three lines
+          are grid items of their own. */}
+      <div
+        className={cn(
+          "relative grid items-center gap-x-2 gap-y-0.5 @[14rem]/stat:flex @[14rem]/stat:flex-row @[14rem]/stat:items-center @[14rem]/stat:gap-4",
+          Icon ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-1"
+        )}
+      >
         {Icon ? (
           <span
             aria-hidden
             className={cn(
-              "flex size-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-base group-hover:scale-105 motion-reduce:group-hover:scale-100",
+              "flex size-8 shrink-0 items-center justify-center rounded-md transition-transform duration-base group-hover:scale-105 motion-reduce:group-hover:scale-100 @[14rem]/stat:rounded-lg",
               denseOnPhone ? "@[14rem]/stat:size-[3.75rem]" : "@[14rem]/stat:size-[4.25rem]",
               "@[18rem]/stat:size-20",
               TILE_GLASS,
               TILE[tone]
             )}
           >
-            <Icon className="size-5 @[14rem]/stat:size-7 @[18rem]/stat:size-8" />
+            <Icon className="size-4 @[14rem]/stat:size-7 @[18rem]/stat:size-8" />
           </span>
         ) : null}
-        <div className="w-full min-w-0 flex-1 pr-3">
+        <div className="contents @[14rem]/stat:block @[14rem]/stat:w-full @[14rem]/stat:min-w-0 @[14rem]/stat:flex-1 @[14rem]/stat:pr-3">
           <p
             className={cn(
-              "break-words font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl",
+              "min-w-0 break-words pr-3 font-extrabold tabular-nums tracking-tight text-foreground sm:text-3xl @[14rem]/stat:pr-0",
+              // A word value ("Not chosen", "None selected") would break mid-word
+              // in the slot beside the icon; it takes its own full-width row.
+              typeof value === "string" && value.length > 7 && "col-span-full",
               denseOnPhone ? "text-xl" : "text-2xl",
               valueClassName
             )}
           >
             {value}
           </p>
-          {/* One line only, like the hint: a long title ends in "…" (the full
-              text stays in the tooltip) so every card in a row keeps the same
-              height. */}
+          {/* Up to two lines, then "…" (the full text stays in the tooltip):
+              one line cut most titles and hints short on a phone. A grid row
+              stretches its cards, so a row still lines up. */}
           <h2
             title={title}
             className={cn(
-              "truncate font-semibold text-foreground sm:text-base",
+              "col-span-full line-clamp-2 font-semibold text-foreground sm:text-base",
               denseOnPhone ? "text-xs" : "text-sm"
             )}
           >
             {title}
           </h2>
-          {/* One line only: an overflowing hint ends in "…". */}
-          <p className="truncate text-xs text-muted-foreground sm:text-sm">
+          <p
+            title={typeof hint === "string" ? hint : undefined}
+            className="col-span-full line-clamp-2 text-xs text-muted-foreground sm:text-sm"
+          >
             {hint}
           </p>
         </div>
@@ -257,7 +272,9 @@ export function StatCard({
       {target ? (
         <PrefetchLink
           href={target}
-          prefetch
+          // No viewport prefetch: a dashboard shows four to eight cards, and a
+          // full prefetch of each one ran every target page on the server at
+          // every load. PrefetchLink still warms the card a finger is on.
           aria-label={action?.label ?? title}
           data-stat-link=""
           className="absolute inset-0 z-10 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

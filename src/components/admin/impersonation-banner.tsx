@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
@@ -32,6 +32,24 @@ export function ImpersonationBanner({
   testLab?: TestLabBannerInfo | null;
 }) {
   const [pending, startTransition] = useTransition();
+  const barRef = useRef<HTMLDivElement>(null);
+
+  // The app header and the phone menu button sit below this bar, so they
+  // need its height, which changes as the copy wraps.
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const root = document.documentElement;
+    const publish = () =>
+      root.style.setProperty("--impersonation-banner-height", `${bar.offsetHeight}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--impersonation-banner-height");
+    };
+  }, []);
 
   function backToAdmin() {
     startTransition(async () => {
@@ -43,7 +61,7 @@ export function ImpersonationBanner({
   }
 
   return (
-    <div className="sticky top-0 z-50 border-b border-warning-300 bg-warning-100 text-warning-950 dark:border-warning-500/40 dark:bg-warning-950/60 dark:text-warning-100">
+    <div ref={barRef} className="sticky top-0 z-50 border-b border-warning-300 bg-warning-100 text-warning-950 dark:border-warning-500/40 dark:bg-warning-950/60 dark:text-warning-100">
       <div className="mx-auto flex flex-wrap items-center justify-between gap-2 px-4 py-2">
         <p className="flex items-center gap-2 text-sm">
           {testLab ? (

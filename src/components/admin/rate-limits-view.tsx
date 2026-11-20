@@ -22,6 +22,7 @@ import {
   RATE_LIMIT_SCOPE_LABELS,
   RATE_LIMIT_SCOPE_ORDER,
   formatRateWindow,
+  formatRateWindowShort,
   type RateLimitScope,
 } from "@/lib/rate-limits/catalog";
 
@@ -37,6 +38,11 @@ export type RateLimitRow = {
 
 function allowance(row: RateLimitRow): string {
   return `${row.limit} per ${formatRateWindow(row.windowMs)}`;
+}
+
+/** Phone value slot: "10 / 5 min", so the limit's name is not cut short. */
+function shortAllowance(row: RateLimitRow): string {
+  return `${row.limit} / ${formatRateWindowShort(row.windowMs)}`;
 }
 
 function ScopeTable({ rows }: { rows: RateLimitRow[] }) {
@@ -70,8 +76,8 @@ function ScopeTable({ rows }: { rows: RateLimitRow[] }) {
         <StackedRow
           key={row.id}
           title={row.label}
-          value={allowance(row)}
-          meta={`Per ${row.per}`}
+          value={shortAllowance(row)}
+          meta={`Per ${row.per} · ${allowance(row)}`}
           details={[{ label: "What it limits", value: row.description }]}
         />
       ))}

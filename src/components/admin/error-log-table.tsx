@@ -150,9 +150,12 @@ export function ErrorLogTable({
       stacked={
         <StackedList aria-label="Error events">
           {events.map((event) => (
+            // Phone row: what failed (the route) and the ref on line 1, the
+            // code and time on line 2, the message's first lines under them.
+            // A row of only code, ref and "—" told an admin nothing.
             <StackedRow
               key={event.id}
-              title={event.code}
+              title={event.route ?? event.code}
               value={
                 <span className="font-mono text-xs font-normal text-muted-foreground">
                   {event.ref}
@@ -161,12 +164,20 @@ export function ErrorLogTable({
               state={<SeverityBadge severity={event.severity} />}
               meta={
                 <>
-                  <span className="truncate">{schoolLabel(event)}</span>
-                  {event.isDemoSchool ? <DemoBadge /> : null}
+                  <span className="truncate font-mono">{event.code}</span>
+                  <span className="shrink-0 tabular-nums">{when(event)}</span>
                 </>
               }
               details={[
-                { label: "When", value: when(event) },
+                {
+                  label: "School",
+                  value: (
+                    <span className="inline-flex items-center gap-1.5">
+                      {schoolLabel(event)}
+                      {event.isDemoSchool ? <DemoBadge /> : null}
+                    </span>
+                  ),
+                },
                 {
                   label: "Where",
                   value: event.route ? (
@@ -180,7 +191,11 @@ export function ErrorLogTable({
                 },
                 { label: "Message", value: <EventDetails event={event} /> },
               ]}
-            />
+            >
+              <p className="line-clamp-2 break-words text-xs text-muted-foreground">
+                {event.message || "No message recorded"}
+              </p>
+            </StackedRow>
           ))}
         </StackedList>
       }

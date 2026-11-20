@@ -4,6 +4,7 @@ import {
   RATE_LIMIT_SCOPE_LABELS,
   RATE_LIMIT_SCOPE_ORDER,
   formatRateWindow,
+  formatRateWindowShort,
 } from "@/lib/rate-limits/catalog";
 import { LOGIN_RATE } from "@/lib/auth/login-gates";
 import { LOOKUP_FAILURE_RATE } from "@/lib/auth/lookup-throttle";
@@ -52,5 +53,15 @@ describe("formatRateWindow", () => {
     [2 * 60 * 60_000, "2 hours"],
   ])("formats %d ms as %s", (ms, text) => {
     expect(formatRateWindow(ms)).toBe(text);
+  });
+});
+
+describe("formatRateWindowShort", () => {
+  it.each([
+    [60_000, "1 min"],
+    [15 * 60_000, "15 min"],
+    [60 * 60_000, "1 hr"],
+  ])("formats %d ms as %s", (ms, text) => {
+    expect(formatRateWindowShort(ms)).toBe(text);
   });
 });

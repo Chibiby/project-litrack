@@ -35,7 +35,9 @@ const Switch = React.forwardRef<
     disabled={disabled}
     onClick={() => onCheckedChange(!checked)}
     className={cn(
-      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+      // A transparent `before` pads the 24px-tall track to a 44px touch target
+      // below `lg`, like the checkbox, without taking layout space.
+      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full ring-offset-background before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-14 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] lg:before:hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
       checked ? "bg-primary" : "bg-muted-foreground/30",
       className
     )}

@@ -600,20 +600,25 @@ html {
  * more glass cards. Cards and tiles become solid fills instead; the header,
  * sidebar and dialog overlays keep their blur (one layer each, and text
  * scrolls under the header).
+ *
+ * The attribute match is anchored to an unprefixed class (at the start or
+ * after a space): a class like `lg:max-xl:bg-card/90` must not turn a phone
+ * element into an opaque card. It once painted a white box over the School
+ * Head greeting art.
  */
 @media (hover: none) and (max-width: 767px) {
   .glass-card,
   .icon-glass,
   .skeleton-shimmer,
   .dashboard-glass .shadow-card,
-  [class*="bg-card/"][class*="backdrop-blur"] {
+  :is([class^="bg-card/"], [class*=" bg-card/"]):is([class^="backdrop-blur"], [class*=" backdrop-blur"]) {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     --tw-backdrop-blur: ;
   }
   .glass-card,
   .dashboard-glass .shadow-card,
-  [class*="bg-card/"][class*="backdrop-blur"] {
+  :is([class^="bg-card/"], [class*=" bg-card/"]):is([class^="backdrop-blur"], [class*=" backdrop-blur"]) {
     background-color: hsl(var(--card) / 0.96) !important;
   }
   .icon-glass {

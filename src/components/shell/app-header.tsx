@@ -172,7 +172,7 @@ export function AppHeader({
     // cards below it. The header box itself keeps its
     // height either way, so nothing below it moves. (It is a flex box so the
     // pane's top margin is kept rather than collapsing through it.)
-    <header className="sticky top-0 z-30 flex h-[var(--app-chrome-header-height)]">
+    <header className="sticky top-[var(--impersonation-banner-height,0px)] z-30 flex h-[var(--app-chrome-header-height)]">
       <div
         className={cn(
           // flex-1 rather than an explicit width: the pane's width follows from

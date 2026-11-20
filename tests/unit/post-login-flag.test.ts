@@ -72,3 +72,27 @@ describe("post-login flag — boot latch", () => {
     expect(m.isPostLoginLoadingCover()).toBe(false);
   });
 });
+
+describe("post-login flag — once per tab", () => {
+  it("skips the boot splash on a reload in a tab that has already seen it", async () => {
+    const first = await freshModule();
+    expect(first.consumePostLoginFlag()).toBe(true);
+    first.clearPendingPostLoginSplash();
+
+    // Reload: a fresh document in the same tab keeps sessionStorage.
+    const reloaded = await freshModule();
+    expect(reloaded.isPostLoginLoadingCover()).toBe(false);
+    expect(reloaded.consumePostLoginFlag()).toBe(false);
+  });
+
+  it("still plays after a login in that tab", async () => {
+    const first = await freshModule();
+    first.consumePostLoginFlag();
+    first.clearPendingPostLoginSplash();
+
+    const afterLogin = await freshModule();
+    sessionStorage.setItem(afterLogin.POST_LOGIN_FLAG, "1");
+    expect(afterLogin.isPostLoginLoadingCover()).toBe(true);
+    expect(afterLogin.consumePostLoginFlag()).toBe(true);
+  });
+});

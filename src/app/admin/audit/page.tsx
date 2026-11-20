@@ -18,13 +18,30 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { TableSectionSkeleton } from "@/components/loading";
 import { ScrollText } from "lucide-react";
 import { formatSchoolTimestamp } from "@/lib/format-datetime";
+import { totalPages } from "@/lib/learners/pagination";
+import { LearnerPagination } from "@/components/learners/learner-pagination";
+
+/**
+ * Thirty events a page. The page used to list the last 150 at once, about 15
+ * screens on a phone, with nothing older reachable.
+ */
+const ADMIN_AUDIT_PAGE_SIZE = 30;
+
+function parsePage(raw: string | string[] | undefined): number {
+  const n = Number(Array.isArray(raw) ? raw[0] : raw);
+  return Number.isInteger(n) && n > 0 ? n : 1;
+}
 
 export const dynamic = "force-dynamic";
 
-async function AdminAuditTable() {
+async function AdminAuditTable({ requestedPage }: { requestedPage: number }) {
+  const totalCount = await prisma.auditLog.count();
+  const pages = totalPages(totalCount, ADMIN_AUDIT_PAGE_SIZE);
+  const page = Math.min(requestedPage, pages);
   const logs = await prisma.auditLog.findMany({
     orderBy: { timestamp: "desc" },
-    take: 150,
+    skip: (page - 1) * ADMIN_AUDIT_PAGE_SIZE,
+    take: ADMIN_AUDIT_PAGE_SIZE,
   });
 
   const schoolIds = [
@@ -46,7 +63,9 @@ async function AdminAuditTable() {
   return (
     <Surface as="section" className="min-w-0 rounded-lg">
       <SurfaceHeader className="items-center">
-        <h2 className="text-base font-semibold">Last 150 events</h2>
+        <h2 className="text-base font-semibold">
+          {totalCount.toLocaleString()} event{totalCount === 1 ? "" : "s"}
+        </h2>
         <span className="text-xs text-muted-foreground">Times in Manila time</span>
       </SurfaceHeader>
       {logs.length === 0 ? (
@@ -118,12 +137,18 @@ async function AdminAuditTable() {
           }
         />
       )}
+      <LearnerPagination basePath="/admin/audit" page={page} totalPages={pages} searchParams={{}} />
     </Surface>
   );
 }
 
-export default async function AdminAuditPage() {
+export default async function AdminAuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}) {
   const user = await requireDeveloperAdminPage();
+  const requestedPage = parsePage((await searchParams).page);
 
   return (
     <AdminPage
@@ -133,7 +158,7 @@ export default async function AdminAuditPage() {
       userName={user.fullName || user.email}
     >
       <Suspense fallback={<TableSectionSkeleton rows={10} columns={5} />}>
-        <AdminAuditTable />
+        <AdminAuditTable requestedPage={requestedPage} />
       </Suspense>
     </AdminPage>
   );

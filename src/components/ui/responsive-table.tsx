@@ -141,7 +141,8 @@ export function StackedRow({
     <PrefetchLink
       href={href}
       title={tooltip}
-      className="block min-w-0 truncate font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      // -my-2 py-2: a 36px-tall tap target on a 20px line, same layout.
+      className="-my-2 block min-w-0 truncate py-2 font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {title}
     </PrefetchLink>
