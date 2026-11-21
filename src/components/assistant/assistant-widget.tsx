@@ -126,19 +126,26 @@ export function AssistantWidget({ role, userName, aiEnabled, userId }: Props) {
           </div>
         )}
 
+        {/*
+          No `size="icon"`: its `lg:size-10` survived `size-14` (a different
+          breakpoint, so the merge keeps both) and shrank the circle to 40px on
+          desktop, and the base `[&_svg]:size-4` beat the icons' own sizes.
+          The circle is 56px at every width; the robot is 28px through the
+          same `[&_svg]` rule, and the sparkle overrides it with `!`.
+        */}
         <Button
           ref={fabRef}
-          size="icon"
+          size={null}
           type="button"
           onClick={() => (open ? minimize() : openPanel())}
           onMouseEnter={loadPanel}
           onFocus={loadPanel}
           aria-expanded={open}
           aria-label={open ? "Minimize the LITRACK Assistant" : "Open the LITRACK Assistant"}
-          className="relative size-14 rounded-full bg-aral text-aral-foreground shadow-lg outline-none transition-transform hover:scale-105 hover:bg-aral focus-visible:ring-offset-background active:scale-95"
+          className="relative size-14 shrink-0 rounded-full bg-aral p-0 text-aral-foreground shadow-lg outline-none transition-transform hover:scale-105 hover:bg-aral focus-visible:ring-offset-background active:scale-95 [&_svg]:size-7"
         >
-          <Bot className="size-6" aria-hidden />
-          <Sparkles className="absolute right-3 top-3 size-3" aria-hidden />
+          <Bot aria-hidden />
+          <Sparkles className="absolute right-2 top-2 !size-3.5" aria-hidden />
         </Button>
       </div>
 

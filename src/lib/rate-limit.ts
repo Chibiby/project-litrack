@@ -21,7 +21,13 @@
 import { upstashCommand, upstashPipeline } from "@/lib/cache/upstash";
 import { d1Check, d1Peek } from "@/lib/rate-limit-d1";
 import { prisma } from "@/lib/prisma";
-import { RATE_LIMITS_PAUSED_KEY } from "@/lib/rate-limits/catalog";
+import {
+  RATE_LIMITS_PAUSED_KEY,
+  RATE_LIMIT_OVERRIDES_KEY,
+  applyRateLimitOverride,
+  parseRateLimitOverrides,
+  type RateLimitOverrides,
+} from "@/lib/rate-limits/catalog";
 
 type WindowEntry = {
   timestamps: number[];
@@ -51,33 +57,43 @@ const ALLOWED: RateLimitResult = { ok: true, retryAfterMs: 0 };
  * one settings read per isolate instead of one per attempt.
  */
 const PAUSE_CACHE_MS = 10_000;
-let pauseCache: { value: boolean; at: number } | null = null;
 
-/** Forget the cached switch, so the next check reads it again. */
+type LimiterSettings = { paused: boolean; overrides: RateLimitOverrides };
+const NO_SETTINGS: LimiterSettings = { paused: false, overrides: {} };
+let settingsCache: { value: LimiterSettings; at: number } | null = null;
+
+/** Forget the cached switch and overrides, so the next check reads them again. */
 export function forgetRateLimitPause(): void {
-  pauseCache = null;
+  settingsCache = null;
 }
 
-async function rateLimitsPaused(): Promise<boolean> {
-  if (process.env.NODE_ENV === "test") return false;
-  if (RATE_LIMITS_PAUSED) return true;
+/**
+ * The pause switch and the limits changed on the Rate limits page, read
+ * together in one query and cached per isolate for `PAUSE_CACHE_MS`.
+ */
+async function limiterSettings(): Promise<LimiterSettings> {
+  if (process.env.NODE_ENV === "test") return NO_SETTINGS;
   const now = Date.now();
-  if (pauseCache && now - pauseCache.at < PAUSE_CACHE_MS) return pauseCache.value;
-  let value = false;
+  if (settingsCache && now - settingsCache.at < PAUSE_CACHE_MS) return settingsCache.value;
+  let value = NO_SETTINGS;
   try {
     // Read directly, not through system-settings: that module reports errors,
     // and error reporting rate-limits its alert emails through this file.
-    const row = await prisma.systemSetting.findUnique({
-      where: { key: RATE_LIMITS_PAUSED_KEY },
-      select: { value: true },
+    const rows = await prisma.systemSetting.findMany({
+      where: { key: { in: [RATE_LIMITS_PAUSED_KEY, RATE_LIMIT_OVERRIDES_KEY] } },
+      select: { key: true, value: true },
     });
-    value = row?.value === "true";
+    const byKey = new Map(rows.map((r) => [r.key, r.value]));
+    value = {
+      paused: byKey.get(RATE_LIMITS_PAUSED_KEY) === "true",
+      overrides: parseRateLimitOverrides(byKey.get(RATE_LIMIT_OVERRIDES_KEY)),
+    };
   } catch (err) {
-    // A failed read keeps the limits ON: a database hiccup must never switch
-    // off sign-in protection.
-    console.error("[rate-limit] pause switch read failed:", err);
+    // A failed read keeps the limits ON at their defaults: a database hiccup
+    // must never switch off sign-in protection.
+    console.error("[rate-limit] settings read failed:", err);
   }
-  pauseCache = { value, at: now };
+  settingsCache = { value, at: now };
   return value;
 }
 
@@ -185,7 +201,9 @@ export async function checkRateLimit(
   key: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
-  if (await rateLimitsPaused()) return { ...ALLOWED };
+  const settings = await limiterSettings();
+  if (RATE_LIMITS_PAUSED || settings.paused) return { ...ALLOWED };
+  options = applyRateLimitOverride(options, settings.overrides);
   const now = Date.now();
 
   const shared = (await redisCheck(key, options, now)) ?? (await d1Check(key, options, now));
@@ -207,7 +225,9 @@ export async function peekRateLimit(
   key: string,
   options: RateLimitOptions
 ): Promise<RateLimitResult> {
-  if (await rateLimitsPaused()) return { ...ALLOWED };
+  const settings = await limiterSettings();
+  if (RATE_LIMITS_PAUSED || settings.paused) return { ...ALLOWED };
+  options = applyRateLimitOverride(options, settings.overrides);
   const now = Date.now();
 
   const shared = (await redisPeek(key, options, now)) ?? (await d1Peek(key, options, now));

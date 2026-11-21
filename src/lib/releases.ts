@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.78.0",
+    date: "2026-11-21",
+    title: "Rate limits you can change, and a rounder Assistant button",
+    announce: false,
+    fixes: [
+      { text: "Developer Controls → Rate limits now lets you change how many attempts each limit allows and over how many minutes, and put any limit, or all of them, back to its default.", roles: ["SUPER_ADMIN"] },
+      "The purple Assistant button is now the same full-size circle on every screen, with a larger robot icon. On wide screens it was smaller than intended.",
+    ],
+  },
+  {
     version: "2.77.0",
     date: "2026-11-20",
     title: "Updates arrive quietly, and new teacher filters",

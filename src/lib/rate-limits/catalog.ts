@@ -292,3 +292,86 @@ export function formatRateWindowShort(windowMs: number): string {
   if (windowMs % HOUR === 0) return `${windowMs / HOUR} hr`;
   return `${Math.round(windowMs / MINUTE)} min`;
 }
+
+// ── Overrides set on the Rate limits page ───────────────────────────────────
+
+/**
+ * SystemSetting key holding the limits a Developer Admin changed on the Rate
+ * limits page, as JSON `{ [id]: { limit, windowMs } }`. A limit missing from it
+ * uses its default above; "Reset to default" removes its entry.
+ */
+export const RATE_LIMIT_OVERRIDES_KEY = "rateLimits.overrides";
+
+/** Bounds for an edited limit, so a typo cannot lock everyone out for a day. */
+export const RATE_LIMIT_BOUNDS = {
+  minLimit: 1,
+  maxLimit: 10_000,
+  minWindowMinutes: 1,
+  maxWindowMinutes: 24 * 60,
+} as const;
+
+export type RateLimitOverride = { limit: number; windowMs: number };
+export type RateLimitOverrides = Partial<Record<RateLimitId, RateLimitOverride>>;
+
+export function isRateLimitId(id: string): id is RateLimitId {
+  return Object.prototype.hasOwnProperty.call(RATE_LIMITS, id);
+}
+
+/** True when `o` is inside `RATE_LIMIT_BOUNDS` and the window is whole minutes. */
+export function isValidRateLimitOverride(o: unknown): o is RateLimitOverride {
+  if (!o || typeof o !== "object") return false;
+  const { limit, windowMs } = o as Record<string, unknown>;
+  if (typeof limit !== "number" || typeof windowMs !== "number") return false;
+  if (!Number.isInteger(limit) || limit < RATE_LIMIT_BOUNDS.minLimit || limit > RATE_LIMIT_BOUNDS.maxLimit) {
+    return false;
+  }
+  if (windowMs % MINUTE !== 0) return false;
+  const minutes = windowMs / MINUTE;
+  return minutes >= RATE_LIMIT_BOUNDS.minWindowMinutes && minutes <= RATE_LIMIT_BOUNDS.maxWindowMinutes;
+}
+
+/**
+ * The stored overrides, keeping only known ids with valid numbers. Bad or
+ * missing JSON reads as no overrides, so every limit falls back to its default.
+ */
+export function parseRateLimitOverrides(raw: string | null | undefined): RateLimitOverrides {
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  const out: RateLimitOverrides = {};
+  for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (isRateLimitId(id) && isValidRateLimitOverride(value)) {
+      out[id] = { limit: value.limit, windowMs: value.windowMs };
+    }
+  }
+  return out;
+}
+
+const ID_BY_ENTRY = new Map<object, RateLimitId>(
+  (Object.keys(RATE_LIMITS) as RateLimitId[]).map((id) => [RATE_LIMITS[id], id])
+);
+
+/**
+ * Which catalog limit `options` is, by identity. Every call site passes the
+ * catalog object itself (`RATE_LIMITS.login`), so the limiter can apply an
+ * override without each call site knowing about overrides. Undefined for an
+ * ad-hoc `{ limit, windowMs }`, which keeps its own numbers.
+ */
+export function rateLimitIdOf(options: object): RateLimitId | undefined {
+  return ID_BY_ENTRY.get(options);
+}
+
+/** The numbers to enforce: the override when one is stored, else `options`. */
+export function applyRateLimitOverride<T extends { limit: number; windowMs: number }>(
+  options: T,
+  overrides: RateLimitOverrides
+): { limit: number; windowMs: number } {
+  const id = rateLimitIdOf(options);
+  const o = id ? overrides[id] : undefined;
+  return o ? { limit: o.limit, windowMs: o.windowMs } : { limit: options.limit, windowMs: options.windowMs };
+}
