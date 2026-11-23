@@ -19,11 +19,17 @@ import { cn } from "@/lib/utils";
 const POLL_MS = 300;
 const WAIT_CAP_MS = 15_000;
 
-/** One key per school per school-local day: the pop-up shows at most once a day. */
-export const attentionSeenKey = (schoolId: string, todayKey: string) =>
-  `litrack:attention-seen:${schoolId}:${todayKey}`;
+const SEEN_PREFIX = "litrack:attention-seen:";
 
-function seenToday(key: string): boolean {
+/**
+ * One key per school per sign-in: `loginKey` changes every time the School Head
+ * signs in, so the pop-up shows once after each sign-in and not again on later
+ * visits to the dashboard in that same sign-in.
+ */
+export const attentionSeenKey = (schoolId: string, loginKey: string) =>
+  `${SEEN_PREFIX}${schoolId}:${loginKey}`;
+
+function alreadySeen(key: string): boolean {
   try {
     return window.localStorage.getItem(key) === "1";
   } catch {
@@ -33,6 +39,13 @@ function seenToday(key: string): boolean {
 
 function markSeen(key: string): void {
   try {
+    // Drop the marks from earlier sign-ins, so one key per browser is kept.
+    const stale: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(SEEN_PREFIX) && k !== key) stale.push(k);
+    }
+    for (const k of stale) window.localStorage.removeItem(k);
     window.localStorage.setItem(key, "1");
   } catch {
     // Private mode or blocked storage: the pop-up may show again, nothing breaks.
@@ -55,28 +68,29 @@ export type AttentionFigure = {
 const ICONS = { teachers: ClipboardCheck, aral: BookOpenCheck, discrepancies: TriangleAlert };
 
 /**
- * "Needs your attention" — the School Head's daily summary pop-up, shaped like
- * the "LITRACK System updated" notes. Opens on the dashboard once per school-local
- * day, after the sign-in cover and after any other dialog has closed.
+ * "Needs your attention" — the School Head's summary pop-up, shaped like the
+ * "LITRACK System updated" notes. Opens on the dashboard once after every
+ * sign-in, after the sign-in cover and after any other dialog has closed.
  * Every row links to the page that lists who or what it counts.
  */
 export function SchoolAttentionModal({
   schoolId,
-  todayKey,
+  loginKey,
   figures,
   items,
 }: {
   schoolId: string;
-  todayKey: string;
+  /** Changes on every sign-in (the session's start time). */
+  loginKey: string;
   figures: AttentionFigure[];
   items: AttentionItem[];
 }) {
   const [open, setOpen] = useState(false);
-  const key = attentionSeenKey(schoolId, todayKey);
+  const key = attentionSeenKey(schoolId, loginKey);
   const hasSomething = items.length > 0;
 
   useEffect(() => {
-    if (!hasSomething || seenToday(key)) return;
+    if (!hasSomething || alreadySeen(key)) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = Date.now() + WAIT_CAP_MS;

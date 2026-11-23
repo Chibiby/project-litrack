@@ -135,6 +135,22 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.81.0",
+    date: "2026-11-23",
+    title: "Needs your attention shows every time you sign in",
+    announce: false,
+    fixes: [
+      {
+        text: "The Needs your attention pop-up, with the teachers who have not finished their tasks and the records to check, now shows once every time you sign in, not just once a day. It stays closed for the rest of that sign-in.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "This update only changes the School Head dashboard. Nothing on your pages changed.",
+        roles: ["TEACHER", "SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.80.0",
     date: "2026-11-23",
     title: "One Filters button on every list, and buttons that line up",

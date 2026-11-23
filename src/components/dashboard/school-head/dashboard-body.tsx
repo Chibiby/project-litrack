@@ -10,6 +10,7 @@ import {
   type SchoolHeadAttentionHrefs,
 } from "@/lib/dashboard/school-head-overview";
 import { getSchoolHeadAttendanceMix } from "@/lib/dashboard/aggregates";
+import { getAuthSession } from "@/lib/auth/auth-session";
 import { AdviserlessSectionsNotice } from "@/components/school-head/adviserless-sections-notice";
 import type { SchoolHeadView } from "@/components/school-head/school-head-page";
 import { DASHBOARD_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
@@ -142,6 +143,17 @@ export async function loadSchoolHeadDashboard({
   } catch (err) {
     console.error("[loadSchoolHeadDashboard] monitoring counts failed:", err);
   }
+  // The attention pop-up shows once per sign-in: key it on when this session
+  // started. A failed read falls back to the day, the old once-a-day rule.
+  let loginKey = data.todayKey;
+  if (!view.isSuperAdminView) {
+    try {
+      const startedAt = (await getAuthSession())?.session.createdAt;
+      if (startedAt) loginKey = `login-${new Date(startedAt).getTime()}`;
+    } catch (err) {
+      console.error("[loadSchoolHeadDashboard] session read failed:", err);
+    }
+  }
   const monitoringItems = monitoring
     ? buildMonitoringAttention(monitoring, {
         nonCompliance: monitoringNonComplianceHref(view),
@@ -205,7 +217,7 @@ export async function loadSchoolHeadDashboard({
       {!view.isSuperAdminView ? (
         <SchoolAttentionModal
           schoolId={view.schoolId}
-          todayKey={data.todayKey}
+          loginKey={loginKey}
           figures={figures}
           items={modalItems}
         />
