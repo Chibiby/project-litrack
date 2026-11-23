@@ -171,6 +171,14 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
     operational: true,
     schoolScope: bySchoolId,
   },
+  // After School, Learner and User, which it points at. `schoolId` is the
+  // sending school, so a one-school restore takes the rows it sent.
+  {
+    model: "SchoolTransferRequest",
+    delegate: "schoolTransferRequest",
+    operational: true,
+    schoolScope: bySchoolId,
+  },
   { model: "Announcement", delegate: "announcement", operational: true, schoolScope: bySchoolId },
   { model: "Report", delegate: "report", operational: true, schoolScope: bySchoolId },
   { model: "SupportTicket", delegate: "supportTicket", operational: true, schoolScope: bySchoolId },

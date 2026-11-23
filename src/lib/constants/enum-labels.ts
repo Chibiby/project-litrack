@@ -717,6 +717,29 @@ export const UNLOCK_SCOPE_LABELS = {
   MONTHLY_READING_LEVEL: "Monthly reading level",
 } as const;
 
+/** `SchoolTransferKind`, plural, as a tab and a count read ("3 learners"). */
+export const SCHOOL_TRANSFER_KIND_LABELS = {
+  LEARNER: "Learners",
+  TEACHER: "Teachers",
+  ARAL_VOLUNTEER: "ARAL volunteers",
+} as const;
+
+/** `SchoolTransferKind`, singular. */
+export const SCHOOL_TRANSFER_KIND_SINGULAR_LABELS = {
+  LEARNER: "learner",
+  TEACHER: "teacher",
+  ARAL_VOLUNTEER: "ARAL volunteer",
+} as const;
+
+/** `SchoolTransferStatus`. */
+export const SCHOOL_TRANSFER_STATUS_LABELS = {
+  PENDING: "Waiting",
+  ACCEPTED: "Accepted",
+  DECLINED: "Declined",
+  CANCELLED: "Cancelled",
+  EXPIRED: "Expired",
+} as const;
+
 /** `SectionTransferRequestStatus`; "Declined" matches the teachers-declined wording. */
 export const SECTION_TRANSFER_REQUEST_STATUS_LABELS = {
   PENDING: "Waiting",

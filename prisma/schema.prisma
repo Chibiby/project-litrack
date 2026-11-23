@@ -477,6 +477,11 @@ enum NotificationType {
   /// `Notification.schoolId` is required. Sentence composed at read time in
   /// `src/lib/notifications.ts`, like the chat/release/unlock types above.
   PROFILE_PHOTO_REMOVED
+  /// A school sent people to the recipient's school (`batchId` set).
+  SCHOOL_TRANSFER_REQUESTED
+  /// A transfer batch the recipient's school sent was answered, or the
+  /// recipient themself was moved to a new school (`batchId` set).
+  SCHOOL_TRANSFER_DECIDED
 }
 
 /// The three grading terms. The calendar window each term covers is DERIVED from
@@ -589,6 +594,8 @@ model School {
   termSubjects            TermSubject[]
   aralMosyDecisions       AralMosyDecision[]
   sectionTransferRequests SectionTransferRequest[]
+  schoolTransfersOut      SchoolTransferRequest[]  @relation("SchoolTransferFrom")
+  schoolTransfersIn       SchoolTransferRequest[]  @relation("SchoolTransferTo")
 
   @@index([deletedAt])
   @@index([isActive])
@@ -903,6 +910,9 @@ model User {
   aralMosyDecisionsTutored   AralMosyDecision[]        @relation("AralMosyTutor")
   sectionTransfersRequested  SectionTransferRequest[]  @relation("SectionTransferRequester")
   sectionTransfersDecided    SectionTransferRequest[]  @relation("SectionTransferDecider")
+  schoolTransfers            SchoolTransferRequest[]   @relation("SchoolTransferPerson")
+  schoolTransfersRequested   SchoolTransferRequest[]   @relation("SchoolTransferRequester")
+  schoolTransfersDecided     SchoolTransferRequest[]   @relation("SchoolTransferDecider")
 
   @@index([schoolId, role, deletedAt])
   @@index([schoolId, approvalStatus])
@@ -1349,6 +1359,7 @@ model Learner {
   aralProfile             AralProfile?
   mosyDecisions           AralMosyDecision[]
   sectionTransferRequests SectionTransferRequest[]
+  schoolTransferRequests  SchoolTransferRequest[]
   attendances             Attendance[]
   readingLevels           ReadingLevelRecord[]
   termGrades              TermGrade[]
@@ -1591,6 +1602,73 @@ model SectionTransferRequest {
   @@index([decidedById])
   @@index([fromSectionId])
   @@index([toSectionId])
+}
+
+/// Which kind of person a cross-school transfer moves. Fixed at send time.
+enum SchoolTransferKind {
+  LEARNER
+  TEACHER
+  ARAL_VOLUNTEER
+}
+
+enum SchoolTransferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  /// Written lazily: a PENDING row past `expiresAt` reads as EXPIRED
+  /// everywhere (`effectiveStatus`) and is stored as EXPIRED by the next
+  /// action that touches it.
+  EXPIRED
+}
+
+/// A pending move of one learner, teacher or ARAL volunteer to another school
+/// in the same division, waiting for the receiving school to accept.
+/// See docs/superpowers/specs/2026-11-23-cross-school-transfers-design.md.
+/// Rows sent together share `batchId`.
+/// SQL-only constraints (Prisma cannot express them) — PRESERVE when editing:
+///   SchoolTransferRequest_one_person (CHECK exactly one of learnerId/userId),
+///   SchoolTransferRequest_schools_differ (CHECK),
+///   SchoolTransferRequest_learner_pending_unique and
+///   SchoolTransferRequest_user_pending_unique (partial unique indexes, one
+///   PENDING row per person).
+model SchoolTransferRequest {
+  id            String               @id @default(uuid())
+  batchId       String
+  kind          SchoolTransferKind
+  learnerId     String?
+  userId        String?
+  /// The sending school. Named `schoolId` like every tenant-owned row, so
+  /// backup restore and tenancy helpers treat it as the owner.
+  schoolId      String
+  toSchoolId    String
+  status        SchoolTransferStatus @default(PENDING)
+  /// SetNull: see Attendance.recordedById.
+  requestedById String?
+  decidedById   String?
+  decidedAt     DateTime?
+  /// Sender note, <=300 (Zod). Never in audit metadata.
+  reason        String?
+  /// Decline note, <=300 (Zod). Never in audit metadata.
+  decisionNote  String?
+  expiresAt     DateTime
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  learner     Learner? @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  user        User?    @relation("SchoolTransferPerson", fields: [userId], references: [id], onDelete: Cascade)
+  fromSchool  School   @relation("SchoolTransferFrom", fields: [schoolId], references: [id], onDelete: Cascade)
+  toSchool    School   @relation("SchoolTransferTo", fields: [toSchoolId], references: [id], onDelete: Cascade)
+  requestedBy User?    @relation("SchoolTransferRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  decidedBy   User?    @relation("SchoolTransferDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([toSchoolId, status, createdAt]) // Incoming list + attention count
+  @@index([schoolId, status, createdAt]) // Outgoing list
+  @@index([learnerId, status])
+  @@index([userId, status])
+  @@index([batchId])
+  @@index([requestedById])
+  @@index([decidedById])
 }
 
 model Attendance {
@@ -1903,6 +1981,9 @@ model Notification {
   /// covered every teacher in the school. Mutually exclusive with
   /// `unlockGrantId` — see the note above.
   schoolUnlockGrantId String?
+  /// Set on the `SCHOOL_TRANSFER_*` types: the `SchoolTransferRequest.batchId`.
+  /// Not a foreign key — a batch is not a row.
+  batchId             String?
   readAt              DateTime?
   createdAt           DateTime         @default(now())
 
@@ -1917,6 +1998,7 @@ model Notification {
   /// The feed read: this recipient's unread rows, newest first.
   @@index([recipientId, readAt, createdAt])
   @@index([schoolId, createdAt])
+  @@index([batchId])
   /// The daily retention purge (`purgeExpiredNotifications` /
   /// `purgeReadNotifications`, src/lib/retention/purge.ts): both delete by
   /// `WHERE "createdAt" < $cutoff`, one of them additionally filtered on
