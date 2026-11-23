@@ -22,7 +22,8 @@ describe("buildDays - future days", () => {
       ["2026-11-17", false, ""],
       ["2026-11-18", false, ""],
       ["2026-11-19", true, "Not yet"],
-      ["2026-11-20", true, "Not yet"],
+      // Friday is locked whatever the date (see aral-weekly-grid-friday-locked).
+      ["2026-11-20", true, "Friday is locked"],
     ]);
   });
 
@@ -35,6 +36,7 @@ describe("buildDays - future days", () => {
   it("locks the whole week when it starts after today", () => {
     const days = buildDays("2026-11-23", [], "2026-11-13");
 
-    expect(days.every((d) => d.locked && d.lockReason === "Not yet")).toBe(true);
+    expect(days.every((d) => d.locked)).toBe(true);
+    expect(days.slice(0, 4).every((d) => d.lockReason === "Not yet")).toBe(true);
   });
 });

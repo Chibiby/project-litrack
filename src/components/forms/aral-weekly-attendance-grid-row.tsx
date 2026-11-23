@@ -106,13 +106,14 @@ function AttendanceGridRowImpl({
         const status = rowState?.statuses[day.key] ?? "";
         const note = rowState?.notes[day.key] ?? "";
         if (day.locked) {
+          const stored = day.showsStoredMark && status !== "" ? STATUS_LABEL[status] : null;
           return (
             <TableCell key={day.key} className="text-center">
               <span
                 className="text-sm text-muted-foreground"
                 title={day.lockReason}
               >
-                <span aria-hidden>—</span>
+                {stored ? <span>{stored}</span> : <span aria-hidden>—</span>}
                 <span className="sr-only">
                   {day.aria}: {day.lockReason}
                 </span>

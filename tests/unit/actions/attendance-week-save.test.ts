@@ -679,22 +679,22 @@ describe("saveAralWeeklyAttendance â€” payload size and tenancy", () => {
   });
 
   it("saves a 100-learner week in a handful of statements, not one per cell", async () => {
-    // 100 learners x 5 school days = 500 cells, the worst case the cap allows once
-    // Task 14 paginates the grid. Per-cell statements were what blew the 5 s
-    // transaction budget at roughly 22 cells.
+    // 100 learners x 4 open days (Friday is locked) = 400 cells, the worst case
+    // the cap allows once Task 14 paginates the grid. Per-cell statements were
+    // what blew the 5 s transaction budget at roughly 22 cells.
     learnerIds = Array.from({ length: 100 }, (_, i) => `learner-${i}`);
-    const days = ["2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28"];
+    const days = ["2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27"];
     const cells = learnerIds.flatMap((learnerId) =>
       days.map((date) => ({ learnerId, date, status: "PRESENT" }))
     );
-    expect(cells).toHaveLength(500);
+    expect(cells).toHaveLength(400);
 
     const res = await post({ cells });
 
-    expect(res).toMatchObject({ ok: true, data: { upserted: 500 } });
+    expect(res).toMatchObject({ ok: true, data: { upserted: 400 } });
     expect(transaction).toHaveBeenCalledTimes(1);
-    // 500 rows at the 100-row chunk size.
-    expect(rawCalls).toHaveLength(5);
+    // 400 rows at the 100-row chunk size.
+    expect(rawCalls).toHaveLength(4);
   });
 
   it("passes an explicit timeout and maxWait", async () => {
@@ -818,5 +818,31 @@ describe("saveAralWeeklyAttendance - days that have not happened yet", () => {
 
     expect(res.ok).toBe(true);
     expect(attendance).toHaveLength(0);
+  });
+});
+
+/** Friday is locked in Weekly Attendance: the grid sends no Friday cell, and the save drops one if it arrives. */
+describe("saveAralWeeklyAttendance — Friday is locked", () => {
+  const FRIDAY = formatLocalDateKey(new Date(2026, 7, 28));
+
+  it("drops a Friday cell and writes the rest of the week", async () => {
+    const res = await post({
+      cells: [
+        { learnerId: "learner-a", date: TUESDAY, status: "PRESENT" },
+        { learnerId: "learner-a", date: FRIDAY, status: "PRESENT" },
+      ],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(attendance.map((a) => a.dateKey)).toEqual([TUESDAY]);
+  });
+
+  it("keeps a Friday mark already stored when a save tries to clear it", async () => {
+    attendance = [{ learnerId: "learner-a", dateKey: FRIDAY, notes: null }];
+
+    const res = await post({ cells: [{ learnerId: "learner-a", date: FRIDAY, status: null }] });
+
+    expect(res.ok).toBe(false);
+    expect(attendance.map((a) => a.dateKey)).toEqual([FRIDAY]);
   });
 });

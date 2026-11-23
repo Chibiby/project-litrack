@@ -229,6 +229,9 @@ export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async
     if (date < weekStart || date >= nextWeekStart) continue;
     const day = date.getDay();
     if (day === 0 || day === 6) continue; // Sat/Sun are never school days
+    // Friday is locked in the grid (owner decision 2026-11-24). A Friday cell
+    // is dropped like a weekend one, so a mark already stored stays as it is.
+    if (day === 5) continue;
     if (holidayKeys.has(cell.date)) continue;
     // Last one wins, should a client ever send the same cell twice.
     cellByKey.set(`${cell.learnerId}:${cell.date}`, {

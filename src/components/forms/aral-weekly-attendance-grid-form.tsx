@@ -47,6 +47,7 @@ import {
   CELL_LETTER,
   CELL_TONE,
   DETAILS_MAX,
+  FRIDAY_LOCK_REASON,
   REASON_OPTIONS,
   REASON_OTHER,
   STATUS_LABEL,
@@ -238,6 +239,8 @@ export function buildDays(
     const key = formatLocalDateKey(date);
     const dow = date.getDay();
     const weekend = dow === 0 || dow === 6;
+    // Locked in the grid only: rates, reports and exports still count Friday.
+    const friday = dow === 5;
     const holiday = holidays.has(key);
     const future = key > todayKey;
     const monthDay = `${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`;
@@ -246,8 +249,17 @@ export function buildDays(
       weekday: WEEKDAYS_SHORT[dow],
       monthDay,
       aria: `${WEEKDAYS_LONG[dow]}, ${monthDay}`,
-      locked: weekend || holiday || future,
-      lockReason: holiday ? "Holiday" : weekend ? "No class" : future ? "Not yet" : "",
+      locked: weekend || friday || holiday || future,
+      lockReason: holiday
+        ? "Holiday"
+        : weekend
+          ? "No class"
+          : friday
+            ? FRIDAY_LOCK_REASON
+            : future
+              ? "Not yet"
+              : "",
+      showsStoredMark: friday && !holiday,
     };
   });
 }

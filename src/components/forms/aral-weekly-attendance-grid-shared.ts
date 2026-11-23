@@ -134,10 +134,18 @@ export type Day = {
   weekday: string;
   monthDay: string;
   aria: string;
-  /** Weekend or grade-level holiday: no mark can be stored here. */
+  /** Weekend, Friday, grade-level holiday or a day still to come: no mark can be entered here. */
   locked: boolean;
   lockReason: string;
+  /**
+   * Locked, but a mark saved before the lock still shows here, read-only
+   * (Friday). Rates and exports still count it.
+   */
+  showsStoredMark: boolean;
 };
+
+/** Friday is locked in Weekly Attendance (owner decision 2026-11-24). */
+export const FRIDAY_LOCK_REASON = "Friday is locked";
 
 export function isCellStatus(value: string): value is Exclude<CellStatus, ""> {
   return (

@@ -132,7 +132,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     ],
     body: [
       "Open Weekly Attendance, choose the week from the dropdown at the top, then set each learner's mark for each day and press Save. Only the cells you change are saved, so an untouched day keeps whatever it already had.",
-      "The grid covers Monday to Friday. Days flagged as holidays are skipped automatically and do not count against a learner's rate.",
+      "The grid covers Monday to Friday. Friday is locked: it shows any mark saved before, but takes no new marks. Days flagged as holidays are skipped automatically and do not count against a learner's rate.",
     ],
     roles: ["TEACHER"],
     routes: ["/teacher/aral"],
