@@ -273,6 +273,7 @@ export function getNavGroups(
               ...(options.pendingTeacherCount ? { badge: options.pendingTeacherCount } : {}),
             },
             { id: "school-head-aral-teachers", label: "ARAL Teachers", href: SCHOOL_HEAD_ROUTES.aralTeachers, icon: HandHelping },
+            { id: "school-head-transfer", label: "Transfer", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
           ],
         },
         {

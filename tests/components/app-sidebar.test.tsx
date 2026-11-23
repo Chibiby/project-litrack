@@ -536,6 +536,16 @@ describe("AppSidebar — school head", () => {
       screen.getAllByRole("link", { name: "Teachers" })[0].getAttribute("href")
     ).toBe("/school-head/teachers");
   });
+
+  it("lists Transfer under Management, after ARAL Teachers", () => {
+    pathname.value = "/school-head";
+    render(<AppSidebar role="SCHOOL_HEAD" userName="Head" expanded />);
+    expect(
+      screen.getAllByRole("link", { name: "Transfer" })[0].getAttribute("href")
+    ).toBe("/school-head/transfer");
+    const links = screen.getAllByRole("link").map((l) => l.getAttribute("href"));
+    expect(links.indexOf("/school-head/transfer")).toBe(links.indexOf("/school-head/aral-teachers") + 1);
+  });
 });
 
 describe("AppSidebar — click feedback while the destination loads", () => {

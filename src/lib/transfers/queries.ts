@@ -218,3 +218,55 @@ export async function listPlacementOptions(schoolId: string): Promise<PlacementO
     })),
   };
 }
+
+/** This school's division as stored, or null when it has none. */
+export async function getTransferDivision(schoolId: string): Promise<string | null> {
+  const school = await prisma.school.findFirst({
+    where: { id: schoolId, deletedAt: null },
+    select: { division: true },
+  });
+  const division = school?.division?.trim();
+  return division && normalizeDivision(division) ? division : null;
+}
+
+/** Waiting, unexpired transfers sent to this school, per kind (tab badges). */
+export async function countIncomingByKind(schoolId: string): Promise<Record<SchoolTransferKind, number>> {
+  const groups = await prisma.schoolTransferRequest.groupBy({
+    by: ["kind"],
+    where: { toSchoolId: schoolId, status: "PENDING", expiresAt: { gt: new Date() } },
+    _count: { _all: true },
+  });
+  const counts: Record<SchoolTransferKind, number> = { LEARNER: 0, TEACHER: 0, ARAL_VOLUNTEER: 0 };
+  for (const g of groups) counts[g.kind] = g._count._all;
+  return counts;
+}
+
+/** The `?kind=` values of the Transfer page. */
+export const TRANSFER_KIND_PARAMS = {
+  learners: "LEARNER",
+  teachers: "TEACHER",
+  "aral-volunteers": "ARAL_VOLUNTEER",
+} as const satisfies Record<string, SchoolTransferKind>;
+
+export type TransferKindParam = keyof typeof TRANSFER_KIND_PARAMS;
+
+/** `?kind=` to a kind; anything unknown is learners. */
+export function parseTransferKind(raw: string | undefined): { param: TransferKindParam; kind: SchoolTransferKind } {
+  const param = (raw && raw in TRANSFER_KIND_PARAMS ? raw : "learners") as TransferKindParam;
+  return { param, kind: TRANSFER_KIND_PARAMS[param] };
+}
+
+/** Everything the workspace needs for one school and one kind, in parallel. */
+export async function loadTransferWorkspace(schoolId: string, kind: SchoolTransferKind) {
+  const [division, targets, candidates, outgoing, incoming, history, placement, incomingCounts] = await Promise.all([
+    getTransferDivision(schoolId),
+    listTransferTargets(schoolId),
+    listTransferCandidates(schoolId, kind),
+    listSchoolTransfers(schoolId, kind, "outgoing"),
+    listSchoolTransfers(schoolId, kind, "incoming"),
+    listSchoolTransfers(schoolId, kind, "history"),
+    kind === "LEARNER" ? listPlacementOptions(schoolId) : Promise.resolve<PlacementOptions>({ grades: [] }),
+    countIncomingByKind(schoolId),
+  ]);
+  return { division, targets, candidates, rows: { outgoing, incoming, history }, placement, incomingCounts };
+}
