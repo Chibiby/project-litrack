@@ -167,6 +167,7 @@ describe("constants", () => {
       "moved-since-request",
       "not-in-advisory",
       "pending-request",
+      "school-transfer-pending",
     ];
     expect(Object.keys(TRANSFER_BLOCK_REASON_LABELS).sort()).toEqual([...reasons].sort());
     for (const r of reasons) expect(TRANSFER_BLOCK_REASON_LABELS[r].length).toBeGreaterThan(10);

@@ -638,11 +638,13 @@ describe("getNavGroups — school head", () => {
       "Learners",
       "Teachers",
       "ARAL Teachers",
+      "Transfer",
     ]);
     expect(groups[1].items.map((i) => i.href)).toEqual([
       "/school-head/learners",
       "/school-head/teachers",
       "/school-head/aral-teachers",
+      "/school-head/transfer",
     ]);
     expect(groups[2].items.map((i) => i.href)).toEqual([
       "/school-head/monitoring/non-compliance",
@@ -678,10 +680,8 @@ describe("getNavGroups — school head", () => {
     expect(resolveActiveItemId("/school-head/aral-teachers", items)).toBe("school-head-aral-teachers");
     // The longer /aral-teachers path must not fall to the ARAL Program row.
     expect(resolveActiveItemId("/school-head/aral", items)).toBe("school-head-aral");
-    // Transfers moved onto the Learners page; the old route is a redirect stub
-    // and no longer has a nav row of its own.
-    expect(items.some((i) => i.id === "school-head-transfer")).toBe(false);
-    expect(resolveActiveItemId("/school-head/transfer", items)).not.toBe("school-head-transfer");
+    // Cross-school transfers have their own Management row (2026-11-23).
+    expect(resolveActiveItemId("/school-head/transfer", items)).toBe("school-head-transfer");
   });
 
   it("shows the Audit Log to a real School Head and a Developer, not a Division Admin", () => {

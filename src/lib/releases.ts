@@ -135,6 +135,34 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.82.0",
+    date: "2026-11-23",
+    title: "Transfer learners, teachers and ARAL volunteers to another school",
+    announce: true,
+    fixes: [
+      {
+        text: "A new Transfer page under Management sends learners, teachers and ARAL volunteers to another school in your division. Pick one person or many. Nobody moves until the other school accepts, and an unanswered transfer cancels itself after 30 days.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "When another school sends people to yours, you get a notice and the dashboard shows Incoming transfers to review. Accept them (you choose each learner's grade and section) or decline them with a note.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "When a teacher moves to another school, their advisory section stays behind without an adviser, and their ARAL learners go to each learner's own section adviser.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "If your School Head transfers you to another school and it accepts, the bell tells you. Next time you sign in, choose your new school.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Transfers now has a school picker: answer transfers between your schools, or send people for a school, as its School Head would.",
+        roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.81.0",
     date: "2026-11-23",
     title: "Needs your attention shows every time you sign in",
