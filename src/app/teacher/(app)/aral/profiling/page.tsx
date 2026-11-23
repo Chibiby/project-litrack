@@ -205,8 +205,9 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
       }),
       prisma.learner.findMany({
         where: baseWhere,
-        select: { gradeLevelId: true },
+        select: { gradeLevelId: true, gradeLevel: { select: { type: true } } },
         distinct: ["gradeLevelId"],
+        orderBy: { gradeLevel: { type: "asc" } },
       }),
     ]);
 
@@ -223,6 +224,14 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
           gradeLevelIds: gradeIdRows.map((g) => g.gradeLevelId),
         })
       : [];
+
+  // The advisory filter: each grade a heading over its sections ("Kinder - A").
+  const advisories = gradeIdRows.flatMap((g) => {
+    const gradeLabel = GRADE_LEVEL_LABELS[g.gradeLevel.type] ?? g.gradeLevel.type;
+    return sections
+      .filter((s) => s.gradeLevelId === g.gradeLevelId)
+      .map((s) => ({ id: s.id, label: `${gradeLabel} - ${s.name}` }));
+  });
 
   const stats = computeProfilingStats({
     total: allCount,
@@ -274,7 +283,7 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
             ))}
           </nav>
 
-          <ProfilingToolbar q={q} section={sectionFilter} sections={sections} status={status} />
+          <ProfilingToolbar q={q} section={sectionFilter} advisories={advisories} status={status} />
         </div>
 
         <Suspense

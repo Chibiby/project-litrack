@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
+/**
+ * Width of every list page's search bar: full width on phones, then grows
+ * with the row between 14rem and 24rem, so it never shrinks to a stub beside
+ * filters nor stretches across a wide screen. Pass as `className`.
+ */
+export const SEARCH_BAR_WIDTH = "w-full min-w-0 sm:w-auto sm:min-w-56 sm:max-w-sm sm:flex-1";
+
 export type SearchInputFocusShortcut = {
   /** e.g. "k" for Ctrl/⌘+K. Matched case-insensitively. */
   key: string;

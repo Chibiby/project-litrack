@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useListNavigate } from "@/components/nav/list-navigation";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { AdvisorySelect } from "@/components/learners/advisory-select";
 import {
   Select,
   SelectContent,
@@ -15,13 +16,15 @@ import { ARAL_PROFILING_HREF } from "@/lib/nav/nav-config";
 import type { LearnerListSectionFilter } from "@/lib/learners/pagination";
 import { PROFILING_STATUS_LABELS, type ProfilingStatusFilter } from "@/lib/aral/profiling-stats";
 
-export type ProfilingSectionOption = { id: string; name: string };
+/** A section, labelled with its grade: "Kinder - A". */
+export type ProfilingAdvisoryOption = { id: string; label: string };
 
 /**
- * ARAL Profiling's own search + Section + Status row. Not `AralSectionSelect`
- * from `aral-scope-select.tsx`: that component's `pathForGrade` signature
- * assumes one grade in the URL, but Profiling lists an ARAL teacher's learners across
- *every grade they are assigned to.
+ * ARAL Profiling's own search + Advisory + Status row. The advisory filter is
+ * the same purple, grade-grouped picker as Learners: All advisories, then each
+ * grade as a heading over its sections. It writes `section` only, since a
+ * section id already names its grade; Profiling lists an ARAL teacher's
+ * learners across every grade they are assigned to.
  *
  * URL-driven: `q`, `section` and `status` all live in the query string, and
  * every change here resets `page` to `1` while preserving `schoolId` and
@@ -32,12 +35,12 @@ export type ProfilingSectionOption = { id: string; name: string };
 export function ProfilingToolbar({
   q,
   section,
-  sections,
+  advisories,
   status,
 }: {
   q: string;
   section: LearnerListSectionFilter;
-  sections: ProfilingSectionOption[];
+  advisories: ProfilingAdvisoryOption[];
   status: ProfilingStatusFilter;
 }) {
   const listNavigate = useListNavigate();
@@ -84,33 +87,25 @@ export function ProfilingToolbar({
         onDebouncedChange={pushSearch}
         label="Search learners by name"
         placeholder="Search learner name…"
-        className="min-w-48 flex-1 sm:max-w-xs"
-        inputClassName="rounded-md lg:h-9"
+        className={SEARCH_BAR_WIDTH}
+        inputClassName="rounded-md lg:h-11"
       />
 
-      <Select
-        value={section === "all" ? "all" : section}
-        onValueChange={(value) => navigate({ section: value === "all" ? undefined : value })}
-      >
-        <SelectTrigger aria-label="Section" className="h-11 sm:w-40 lg:h-9">
-          <SelectValue placeholder="All sections" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All sections</SelectItem>
-          <SelectItem value="none">No section</SelectItem>
-          {sections.map((s) => (
-            <SelectItem key={s.id} value={s.id}>
-              {s.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {advisories.length > 1 ? (
+        <AdvisorySelect
+          advisories={advisories}
+          // "none" (learners with no section) is an old link only; it reads as All.
+          value={section === "all" || section === "none" ? null : section}
+          onChange={(next) => navigate({ section: next ?? undefined })}
+          className="w-full shrink-0 sm:w-56"
+        />
+      ) : null}
 
       <Select
         value={status}
         onValueChange={(value) => navigate({ status: value === "all" ? undefined : value })}
       >
-        <SelectTrigger aria-label="Status" className="h-11 sm:w-40 lg:h-9">
+        <SelectTrigger aria-label="Status" className="h-11 sm:w-40">
           <SelectValue placeholder="All statuses" />
         </SelectTrigger>
         <SelectContent>

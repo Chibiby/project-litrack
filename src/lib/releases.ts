@@ -135,6 +135,22 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.79.1",
+    date: "2026-11-23",
+    title: "ARAL Profiling uses the advisory filter",
+    announce: false,
+    fixes: [
+      {
+        text: "ARAL Profiling now has the same purple advisory filter as Learners, opening on All advisories, with each grade as a heading over its sections like Kinder - A. It replaces the plain section filter.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "This update only changes a teacher page. Nothing on your pages changed.",
+        roles: ["SUPER_ADMIN", "SCHOOL_HEAD", "DISTRICT_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.79.0",
     date: "2026-11-23",
     title: "Weekly Attendance for all your grades at once, and pickers beside the search box",
