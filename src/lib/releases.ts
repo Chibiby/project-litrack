@@ -137,9 +137,21 @@ export const RELEASES: readonly Release[] = [
   {
     version: "2.82.0",
     date: "2026-11-23",
-    title: "Transfer learners, teachers and ARAL volunteers to another school",
+    title: "Transfers between schools, ARAL Tutor is back, Friday is locked",
     announce: true,
     fixes: [
+      {
+        text: "ARAL Teacher is called ARAL Tutor again on every page, list and export, and Non-DepEd ARAL Teacher is Non-DepEd ARAL Volunteer again. Old links still work.",
+        roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+      {
+        text: "In Weekly Attendance, Friday is locked. A mark saved on a Friday before still shows, but Friday marks can no longer be added or changed. Attendance rates still count Monday to Friday.",
+        roles: ["TEACHER", "SCHOOL_HEAD"],
+      },
+      {
+        text: "Discrepancies now lists ARAL weeks with only 1 attendance day. Each finished week needs at least 2 days; each row names the week, the grade and the tutor.",
+        roles: ["SCHOOL_HEAD"],
+      },
       {
         text: "A new Transfer page under Management sends learners, teachers and ARAL volunteers to another school in your division. Pick one person or many. Nobody moves until the other school accepts, and an unanswered transfer cancels itself after 30 days.",
         roles: ["SCHOOL_HEAD"],
