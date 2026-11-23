@@ -192,7 +192,7 @@ export default async function AdminLearnerProfilePage({ params }: PageProps) {
               <Field label="Grade">{gradeLabel}</Field>
               <Field label="Section">{learner.section?.name ?? <NoValue />}</Field>
               <Field label="Adviser">{learner.teacher?.fullName ?? <NoValue />}</Field>
-              <Field label="ARAL teacher">
+              <Field label="ARAL tutor">
                 {learner.isAralLearner ? (learner.aralTeacher?.fullName ?? <NoValue />) : "Not in ARAL"}
               </Field>
               <Field label="Ethnicity">

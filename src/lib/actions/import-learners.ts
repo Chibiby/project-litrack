@@ -45,7 +45,7 @@ function buildFullName(
 
 /**
  * CSV import writes a roster, so this stays adviser-scoped: being some learner's
- * designated ARAL teacher does not grant the right to add learners to a grade.
+ * designated ARAL tutor does not grant the right to add learners to a grade.
  */
 async function assertTeacherGradeAccess(userId: string, schoolId: string, gradeLevelId: string) {
   return prisma.gradeLevel.findFirst({
@@ -331,7 +331,7 @@ export const commitLearnerImport = action("commitLearnerImport", async (input: {
     isAralLearner: data.isAralLearner ?? false,
     aralEnrolledAt: data.isAralLearner ? new Date() : null,
     // "Whoever enrolled them" — the same fallback `toggleAralEnrollment` uses,
-    // and the CSV carries no ARAL teacher column to override it with. Required, not
+    // and the CSV carries no ARAL tutor column to override it with. Required, not
     // cosmetic: ARAL pages scope on `aralTeacherId` alone (`aralLearnerScope`),
     // so an imported ARAL learner without one is visible to nobody, including
     // the teacher who just imported them.

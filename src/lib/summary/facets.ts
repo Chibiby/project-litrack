@@ -113,7 +113,7 @@ export type SummaryFacet = {
  * `selected` row). v3: the raw entry is `{ computedAt, rows }` and is the only
  * facet entry (no per-scope shaped entry). v4: `aral` is learners only, with
  * the teacher rows moved to `aral-teachers` (no old combined blob is read).
- * v5: the ARAL teachers facet renamed to `aral-teachers` (raw fields `teacher` /
+ * v5: the ARAL tutors facet renamed to `aral-teachers` (raw fields `teacher` /
  * `teacherGrade`), and facet `advisory` added.
  */
 export const SUMMARY_CACHE_VERSION = "v5";

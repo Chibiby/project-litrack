@@ -126,7 +126,7 @@ export async function getTeacherOverview(
       const gradeIds = grades.map((g) => g.id);
       // "Your Grades" means the grades a teacher advises. `grades` is a
       // visibility union that also includes any grade holding one learner they
-      // ARAL teacher for, so a single-advisory teacher with one stray learner in
+      // ARAL tutor for, so a single-advisory teacher with one stray learner in
       // another grade read "2". Fall back to the union only when they advise
       // nothing (floating / ARAL-only), where it is the only grade they have.
       const advisedGradeCount = new Set(
@@ -187,7 +187,7 @@ export async function getTeacherOverview(
       ] = await Promise.all([
         prisma.learner.count({ where: learnerWhere }),
         prisma.learner.count({ where: { ...learnerWhere, isAralLearner: true } }),
-        // ARAL teacher scope, not `careFilter`: only the designated ARAL teacher can save a
+        // ARAL tutor scope, not `careFilter`: only the designated ARAL tutor can save a
         // profile, and this number links to /teacher/aral/profiling, which lists
         // exactly these learners on its Pending tab.
         prisma.learner.count({

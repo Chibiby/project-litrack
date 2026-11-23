@@ -360,7 +360,7 @@ describe("LearnerProfileModal — view mode is read-only", () => {
     await awaitLoaded();
 
     // Every tab, no exceptions: the one control that used to live in one —
-    // changing the ARAL teacher — is a footer action now.
+    // changing the ARAL tutor — is a footer action now.
     for (const tab of ["Profile", "Attendance", "Reading Level", "Grades", "ARAL Progress"]) {
       fireEvent.click(screen.getByRole("tab", { name: tab }));
       const panel = within(screen.getByRole("tabpanel"));
@@ -556,7 +556,7 @@ describe("LearnerProfileModal — footer actions", () => {
     });
     renderModal();
     await awaitLoaded();
-    expect(footerLabels()).toEqual(["Transfer ARAL teacher", "Remove from ARAL", "Edit"]);
+    expect(footerLabels()).toEqual(["Transfer ARAL tutor", "Remove from ARAL", "Edit"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove from ARAL" }));
 
@@ -643,7 +643,7 @@ describe("LearnerProfileModal — Transfer teacher", () => {
     // rather than opening a tab.
     expect(footerLabels()).toEqual([
       "Request transfer",
-      "Transfer ARAL teacher",
+      "Transfer ARAL tutor",
       "Remove from ARAL",
       "Edit",
     ]);
@@ -655,18 +655,18 @@ describe("LearnerProfileModal — Transfer teacher", () => {
     await awaitLoaded();
 
     fireEvent.click(
-      within(footer()).getByRole("button", { name: "Transfer ARAL teacher" })
+      within(footer()).getByRole("button", { name: "Transfer ARAL tutor" })
     );
 
     const picker = await screen.findByRole("dialog", {
-      name: "Change Ana Santos's ARAL teacher",
+      name: "Change Ana Santos's ARAL tutor",
     });
     // Not a second enrolment: the wording says so, and the picker opens on the
     // teacher the learner already has rather than resetting to the viewer.
     const trigger = await waitFor(() => within(picker).getByRole("combobox"));
     expect(trigger.textContent).toContain("Jun Dela Cruz");
 
-    fireEvent.click(within(picker).getByRole("button", { name: "Save ARAL teacher" }));
+    fireEvent.click(within(picker).getByRole("button", { name: "Save ARAL tutor" }));
     await waitFor(() =>
       expect(enrollRosterLearnersToAral).toHaveBeenCalledWith({
         learnerIds: ["learner-1"],
@@ -697,10 +697,10 @@ describe("LearnerProfileModal — Transfer teacher", () => {
 
     // Enrolled but unassigned is the row that needs this button most.
     fireEvent.click(
-      within(footer()).getByRole("button", { name: "Transfer ARAL teacher" })
+      within(footer()).getByRole("button", { name: "Transfer ARAL tutor" })
     );
     expect(
-      await screen.findByRole("dialog", { name: "Change Ana Santos's ARAL teacher" })
+      await screen.findByRole("dialog", { name: "Change Ana Santos's ARAL tutor" })
     ).not.toBeNull();
   });
 
@@ -710,7 +710,7 @@ describe("LearnerProfileModal — Transfer teacher", () => {
 
     // Enroll as ARAL already asks who will teacher, so a second control asking the
     // same question would be the same button twice.
-    expect(screen.queryByRole("button", { name: "Transfer ARAL teacher" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Transfer ARAL tutor" })).toBeNull();
   });
 
   it("gives Super Admin no way to change the teacher either", async () => {
@@ -722,7 +722,7 @@ describe("LearnerProfileModal — Transfer teacher", () => {
     // The teacher is still named — Super Admin reads the roster, and reading it is
     // the point — but the control that would rewrite it is not drawn.
     expect(screen.getByText("Jun Dela Cruz")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Transfer ARAL teacher" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Transfer ARAL tutor" })).toBeNull();
   });
 
   it("disables the transfer for an archived learner", async () => {
@@ -741,7 +741,7 @@ describe("LearnerProfileModal — Transfer teacher", () => {
     // Disabled rather than hidden, like every other write in this footer: the
     // action still belongs to this learner, it is the learner that is closed.
     expect(
-      within(footer()).getByRole("button", { name: "Transfer ARAL teacher" })
+      within(footer()).getByRole("button", { name: "Transfer ARAL tutor" })
     ).toHaveProperty("disabled", true);
   });
 });

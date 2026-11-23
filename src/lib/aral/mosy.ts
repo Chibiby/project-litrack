@@ -480,7 +480,7 @@ export function resolveMosySave(input: MosySaveInput): MosySaveResult {
 
   if (!learner.isAralLearner && decision === "STAY") {
     // aralTeacherId = actorId: the adviser saving the STAY becomes the learner's
-    // designated ARAL teacher again (the Move out cleared the previous one).
+    // designated ARAL tutor again (the Move out cleared the previous one).
     // notifyAralAssigned is deliberately not called: the actor is the assignee, so
     // it would only notify them of their own action.
     return {

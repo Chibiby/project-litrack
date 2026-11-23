@@ -2,7 +2,7 @@ import { MetricsGridSkeleton, TableSectionSkeleton } from "@/components/loading"
 import { RouteLoadingOverlay } from "@/components/loading/route-loading-overlay";
 import { SchoolHeadPageSkeleton } from "@/components/school-head/page-skeleton";
 
-/** Content-slot skeleton: the banded hero, the three figure cards, then the filtered six-column ARAL teacher table. RoleShell stays mounted. */
+/** Content-slot skeleton: the banded hero, the three figure cards, then the filtered six-column ARAL tutor table. RoleShell stays mounted. */
 export default function AdminAralTeachersLoading() {
   return (
     <RouteLoadingOverlay>

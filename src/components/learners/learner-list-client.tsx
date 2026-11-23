@@ -250,7 +250,7 @@ function LearnerListPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** Learner whose read-only profile dialog is open; `null` when closed. */
   const [profileLearnerId, setProfileLearnerId] = useState<string | null>(null);
-  /** Subject of the open ARAL teacher picker; `null` when closed. */
+  /** Subject of the open ARAL tutor picker; `null` when closed. */
   const [aralTarget, setAralTarget] = useState<AssignAralTeacherTarget | null>(
     null
   );
@@ -472,7 +472,7 @@ function LearnerListPanel({
       learnerIds: rows.map((l) => l.id),
       learnerName: rows.length === 1 ? (rows[0]?.fullName ?? null) : null,
       currentTeacherId: null,
-      // Every one of them already in ARAL makes this a change of ARAL teacher, and the
+      // Every one of them already in ARAL makes this a change of ARAL tutor, and the
       // dialog says so rather than offering to enroll them twice.
       enrolling: rows.some((l) => !l.isAralLearner),
     });

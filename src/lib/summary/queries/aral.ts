@@ -20,7 +20,7 @@ import type {
 
 /**
  * Facets `aral` ("ARAL learners": learners per grade level) and `aral-teachers`
- * ("ARAL teachers": teachers currently designated as an ARAL teacher, DepEd /
+ * ("ARAL tutors": teachers currently designated as an ARAL tutor, DepEd /
  * Non-DepEd, overall and per grade level). Names, emails and contact numbers
  * are never read.
  *
@@ -34,8 +34,8 @@ import type {
 export type RawAralRow = {
   school_id: string;
   /**
-   * `grade`: ARAL learners per grade type. `teacher`: distinct ARAL teachers per school.
-   * `teacherGrade`: distinct ARAL teachers per school and grade type, a teacher being
+   * `grade`: ARAL learners per grade type. `teacher`: distinct ARAL tutors per school.
+   * `teacherGrade`: distinct ARAL tutors per school and grade type, a teacher being
    * counted in every grade where they teach at least one ARAL learner.
    */
   field: "grade" | "teacher" | "teacherGrade";
@@ -90,7 +90,7 @@ export async function queryAralLearnerRows(): Promise<RawAralRow[]> {
 }
 
 /**
- * Every school's ARAL teacher rows. Teachers are counted DISTINCT per school (and per
+ * Every school's ARAL tutor rows. Teachers are counted DISTINCT per school (and per
  * school and grade), so one school's rows never depend on another's and the
  * per-scope sums `rollUp` makes match a per-scope query.
  */
@@ -231,17 +231,17 @@ export function shapeAralTeachers(args: {
   const teachersSection = buildSection({
     ...common,
     id: "teachers",
-    title: "Teachers serving as ARAL teachers",
+    title: "Teachers serving as ARAL tutors",
     kind: "single",
     buckets: bucketsFrom(
       [ARAL_TEACHER_DEPED, ARAL_TEACHER_NON_DEPED, NOT_ANSWERED],
       {
-        [ARAL_TEACHER_DEPED]: "DepEd ARAL teachers",
-        [ARAL_TEACHER_NON_DEPED]: "Non-DepEd ARAL teachers",
+        [ARAL_TEACHER_DEPED]: "DepEd ARAL tutors",
+        [ARAL_TEACHER_NON_DEPED]: "Non-DepEd ARAL volunteers",
       }
     ),
     rows: teacherRows,
-    baseLabel: "% of ARAL teachers",
+    baseLabel: "% of ARAL tutors",
   });
 
   const gradeIds = presentGradeBuckets(teacherGradeRows, (b) => b.split("|")[0] ?? b);
@@ -256,24 +256,24 @@ export function shapeAralTeachers(args: {
   const teachersByGradeSection = buildSection({
     ...common,
     id: "teachersByGrade",
-    title: "ARAL teachers by grade level",
+    title: "ARAL tutors by grade level",
     kind: "multi",
     buckets: gradeBuckets,
     rows: teacherGradeRows,
     baseRows: teacherRows,
-    baseLabel: "% of the row's ARAL teachers",
-    note: "An ARAL teacher with ARAL learners in more than one grade is counted in each of those grades, so grade totals can add up to more than the row's ARAL teachers.",
+    baseLabel: "% of the row's ARAL tutors",
+    note: "An ARAL tutor with ARAL learners in more than one grade is counted in each of those grades, so grade totals can add up to more than the row's ARAL tutors.",
   });
 
   return {
     facetId: "aral-teachers",
-    title: "ARAL teachers",
-    subtitle: "Teachers designated as ARAL teachers for ARAL learners in the active school year",
+    title: "ARAL tutors",
+    subtitle: "Teachers designated as ARAL tutors for ARAL learners in the active school year",
     level,
     params: { level },
     schoolCount: schools.length,
     notes: [
-      "ARAL teacher figures reflect current ARAL teacher designations; there is no history of past designations.",
+      "ARAL tutor figures reflect current ARAL tutor designations; there is no history of past designations.",
       NAMES_NOTE,
     ],
     gaps: [],
@@ -511,10 +511,10 @@ function aralLearnerExportList(args: {
 }
 
 /**
- * ARAL teachers export: one row per school (district, scope) with the ARAL
+ * ARAL tutors export: one row per school (district, scope) with the ARAL
  * teacher counts first (DepEd, Non-DepEd, optionally not answered, total), then
  * the percentages, then per grade the total, DepEd and Non-DepEd counts. A
- * "Not answered" column appears only when some ARAL teacher has no
+ * "Not answered" column appears only when some ARAL tutor has no
  * designation.
  */
 function aralTeacherExportList(args: {
@@ -532,19 +532,19 @@ function aralTeacherExportList(args: {
 
   return {
     id: "aral-teachers-per-school",
-    title: "ARAL teachers",
-    note: "% DepEd and % Non-DepEd are of the row's ARAL teachers; a blank % means the row has no ARAL teachers. An ARAL teacher with ARAL learners in more than one grade is counted in each of those grades, so grade columns can add up to more than Total ARAL teachers.",
+    title: "ARAL tutors",
+    note: "% DepEd and % Non-DepEd are of the row's ARAL tutors; a blank % means the row has no ARAL tutors. An ARAL tutor with ARAL learners in more than one grade is counted in each of those grades, so grade columns can add up to more than Total ARAL tutors.",
     columns: [
       ...leadColumns(level),
-      "DepEd ARAL teachers",
-      "Non-DepEd ARAL teachers",
+      "DepEd ARAL tutors",
+      "Non-DepEd ARAL volunteers",
       ...(showNotAnswered ? ["Not answered"] : []),
-      "Total ARAL teachers",
+      "Total ARAL tutors",
       "% DepEd",
       "% Non-DepEd",
       ...presentGrades.flatMap((b) => {
         const label = b.label.replace(/ total$/, "");
-        return [`${label} ARAL teachers`, `${label} DepEd`, `${label} Non-DepEd`];
+        return [`${label} ARAL tutors`, `${label} DepEd`, `${label} Non-DepEd`];
       }),
     ],
     groups: presentGrades.map((b, i) => ({

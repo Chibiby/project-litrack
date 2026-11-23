@@ -8,7 +8,7 @@ import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
  * one `Section` write that changes a *cached* value while touching no `User` row.
  * `listAralTeachers` is tagged `schoolTeachers(schoolId)` and builds each teacher's
  * `advisoryLabel` from `advisorySection.name`, so without
- * `revalidateSchoolTeachers` every ARAL teacher picker keeps showing the old section
+ * `revalidateSchoolTeachers` every ARAL tutor picker keeps showing the old section
  * name until the entry's TTL runs out. Nothing about that is visible from the
  * rename's own response — the action returns `{ ok: true }` either way, and the
  * Grade Levels page it revalidates shows the new name immediately — which is

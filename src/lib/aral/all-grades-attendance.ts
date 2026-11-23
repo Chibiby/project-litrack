@@ -15,7 +15,7 @@ import type { AralWeeklyAttendanceRecord } from "@/lib/actions/aral-grid";
  *
  * Learners: the per-grade page's rule applied to each of those grades — ARAL,
  * not deleted or archived, and for a real teacher only the learners they are
- * the designated ARAL teacher of. Tenancy: a teacher is pinned to their own
+ * the designated ARAL tutor of. Tenancy: a teacher is pinned to their own
  * school; Super Admin (impersonation view) reads the `?schoolId=` school.
  */
 export async function allGradesAttendanceScope(

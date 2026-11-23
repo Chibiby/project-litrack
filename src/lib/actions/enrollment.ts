@@ -299,7 +299,7 @@ export const transferLearner = action("transferLearner", async (formData: FormDa
   if (resolvedTeacherId && resolvedTeacherId !== learner.teacherId) {
     revalidateTeacherCaches(resolvedTeacherId);
   }
-  // The designated ARAL teacher holds this grade through `teacherGradeScope`'s
+  // The designated ARAL tutor holds this grade through `teacherGradeScope`'s
   // learner arm, so changing the learner's grade moves their grade set too — and
   // an ARAL-only teacher has no other path into these caches.
   if (learner.aralTeacherId) revalidateTeacherCaches(learner.aralTeacherId);
@@ -477,7 +477,7 @@ export const transferLearnerCrossSchool = action(
     if (learner.teacherId) revalidateTeacherCaches(learner.teacherId);
     revalidateTeacherCaches(targetTeacherId);
     // Same reason as the same-school transfer: `teacherGradeScope`'s learner arm
-    // makes the learner's grade part of their designated ARAL teacher's grade set.
+    // makes the learner's grade part of their designated ARAL tutor's grade set.
     if (learner.aralTeacherId) revalidateTeacherCaches(learner.aralTeacherId);
     return { ok: true };
   },

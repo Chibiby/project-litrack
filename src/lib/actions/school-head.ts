@@ -943,7 +943,7 @@ export const setTeacherActive = action("setTeacherActive", async (
  * adviser until the School Head gives the section a new one, who picks them up
  * (see `releaseTeacherAdvisory` and `setTeacherAdvisory`'s `add`).
  *
- * Still refuses while they are someone's designated ARAL teacher — that is a
+ * Still refuses while they are someone's designated ARAL tutor — that is a
  * separate assignment the School Head must hand over deliberately.
  */
 export const removeTeacher = action("removeTeacher", async (formData: FormData): Promise<ActionResult> => {
@@ -973,7 +973,7 @@ export const removeTeacher = action("removeTeacher", async (formData: FormData):
 
   // Advisory learners no longer block removal — they are released below. ARAL
   // designations still do: nothing releases those, so a removed teacher would
-  // stay the named ARAL teacher of learners nobody is then tracking. The School Head
+  // stay the named ARAL tutor of learners nobody is then tracking. The School Head
   // designates someone else first.
   if (teacher._count.aralLearners > 0) {
     return {

@@ -22,14 +22,14 @@ describe("teacherCanAccessLearner", () => {
     ).toBe(true);
   });
 
-  it("grants access to the designated ARAL teacher who is not the adviser", () => {
+  it("grants access to the designated ARAL tutor who is not the adviser", () => {
     // The whole point of the second axis: an ARAL-only teacher advises nobody.
     expect(
       teacherCanAccessLearner({ teacherId: OTHER, aralTeacherId: TEACHER }, TEACHER)
     ).toBe(true);
   });
 
-  it("grants access to a floating learner's ARAL teacher (no adviser at all)", () => {
+  it("grants access to a floating learner's ARAL tutor (no adviser at all)", () => {
     expect(
       teacherCanAccessLearner({ teacherId: null, aralTeacherId: TEACHER }, TEACHER)
     ).toBe(true);
@@ -49,7 +49,7 @@ describe("teacherCanAccessLearner", () => {
 });
 
 describe("teacherLearnerScope", () => {
-  it("matches adviser OR designated ARAL teacher", () => {
+  it("matches adviser OR designated ARAL tutor", () => {
     expect(teacherLearnerScope(TEACHER)).toEqual({
       OR: [{ teacherId: TEACHER }, { aralTeacherId: TEACHER }],
     });
@@ -208,7 +208,7 @@ describe("deniesAdvisoryRoster", () => {
 
 /**
  * §11 of the ten concerns. `teacherLearnerScope` answers "may this teacher act
- * on the learner" — adviser OR designated ARAL teacher — and every ARAL page used
+ * on the learner" — adviser OR designated ARAL tutor — and every ARAL page used
  * it. So an adviser saw the ARAL learners in their own class on their own ARAL
  * pages even when somebody else was the designated teacher. That is the reported
  * bug, and it is a real correctness bug: the ARAL programme's records were being
@@ -223,7 +223,7 @@ describe("deniesAdvisoryRoster", () => {
  * other.
  */
 describe("aralLearnerScope", () => {
-  it("matches the designated ARAL teacher only — advising is not enough", () => {
+  it("matches the designated ARAL tutor only — advising is not enough", () => {
     expect(aralLearnerScope(TEACHER)).toEqual({ aralTeacherId: TEACHER });
   });
 

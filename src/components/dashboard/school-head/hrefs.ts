@@ -33,7 +33,7 @@ export function schoolGradeLevelsHref(view: SchoolHeadView): string {
   return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.schoolGradeLevels);
 }
 
-/** ARAL learners card, and the coverage panel's "Designate ARAL teachers" pill. */
+/** ARAL learners card, and the coverage panel's "Designate ARAL tutors" pill. */
 export function aralHref(view: SchoolHeadView): string {
   return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.aral);
 }
@@ -73,7 +73,7 @@ export function monitoringNonComplianceHref(view: SchoolHeadView): string {
   return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.monitoringNonCompliance);
 }
 
-/** Monitoring > ARAL Monitoring: ARAL teachers behind on an ARAL task. */
+/** Monitoring > ARAL Monitoring: ARAL tutors behind on an ARAL task. */
 export function monitoringAralHref(view: SchoolHeadView): string {
   return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.monitoringAral);
 }

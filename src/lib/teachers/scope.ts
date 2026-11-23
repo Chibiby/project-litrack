@@ -7,7 +7,7 @@ import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
  *
  *   - `teacherId`      adviser (via the section they advise). Null for a
  *                      floating learner.
- *   - `aralTeacherId`  designated ARAL teacher. May be a teacher with no
+ *   - `aralTeacherId`  designated ARAL tutor. May be a teacher with no
  *                      advisory section at all.
  *
  * A teacher may act on a learner when they are EITHER of those. Both pointers
@@ -20,7 +20,7 @@ export type LearnerTeacherRefs = {
   aralTeacherId: string | null;
 };
 
-/** True when `teacherId` advises the learner or is their designated ARAL teacher. */
+/** True when `teacherId` advises the learner or is their designated ARAL tutor. */
 export function teacherCanAccessLearner(
   learner: LearnerTeacherRefs,
   teacherId: string
@@ -30,7 +30,7 @@ export function teacherCanAccessLearner(
 
 /**
  * `where` fragment for "learners this teacher may act on" — adviser OR
- * designated ARAL teacher.
+ * designated ARAL tutor.
  *
  * Owns the `OR` key: spread it into a `where` that has no `OR` of its own
  * (every current call site qualifies), or nest it inside an `AND`.
@@ -40,14 +40,14 @@ export function teacherLearnerScope(teacherId: string): Prisma.LearnerWhereInput
 }
 
 /**
- * True when `teacherId` is the learner's DESIGNATED ARAL teacher. Advising them is
+ * True when `teacherId` is the learner's DESIGNATED ARAL tutor. Advising them is
  * not enough.
  *
  * The narrow counterpart to `teacherCanAccessLearner`, and the boolean half of
  * `aralLearnerScope`. Use it on the ARAL write paths that load a learner by id
  * and guard it in memory; use `teacherCanAccessLearner` everywhere else.
  *
- * A learner with no designated ARAL teacher matches nobody — the designation is an
+ * A learner with no designated ARAL tutor matches nobody — the designation is an
  * explicit act, and an adviser does not acquire it by default.
  */
 export function teacherIsAralTeacherFor(
@@ -58,12 +58,12 @@ export function teacherIsAralTeacherFor(
 }
 
 /**
- * `where` fragment for "learners this teacher is the DESIGNATED ARAL teacher for".
+ * `where` fragment for "learners this teacher is the DESIGNATED ARAL tutor for".
  *
  * ARAL pages and ARAL write paths only. `teacherLearnerScope` answers a different
  * question — "may this teacher act on the learner at all" — and answering it on
  * an ARAL page showed an adviser the ARAL records of learners in their class that
- * somebody else is the designated ARAL teacher for.
+ * somebody else is the designated ARAL tutor for.
  *
  * The two must stay separate. Narrowing `teacherLearnerScope` to this would close
  * the advisory roster, the exports, global search and the dashboard aggregates to
@@ -81,9 +81,9 @@ export function aralLearnerScope(teacherId: string): Prisma.LearnerWhereInput {
 /**
  * `where` fragment for the MOSY Report: "ARAL learners in the given advisory
  * sections, plus learners in those sections who were moved out of ARAL through
- * MOSY this school year (by any ARAL teacher)".
+ * MOSY this school year (by any ARAL tutor)".
  *
- * Advisory scope, not ARAL teacher scope: the MOSY Report belongs to the DepEd adviser of
+ * Advisory scope, not ARAL tutor scope: the MOSY Report belongs to the DepEd adviser of
  * the class, so `aralTeacherId` and the decision row's `tutorId` are deliberately
  * not consulted. A moved-out learner is untagged, so the this-year MOVE_OUT
  * decision row is what keeps them on the adviser's page.
@@ -157,7 +157,7 @@ export function teacherAdvisoryGradeScope(
  *
  * Union of the two axes a teacher can hold:
  *   1. the grade of the section they advise — the authoritative axis.
- *   2. any grade holding a learner whose designated ARAL teacher they are —
+ *   2. any grade holding a learner whose designated ARAL tutor they are —
  *      this is what lets an ARAL-only teacher (no advisory section) reach the
  *      ARAL pages for that grade.
  *
@@ -166,7 +166,7 @@ export function teacherAdvisoryGradeScope(
  * `Section.adviserId` is what every access decision reads, so the mirror can only
  * ever agree with the advisory pointers or lag behind them.
  *
- * A teacher who advises nothing and is nobody's ARAL teacher matches no grades. That is the
+ * A teacher who advises nothing and is nobody's ARAL tutor matches no grades. That is the
  * intended outcome, not a gap — see `teacherAdvisoryGradeScope`.
  *
  * Owns the `OR` key, same caveat as `teacherLearnerScope`.

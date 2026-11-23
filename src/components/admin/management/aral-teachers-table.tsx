@@ -62,7 +62,7 @@ function EmploymentCell({ row, dash = false }: { row: AralTeacherRow; dash?: boo
   );
 }
 
-/** ARAL teacher list: filters, sort, table, pager. One navigation provider for all. */
+/** ARAL tutor list: filters, sort, table, pager. One navigation provider for all. */
 export function AralTeachersTable(props: AralTeachersTableProps) {
   return (
     <ListNavigationProvider>
@@ -87,12 +87,12 @@ function AralTeachersTableInner({
 
   return (
     <div className="space-y-4">
-      <Surface as="section" aria-label="Find ARAL teachers" className="rounded-lg p-3 sm:p-4">
+      <Surface as="section" aria-label="Find ARAL tutors" className="rounded-lg p-3 sm:p-4">
         <ListFilterBar
           basePath={basePath}
           q={list.q}
           resultCount={list.totalCount}
-          searchLabel="Search ARAL teachers"
+          searchLabel="Search ARAL tutors"
           searchPlaceholder="Teacher name…"
           fields={filters}
           sort={{ value: sort, options: ARAL_TEACHER_SORTS.options }}
@@ -103,7 +103,7 @@ function AralTeachersTableInner({
       <Surface as="section" className="min-w-0 space-y-3 overflow-hidden rounded-lg">
         <div className="flex items-center justify-between gap-3 px-3 pt-4 sm:px-4">
           <h2 className="text-base font-semibold">
-            ARAL teachers{" "}
+            ARAL tutors{" "}
             <span className="text-muted-foreground">({list.totalCount.toLocaleString()})</span>
           </h2>
           <span className="text-xs text-muted-foreground">
@@ -111,7 +111,7 @@ function AralTeachersTableInner({
           </span>
         </div>
         <ListBusyRegion
-          label="ARAL teachers"
+          label="ARAL tutors"
           skeleton={<TableSectionSkeleton rows={8} columns={columns} showToolbar={false} />}
         >
           {rows.length === 0 ? (
@@ -136,8 +136,8 @@ function AralTeachersTableInner({
                 />
               ) : (
                 <EmptyState
-                  title="No ARAL teachers yet"
-                  description="Teachers appear here once they are designated as the ARAL teacher of at least one learner."
+                  title="No ARAL tutors yet"
+                  description="Teachers appear here once they are designated as the ARAL tutor of at least one learner."
                   icon={HandHelping}
                 />
               )}
@@ -190,7 +190,7 @@ function AralTeachersTableInner({
                 </Table>
               }
               stacked={
-                <StackedList aria-label="ARAL teachers">
+                <StackedList aria-label="ARAL tutors">
                   {rows.map((row) => (
                     <StackedRow
                       key={row.id}

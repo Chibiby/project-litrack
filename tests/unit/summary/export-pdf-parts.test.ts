@@ -137,7 +137,7 @@ function expectWellFormedParts(result: ReturnType<typeof teachers>) {
 }
 
 describe("exportListReportTable pdfParts", () => {
-  it("ARAL teachers: PDF shows one total per grade, Excel gets four sheets", () => {
+  it("ARAL tutors: PDF shows one total per grade, Excel gets four sheets", () => {
     const result = teachers(ALL_GRADES);
     const list = result.exportList!;
     const blocks = exportListReportTable(result, FRAME).blocks!;
@@ -211,7 +211,7 @@ describe("renderPdf with pdfParts", () => {
   });
 
   const tableFor = (result: ReturnType<typeof teachers>, block = blockOf(result)): ReportTable => ({
-    title: "ARAL teachers",
+    title: "ARAL tutors",
     summary: [],
     frame: FRAME,
     columns: block.columns,
@@ -266,7 +266,7 @@ describe("renderPdf with pdfParts", () => {
     const totalCells = drawn.filter((d) => d.text === "Total");
     // The "Total" label of the last row opens each part.
     expect(totalCells.length).toBeGreaterThanOrEqual(block.pdfParts!.length);
-    // (Header "Grade n ARAL teachers" never equals "Total", so these are row cells.)
+    // (Header "Grade n ARAL tutors" never equals "Total", so these are row cells.)
     for (const c of totalCells) expect(c.font).toBe("Helvetica-Bold");
     // Ordinary school rows stay regular.
     const schoolRow = drawn.filter((d) => d.text === "Alabel CES");
@@ -305,7 +305,7 @@ describe("renderExcel ignores pdfParts", () => {
     const { pdfParts, ...plain } = block;
     expect(pdfParts).toBeDefined();
     const mk = (b: ReportBlock): ReportTable => ({
-      title: "ARAL teachers",
+      title: "ARAL tutors",
       summary: [],
       frame: FRAME,
       columns: b.columns,

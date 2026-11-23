@@ -179,7 +179,7 @@ describe("teacher profiling — advisory mode checkboxes", () => {
     await goToAssignmentStep();
 
     expect(
-      screen.getByText(/Non-DepEd ARAL teachers don't take a teaching assignment/)
+      screen.getByText(/Non-DepEd ARAL volunteers don't take a teaching assignment/)
     ).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: "Floating teacher" })).toBeNull();
     expect(screen.queryByLabelText("Current Grade Level / Assignment")).toBeNull();

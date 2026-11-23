@@ -7,7 +7,7 @@ import { resourceNotFound } from "@/lib/errors/app-error";
  *
  * These two actions had no action-level coverage of any kind. The specific lines
  * pinned here are the `revalidateTeacherCaches(learner.aralTeacherId)` busts: a
- * learner's grade is part of their designated ARAL teacher's grade set, because
+ * learner's grade is part of their designated ARAL tutor's grade set, because
  * `teacherGradeScope` unions the advised-section arm with
  * `{ learners: { some: { aralTeacherId, deletedAt: null } } }`. For a Non-DepEd
  * ARAL Volunteer who advises no section, that one learner can be the teacher's
@@ -50,7 +50,7 @@ const TO_GRADE_ID = "grade-4";
 const TEACHER_OUT = "teacher-out";
 /** Receiving adviser. */
 const TEACHER_IN = "teacher-in";
-/** Designated ARAL teacher — advises no section, so this is their only path in. */
+/** Designated ARAL tutor — advises no section, so this is their only path in. */
 const TEACHER_ARAL = "teacher-aral";
 
 type LearnerRow = {
@@ -314,7 +314,7 @@ beforeEach(() => {
 });
 
 describe("transferLearner — teacher cache fan-out", () => {
-  it("busts the designated ARAL teacher as well as both advisers", async () => {
+  it("busts the designated ARAL tutor as well as both advisers", async () => {
     const result = await transferLearner(sameSchoolFormData());
     // Asserted first: a bailed-out action would make the bust assertions vacuous.
     expect(result).toEqual({ ok: true });
@@ -373,7 +373,7 @@ describe("transferLearner — teacher cache fan-out", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("makes no third call when the learner has no designated ARAL teacher", async () => {
+  it("makes no third call when the learner has no designated ARAL tutor", async () => {
     learnerRow = makeLearner({ aralTeacherId: null });
 
     const result = await transferLearner(sameSchoolFormData());
@@ -461,7 +461,7 @@ describe("transferLearner — teacher cache fan-out", () => {
 });
 
 describe("transferLearnerCrossSchool — teacher cache fan-out", () => {
-  it("busts the designated ARAL teacher and both schools' dashboards", async () => {
+  it("busts the designated ARAL tutor and both schools' dashboards", async () => {
     const result = await transferLearnerCrossSchool(crossSchoolFormData());
     expect(result).toEqual({ ok: true });
 

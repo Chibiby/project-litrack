@@ -22,7 +22,7 @@ import type { SectionPeople, SectionTeacherRole } from "@/lib/school-head/sectio
 const ROLE_LABEL: Record<SectionTeacherRole, string> = {
   ADVISER: "Adviser",
   TEACHER: "Teacher",
-  ARAL: "ARAL teacher",
+  ARAL: "ARAL tutor",
 };
 
 const NO_ADVISER = "__none__";

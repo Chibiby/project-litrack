@@ -55,12 +55,12 @@ export const SCHOOL_HEAD_ROUTES = {
   learners: "/school-head/learners",
   /** Cross-school transfers of learners, teachers and ARAL volunteers (Management group). */
   transfer: "/school-head/transfer",
-  /** Teachers who are the ARAL teacher of ARAL learners (Management group). */
+  /** Teachers who are the ARAL tutor of ARAL learners (Management group). */
   aralTeachers: "/school-head/aral-teachers",
 
   /** Monitoring group: teachers behind on their tasks. */
   monitoringNonCompliance: "/school-head/monitoring/non-compliance",
-  /** Monitoring group: ARAL teachers behind on attendance, reading level or profiling. */
+  /** Monitoring group: ARAL tutors behind on attendance, reading level or profiling. */
   monitoringAral: "/school-head/monitoring/aral",
   /** Monitoring group: learner and section records that do not add up. */
   monitoringDiscrepancies: "/school-head/monitoring/discrepancies",

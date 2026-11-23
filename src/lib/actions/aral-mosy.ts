@@ -206,7 +206,7 @@ export const saveMosyDecision = action(
       revalidateLearnerScoped({
         schoolId: user.schoolId,
         teacherId: learner.teacherId,
-        // The ARAL teacher whose ARAL lists changed: the one just untagged, else the actor.
+        // The ARAL tutor whose ARAL lists changed: the one just untagged, else the actor.
         aralTeacherId: learner.aralTeacherId ?? user.id,
         teacherShell: true,
       });

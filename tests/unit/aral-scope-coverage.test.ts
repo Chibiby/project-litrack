@@ -49,7 +49,7 @@ const rel = (f: string) => path.relative(SRC, f).replace(/\\/g, "/");
  * predicate.
  *
  * `teacherLearnerScope` asks "may this teacher act on the learner" — adviser OR
- * designated ARAL teacher. Every ARAL page and write path used it, so an adviser
+ * designated ARAL tutor. Every ARAL page and write path used it, so an adviser
  * saw and could encode the ARAL records of learners in their own class that
  * somebody else is the designated teacher for. `tests/unit/teachers-scope.test.ts`
  * guards the two predicates; this file guards which one each surface reaches for,
@@ -141,7 +141,7 @@ describe("ARAL surfaces use the narrow learner scope", () => {
  * for meaning from here. It catches the failure that actually happens: a
  * condition added to the scope and forgotten in the SQL.
  */
-describe("the ARAL teacher backfill matches aralTeacherScope", () => {
+describe("the ARAL tutor backfill matches aralTeacherScope", () => {
   // Applied migration folders are immutable, so the directory keeps its original
   // name; find it by its version prefix rather than spelling the old word here.
   const MIGRATIONS_DIR = path.resolve(__dirname, "../../prisma/migrations");

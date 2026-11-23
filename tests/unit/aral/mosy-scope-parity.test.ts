@@ -140,7 +140,7 @@ describe("mosyLearnerScope <-> teacherOwnsMosyRow", () => {
     });
   });
 
-  it("never consults the ARAL teacher: no aralTeacherId or tutorId anywhere", () => {
+  it("never consults the ARAL tutor: no aralTeacherId or tutorId anywhere", () => {
     for (const [, s] of SCOPES) {
       const json = JSON.stringify(mosyLearnerScope(s, YEAR));
       expect(json).not.toContain("tutorId");

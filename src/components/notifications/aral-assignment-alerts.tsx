@@ -167,7 +167,7 @@ export function AralAssignmentAlerts() {
             <>
               <DialogTitle>New ARAL learners</DialogTitle>
               <DialogDescription>
-                You were designated an ARAL teacher while you were away.
+                You were designated an ARAL tutor while you were away.
               </DialogDescription>
             </>
           )}

@@ -6,7 +6,7 @@ import { schoolTeachers } from "@/lib/cache/tags";
 import { GRADE_LEVEL_LABELS } from "@/lib/constants/enum-labels";
 
 /**
- * Who may be designated the ARAL teacher for a learner.
+ * Who may be designated the ARAL tutor for a learner.
  *
  * ANY teacher at the school qualifies, DepEd plantilla or not, with or without an
  * advisory section. That is the point of the designation: it is the axis that lets
@@ -90,7 +90,7 @@ export async function listAralTeachers(schoolId: string): Promise<AralTeacherPic
       });
 
       return teachers.map((t) => {
-        // Every section they advise, not the first. The person choosing an ARAL teacher
+        // Every section they advise, not the first. The person choosing an ARAL tutor
         // is picking a colleague, and "Grade 3 · Sampaguita" for a teacher who
         // also holds two other classes tells them less than the full list.
         const advisory =

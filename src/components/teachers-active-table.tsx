@@ -162,7 +162,7 @@ export type ActiveTeacherRow = {
   listingName: string;
   /** Advisory learners — removal leaves them with no adviser; it does not block. */
   learnerCount: number;
-  /** Learners whose designated ARAL teacher this is — blocks removal while > 0. */
+  /** Learners whose designated ARAL tutor this is — blocks removal while > 0. */
   aralLearnerCount: number;
   /**
    * `TeacherProfile.designation` / `.advisoryMode`. Both `null` when the teacher
@@ -443,11 +443,11 @@ function TeacherManageButtons({
   onRemovePhoto,
 }: TeacherManageActionsProps) {
   // The server blocks removal only while the teacher is someone's designated
-  // ARAL teacher. Mirror it here so the button explains itself instead of
+  // ARAL tutor. Mirror it here so the button explains itself instead of
   // failing on click. Advisory learners do not block: removal releases them.
   const blockedReason =
     row.aralLearnerCount > 0
-      ? `${row.fullName} is the ARAL teacher for ${row.aralLearnerCount} learner(s). Designate another ARAL teacher for them first.`
+      ? `${row.fullName} is the ARAL tutor for ${row.aralLearnerCount} learner(s). Designate another ARAL tutor for them first.`
       : null;
 
   const removeDescription = [

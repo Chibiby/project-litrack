@@ -239,8 +239,8 @@ export const HELP_TOPICS: HelpTopic[] = [
       "tutor",
     ],
     body: [
-      "Open Weekly Attendance for the grade and use Enroll to ARAL. Pick the learners from your roster and the ARAL teacher they are assigned to.",
-      "Enrolling is what puts a learner into the weekly attendance grid and the monthly reading level sheet. Their ARAL teacher does not have to be their adviser.",
+      "Open Weekly Attendance for the grade and use Enroll to ARAL. Pick the learners from your roster and the ARAL tutor they are assigned to.",
+      "Enrolling is what puts a learner into the weekly attendance grid and the monthly reading level sheet. Their ARAL tutor does not have to be their adviser.",
     ],
     roles: ["TEACHER"],
     routes: ["/teacher/aral"],

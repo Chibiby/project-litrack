@@ -136,7 +136,7 @@ export interface NavOptions {
   isDeveloperAdmin?: boolean;
 }
 
-/** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher is the ARAL teacher of. */
+/** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher is the ARAL tutor of. */
 export const ARAL_PROFILING_HREF = "/teacher/aral/profiling";
 
 /**
@@ -212,7 +212,7 @@ export function getNavGroups(
             { id: "admin-learners", label: "Learners", href: ADMIN_ROUTES.learners, icon: GraduationCap },
             { id: "admin-ip-learners", label: "IP Learners", href: ADMIN_ROUTES.ipLearners, icon: Feather },
             { id: "admin-teachers", label: "Teachers", href: ADMIN_ROUTES.teachers, icon: Users, heavy: true },
-            { id: "admin-aral-teachers", label: "ARAL Teachers", href: ADMIN_ROUTES.aralTeachers, icon: HandHelping },
+            { id: "admin-aral-teachers", label: "ARAL Tutors", href: ADMIN_ROUTES.aralTeachers, icon: HandHelping },
             { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },
             { id: "admin-schools", label: "Schools", href: ADMIN_ROUTES.schools, icon: School },
             { id: "admin-district-admins", label: "District Admins", href: ADMIN_ROUTES.districtAdmins, icon: MapPinned, heavy: true },
@@ -272,7 +272,7 @@ export function getNavGroups(
               icon: Users,
               ...(options.pendingTeacherCount ? { badge: options.pendingTeacherCount } : {}),
             },
-            { id: "school-head-aral-teachers", label: "ARAL Teachers", href: SCHOOL_HEAD_ROUTES.aralTeachers, icon: HandHelping },
+            { id: "school-head-aral-teachers", label: "ARAL Tutors", href: SCHOOL_HEAD_ROUTES.aralTeachers, icon: HandHelping },
             { id: "school-head-transfer", label: "Transfer", href: SCHOOL_HEAD_ROUTES.transfer, icon: ArrowRightLeft },
           ],
         },
@@ -410,7 +410,7 @@ export function getNavGroups(
               href: aralHref(grades, "reading-level"),
               icon: BookOpen,
             },
-            // One page for every ARAL learner of this ARAL teacher, across grades,
+            // One page for every ARAL learner of this ARAL tutor, across grades,
             // so it is never grade-scoped and never collapses onto the picker.
             // Longest-prefix matching still awards it over `/teacher/aral`.
             {

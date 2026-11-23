@@ -35,7 +35,7 @@ function formToObj(formData: FormData): Record<string, unknown> {
 /**
  * Authorization: `requireSchoolUser("TEACHER")`. Tenancy: `assertSameSchool`
  * against the learner's `schoolId`, then `teacherIsAralTeacherFor` — the
- * designated ARAL teacher, not merely the adviser, because the ARAL profile is
+ * designated ARAL tutor, not merely the adviser, because the ARAL profile is
  * the programme's own intake record for this learner.
  */
 export const saveAralProfile = action(

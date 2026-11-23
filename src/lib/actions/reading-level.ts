@@ -95,7 +95,7 @@ export const recordReadingLevel = action("recordReadingLevel", async (formData: 
   if (!learner) throw resourceNotFound("Learner");
 
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-  // The designated ARAL teacher, not merely the adviser — same rule as the bulk
+  // The designated ARAL tutor, not merely the adviser — same rule as the bulk
   // path below and as `markAttendance`.
   if (!teacherIsAralTeacherFor(learner, user.id)) throw resourceNotFound("Learner");
   if (!learner.isAralLearner) {
@@ -214,7 +214,7 @@ export const bulkRecordMonthlyReadingLevel = action("bulkRecordMonthlyReadingLev
     where: {
       id: { in: learnerIds },
       schoolId: user.schoolId,
-      // The designated ARAL teacher only — see `saveAralWeeklyAttendance`. Reading
+      // The designated ARAL tutor only — see `saveAralWeeklyAttendance`. Reading
       // levels are the ARAL programme's own record of a learner's progress.
       ...aralLearnerScope(user.id),
       deletedAt: null,
@@ -519,7 +519,7 @@ export const bulkRecordMonthlyReadingLevel = action("bulkRecordMonthlyReadingLev
     revalidatePath(`/teacher/grade/${l.gradeLevelId}/learners/${id}`);
   }
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
-  // The acting teacher may be the ARAL teacher while somebody else advises the
+  // The acting teacher may be the ARAL tutor while somebody else advises the
   // learner (or vice versa) — bust every affected teacher's metrics.
   for (const l of learners) {
     for (const id of [l.teacherId, l.aralTeacherId]) {

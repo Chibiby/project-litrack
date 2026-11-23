@@ -11,7 +11,7 @@ import { ARAL_VOLUNTEER_DESIGNATION } from "@/lib/validators/profile.schema";
  * `employmentType` wins when set; otherwise the volunteer designation reads as
  * Non-DepEd, any other designation as DepEd, and a blank one as not answered.
  * An ARAL tutor is a teacher with at least one live ARAL learner, the rule the
- * ARAL teachers pages use. Every value is validated, never trusted.
+ * ARAL tutors pages use. Every value is validated, never trusted.
  */
 
 export const ADVISORY_FILTERS = ["one", "multi", "floating", "with-section", "no-section"] as const;

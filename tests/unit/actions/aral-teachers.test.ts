@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/lib/errors/app-error";
 
 /**
- * `listAralTeacherOptions` — the on-demand ARAL teacher picker's read action.
+ * `listAralTeacherOptions` — the on-demand ARAL tutor picker's read action.
  *
  * The action takes no id from the caller at all: the school comes from the
  * session (`user.schoolId`), so there is nothing to craft to reach another

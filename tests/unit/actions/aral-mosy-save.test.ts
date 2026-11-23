@@ -270,7 +270,7 @@ describe("saveMosyDecision — guards", () => {
     expect(learnerFindFirst.mock.calls[0][0].select.sectionId).toBe(true);
   });
 
-  it("the adviser may save a learner tagged to a different ARAL teacher (advisory, not teacher, scope)", async () => {
+  it("the adviser may save a learner tagged to a different ARAL tutor (advisory, not teacher, scope)", async () => {
     learnerRow = taggedLearner({ aralTeacherId: OTHER_TEACHER });
     const res = await saveMosyDecision(form({ decision: "MOVE_OUT", reason: "DIAGNOSED_LSEN" }));
     expect(res).toEqual({ ok: true, data: { transition: "MOVED_OUT" } });
@@ -650,7 +650,7 @@ describe("saveMosyDecision — re-tag", () => {
     );
   });
 
-  it("the adviser may re-tag a learner another teacher moved out; they become the designated ARAL teacher", async () => {
+  it("the adviser may re-tag a learner another teacher moved out; they become the designated ARAL tutor", async () => {
     learnerRow = taggedLearner({ isAralLearner: false, aralTeacherId: null, aralEnrolledAt: null });
     existingRow = { decision: "MOVE_OUT", tutorId: OTHER_TEACHER, priorAralEnrolledAt: ENROLLED };
     const res = await saveMosyDecision(form({ decision: "STAY" }));

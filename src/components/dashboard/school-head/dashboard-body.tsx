@@ -207,7 +207,7 @@ export async function loadSchoolHeadDashboard({
         },
         {
           id: "aral",
-          label: "ARAL teachers behind",
+          label: "ARAL tutors behind",
           value: `${monitoring.aralTeachersWithPending} of ${monitoring.aralTeachers}`,
           href: monitoringAralHref(view),
           icon: "aral",

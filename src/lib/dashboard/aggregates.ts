@@ -715,7 +715,7 @@ export type TeacherOpts = {
 /**
  * Grades a teacher's dashboard/sidebar covers: the grade they advise in (legacy
  * `taughtGrades` mirror + the section they actually advise) unioned with every
- * grade holding a learner they are the designated ARAL teacher of. Without the
+ * grade holding a learner they are the designated ARAL tutor of. Without the
  * ARAL branch an ARAL-only teacher resolves to zero grades and every count
  * below silently returns 0.
  */
@@ -773,7 +773,7 @@ const getTeacherShellContextCached = cache(
         const opts: TeacherOpts = { schoolId, teacherId, isSuperAdmin };
         // `_count` avoids nesting learner rows; shell only needs hasAral boolean.
         // hasAral counts ARAL learners in *this teacher's* care, so the ARAL nav
-        // appears for a designated ARAL teacher and not for a teacher who merely
+        // appears for a designated ARAL tutor and not for a teacher who merely
         // shares a grade with somebody else's ARAL learners.
         const [grades, profile, advisorySections] = await Promise.all([
           prisma.gradeLevel.findMany({

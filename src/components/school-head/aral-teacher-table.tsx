@@ -71,7 +71,7 @@ export type AralLearnerRow = {
   fullName: string;
   gradeLabel: string;
   sectionName: string | null;
-  /** Advisory teacher (roster owner) — distinct from the ARAL teacher. */
+  /** Advisory teacher (roster owner) — distinct from the ARAL tutor. */
   adviserName: string | null;
   aralTeacherId: string | null;
 };
@@ -86,11 +86,11 @@ export type AralListPagination = {
 };
 
 /**
- * ARAL teacher designation — the second, independent axis.
+ * ARAL tutor designation — the second, independent axis.
  *
  * Advisory (grade + section) and ARAL are separate assignments: any active
  * teacher may be designated here, whether or not they advise a section, and a
- * learner's ARAL teacher need not be their adviser. This is also the only place
+ * learner's ARAL tutor need not be their adviser. This is also the only place
  * a School Head can hand ARAL learners over before removing a teacher, so the
  * teacher dropdown is deliberately the whole active roster, not just advisers.
  */
@@ -210,7 +210,7 @@ function AralTeacherTablePanel({
         toast.success(
           nextId
             ? `${row.fullName} assigned to ${teacherById.get(nextId)?.fullName ?? "teacher"}`
-            : `ARAL teacher cleared for ${row.fullName}`
+            : `ARAL tutor cleared for ${row.fullName}`
         );
         router.refresh();
       } finally {
@@ -300,7 +300,7 @@ function AralTeacherTablePanel({
             ) : (
               <>
                 <Label htmlFor={selectId} className="sr-only">
-                  ARAL teacher for {row.fullName}
+                  ARAL tutor for {row.fullName}
                 </Label>
                 <select
                   id={selectId}
@@ -333,7 +333,7 @@ function AralTeacherTablePanel({
                       <TableHead>Grade</TableHead>
                       <TableHead>Section</TableHead>
                       <TableHead>Adviser</TableHead>
-                      <TableHead className="min-w-64">ARAL teacher</TableHead>
+                      <TableHead className="min-w-64">ARAL tutor</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

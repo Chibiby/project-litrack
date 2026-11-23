@@ -226,7 +226,7 @@ export function ChangeGradeDialog({
             {toFloating ? (
               <p className="text-xs text-muted-foreground">
                 Floating holds learners who are not yet placed in a grade or section. They keep their records and
-                their ARAL teacher, and appear under the Floating filter in learner lists.
+                their ARAL tutor, and appear under the Floating filter in learner lists.
               </p>
             ) : null}
           </div>

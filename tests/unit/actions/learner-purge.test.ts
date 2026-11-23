@@ -301,7 +301,7 @@ describe("purgeArchivedLearner", () => {
     expect(purgeLearnerRecord).toHaveBeenCalledTimes(1);
   });
 
-  it("allows the designated ARAL teacher", async () => {
+  it("allows the designated ARAL tutor", async () => {
     learnerFindFirst.mockResolvedValue(archived({ teacherId: null, aralTeacherId: TEACHER_ID }));
     expect(await purgeArchivedLearner(fd(NAME))).toEqual({ ok: true });
   });

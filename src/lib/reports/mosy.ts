@@ -551,7 +551,7 @@ function buildLearnerDetailBlock(learners: MosyLearner[]): ReportBlock {
       { header: "Grade", width: 14 },
       { header: "Section", width: 14 },
       { header: "ARAL", width: 8 },
-      { header: "ARAL Teacher", width: 20 },
+      { header: "ARAL Tutor", width: 20 },
       { header: "Assessment Month", width: 18 },
       { header: "English", width: 20 },
       { header: "Filipino", width: 20 },

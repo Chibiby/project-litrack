@@ -56,7 +56,7 @@ export const DISTRICT_SUMMARY_FACETS = [
   { id: "aral", label: "ARAL learners" },
   { id: "bosy", label: "BOSY" },
   { id: "mosy", label: "MOSY" },
-  { id: "aral-teachers", label: "ARAL teachers" },
+  { id: "aral-teachers", label: "ARAL tutors" },
   { id: "advisory", label: "Advisory" },
 ] as const;
 

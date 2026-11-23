@@ -129,7 +129,7 @@ export function EnrollToAralDialog({
       toast.error("Select at least one learner");
       return;
     }
-    // Keeping them yourself sends no ARAL teacher at all rather than your own id. The
+    // Keeping them yourself sends no ARAL tutor at all rather than your own id. The
     // schema documents omission as that default, and the wire then says what
     // happened — the teacher named nobody — instead of implying a choice.
     const aralTeacherId = assignedToSelf ? undefined : teacherId;
@@ -193,7 +193,7 @@ export function EnrollToAralDialog({
 
         <div className="mt-4 space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="enroll-aral-teacher">ARAL teacher</Label>
+            <Label htmlFor="enroll-aral-teacher">ARAL tutor</Label>
             <AralTeacherCombobox
               id="enroll-aral-teacher"
               teachers={otherTeachers}

@@ -906,7 +906,7 @@ describe("setLearnerAralTeacher", () => {
     // Binds to the `!learner.isAralLearner` guard.
     expect(res).toMatchObject({
       ok: false,
-      error: "Enroll the learner in ARAL before assigning an ARAL teacher",
+      error: "Enroll the learner in ARAL before assigning an ARAL tutor",
     });
     expect(m.learnerUpdate).not.toHaveBeenCalled();
   });

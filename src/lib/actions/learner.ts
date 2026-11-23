@@ -95,7 +95,7 @@ export const createLearner = action("createLearner", async (
   // Placement is DERIVED from the section this teacher advises, never submitted.
   // The dropdowns that used to send it were built from the ARAL-inclusive grade
   // list while this action validated against the advisory-only one, so every
-  // teacher who was also the ARAL teacher of learners was offered a grade the action then
+  // teacher who was also the ARAL tutor of learners was offered a grade the action then
   // refused — and the modal could open pre-set to it.
   // With multi-advisory a teacher may hold up to three, so the section is named
   // when there is more than one. `resolveAdvisoryTarget` owns that decision: one
@@ -608,7 +608,7 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
 
   const uniqueIds = [...new Set(parsed.data.learnerIds)];
 
-  // Who is their ARAL teacher. Any teacher at the school qualifies — DepEd plantilla or
+  // Who is their ARAL tutor. Any teacher at the school qualifies — DepEd plantilla or
   // not, advisory section or not — because the designation is precisely what lets
   // a volunteer or ARAL-only teacher work on ARAL learners. Omitted means the
   // enrolling adviser keeps them, which is what the picker defaults to.
@@ -637,7 +637,7 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
   }
 
   const toEnroll = learners.filter((l) => !l.isAralLearner).map((l) => l.id);
-  // Already in ARAL with a different ARAL teacher. The teacher picked one for
+  // Already in ARAL with a different ARAL tutor. The teacher picked one for
   // this whole selection, so honour that for them too rather than silently
   // skipping them — a selection that partly took effect is worse than either
   // outcome.
@@ -646,7 +646,7 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
     .map((l) => l.id);
   const enrolledAt = new Date();
 
-  // One transaction for both writes. The teacher picked one ARAL teacher for one
+  // One transaction for both writes. The teacher picked one ARAL tutor for one
   // selection; enrolling some learners and then failing to move the rest would
   // leave the roster in a state nobody chose, and the toast counts the two
   // groups separately, so a partial apply would also be misreported.
@@ -673,7 +673,7 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
   }
 
   // One message per action, not per learner: enrolling twelve learners at once
-  // tells the ARAL teacher once. Self-assignment writes nothing.
+  // tells the ARAL tutor once. Self-assignment writes nothing.
   await notifyAralAssigned({
     schoolId: user.schoolId,
     recipientId: aralTeacherId,
@@ -705,7 +705,7 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
     teacherId: user.id,
     teacherShell: true,
   });
-  // The designated ARAL teacher's own sidebar and metrics are derived from the learners
+  // The designated ARAL tutor's own sidebar and metrics are derived from the learners
   // they track, so a designation to somebody else has to bust their caches too.
   if (aralTeacherId !== user.id) {
     revalidateLearnerScoped({
@@ -716,7 +716,7 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
   }
 
   // Both counts, because the caller reports them separately: a selection that
-  // enrolled nobody may still have moved learners to a new ARAL teacher, and "already
+  // enrolled nobody may still have moved learners to a new ARAL tutor, and "already
   // in ARAL" would be the wrong thing to say about that.
   return {
     ok: true,
@@ -726,7 +726,7 @@ export const enrollLearnersToAral = action("enrollLearnersToAral", async (
 
 /**
  * Enroll learners picked on the teacher roster into ARAL, and/or hand
- * already-enrolled ones to a different ARAL teacher.
+ * already-enrolled ones to a different ARAL tutor.
  *
  * A sibling of `enrollLearnersToAral` rather than a wrapper around it. That
  * action is scoped to one grade the caller *advises*, which is exactly right for
@@ -789,7 +789,7 @@ export const enrollRosterLearnersToAral = action("enrollRosterLearnersToAral", a
   }
 
   const toEnroll = learners.filter((l) => !l.isAralLearner).map((l) => l.id);
-  // Already in ARAL with a different ARAL teacher. The teacher picked one
+  // Already in ARAL with a different ARAL tutor. The teacher picked one
   // for this whole selection, so honour it for them too rather than silently
   // skipping them — a selection that partly took effect is worse than either
   // outcome.
@@ -797,7 +797,7 @@ export const enrollRosterLearnersToAral = action("enrollRosterLearnersToAral", a
     .filter((l) => l.isAralLearner && l.aralTeacherId !== aralTeacherId)
     .map((l) => l.id);
 
-  // Nothing to do: every learner is already in ARAL with this ARAL teacher. Returning
+  // Nothing to do: every learner is already in ARAL with this ARAL tutor. Returning
   // early keeps the audit log free of a row claiming a change that never
   // happened, and the caller still gets both counts to report from.
   if (toEnroll.length === 0 && toRedesignate.length === 0) {
@@ -806,7 +806,7 @@ export const enrollRosterLearnersToAral = action("enrollRosterLearnersToAral", a
 
   const enrolledAt = new Date();
 
-  // One transaction for both writes: the teacher picked one ARAL teacher for one
+  // One transaction for both writes: the teacher picked one ARAL tutor for one
   // selection, and enrolling some while failing to move the rest would leave the
   // roster in a state nobody chose — which the two separate counts would then
   // also misreport.
@@ -877,7 +877,7 @@ export const enrollRosterLearnersToAral = action("enrollRosterLearnersToAral", a
     teacherId: user.id,
     teacherShell: true,
   });
-  // The designated ARAL teacher's own sidebar and metrics are derived from the learners
+  // The designated ARAL tutor's own sidebar and metrics are derived from the learners
   // they track, so a designation to somebody else has to bust their caches too.
   if (aralTeacherId !== user.id) {
     revalidateLearnerScoped({
@@ -886,8 +886,8 @@ export const enrollRosterLearnersToAral = action("enrollRosterLearnersToAral", a
       teacherShell: true,
     });
   }
-  // The outgoing ARAL teacher of a reassigned learner loses them from their own ARAL
-  // list, so their caches are just as stale as the incoming ARAL teacher's.
+  // The outgoing ARAL tutor of a reassigned learner loses them from their own ARAL
+  // list, so their caches are just as stale as the incoming ARAL tutor's.
   const previousAralTeacherIds = new Set(
     learners
       .filter((l) => affectedSet.has(l.id) && l.aralTeacherId)
@@ -953,7 +953,7 @@ export const setLearnerAralTeacher = action("setLearnerAralTeacher", async (
   if (nextAralTeacherId && !learner.isAralLearner) {
     return {
       ok: false,
-      error: "Enroll the learner in ARAL before assigning an ARAL teacher",
+      error: "Enroll the learner in ARAL before assigning an ARAL tutor",
     };
   }
 
@@ -999,7 +999,7 @@ export const setLearnerAralTeacher = action("setLearnerAralTeacher", async (
   revalidateSchoolHeadTeachers(user.schoolId);
   revalidatePath(SCHOOL_HEAD_ROUTES.learners);
   revalidatePath("/teacher/aral");
-  // Both the outgoing and incoming ARAL teacher's sidebar/metrics are derived
+  // Both the outgoing and incoming ARAL tutor's sidebar/metrics are derived
   // from the learners they track, so both have to be busted.
   revalidateLearnerScoped({
     schoolId: learner.schoolId,
@@ -1013,4 +1013,4 @@ export const setLearnerAralTeacher = action("setLearnerAralTeacher", async (
     teacherShell: true,
   });
   return { ok: true };
-}, { verb: "assign the ARAL teacher" });
+}, { verb: "assign the ARAL tutor" });

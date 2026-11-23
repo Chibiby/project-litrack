@@ -1549,7 +1549,7 @@ export function TeacherProfileForm({
                 aria-disabled="true"
                 className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
               >
-                Non-DepEd ARAL teachers don&apos;t take a teaching assignment. Your
+                Non-DepEd ARAL volunteers don&apos;t take a teaching assignment. Your
                 School Head assigns the learners you teach for ARAL.
               </p>
             ) : (

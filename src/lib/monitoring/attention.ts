@@ -46,8 +46,8 @@ export function buildMonitoringAttention(
   if (counts.aralTeachersWithPending > 0) {
     items.push({
       id: "monitoring:aral",
-      label: "ARAL teachers with pending tasks",
-      detail: `${n(counts.aralTeachersWithPending, "ARAL teacher is", "ARAL teachers are")} behind on attendance, reading level or profiling`,
+      label: "ARAL tutors with pending tasks",
+      detail: `${n(counts.aralTeachersWithPending, "ARAL tutor is", "ARAL tutors are")} behind on attendance, reading level or profiling`,
       href: hrefs.aral,
       badge: `${counts.aralTeachersWithPending} of ${counts.aralTeachers}`,
       tone: "amber",
@@ -73,7 +73,7 @@ export function buildMonitoringAttention(
   if ((d.ARAL_NO_TUTOR ?? 0) > 0) {
     items.push({
       id: "monitoring:aral-no-tutor",
-      label: "ARAL learners with no ARAL teacher",
+      label: "ARAL learners with no ARAL tutor",
       detail: "Nobody is recording their ARAL attendance or reading level",
       href: `${hrefs.discrepancies}#ARAL_NO_TUTOR`,
       badge: n(d.ARAL_NO_TUTOR, "learner", "learners"),

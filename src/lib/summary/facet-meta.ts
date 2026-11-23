@@ -76,8 +76,8 @@ export const SUMMARY_FACET_META: Record<SummaryFacetId, SummaryFacetMeta> = {
   },
   "aral-teachers": {
     id: "aral-teachers",
-    label: "ARAL teachers",
-    description: "Teachers serving as ARAL teachers, DepEd vs Non-DepEd, overall and per grade level.",
+    label: "ARAL tutors",
+    description: "Teachers serving as ARAL tutors, DepEd vs Non-DepEd, overall and per grade level.",
     paramKinds: [],
   },
   advisory: {

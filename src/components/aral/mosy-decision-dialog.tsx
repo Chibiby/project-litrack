@@ -59,7 +59,7 @@ type MosyFormValues = {
 const TRANSITION_TOAST: Record<MosyTransition, string> = {
   NONE: "MOSY level saved",
   MOVED_OUT: "Moved out of ARAL",
-  RETAGGED: "Back in ARAL. You are now their ARAL teacher.",
+  RETAGGED: "Back in ARAL. You are now their ARAL tutor.",
 };
 
 const CHOICE_CARD =
@@ -223,7 +223,7 @@ function MosyDecisionForm({
               <span className="text-muted-foreground"> · {gradeSection}</span>
             </p>
             <p className="text-sm text-muted-foreground">
-              You can undo a move-out: the ARAL teacher who recorded it can reopen this dialog and
+              You can undo a move-out: the ARAL tutor who recorded it can reopen this dialog and
               choose Stay.
             </p>
           </div>
@@ -296,8 +296,8 @@ function MosyDecisionForm({
       {/* Re-tagging a moved-out learner makes the saving adviser their ARAL
           teacher of record (resolveMosySave), so say so before they commit. */}
       {!row.isAralLearner && decision === "STAY" ? (
-        <Callout role="status" title="You will become this learner's ARAL teacher">
-          Saving puts {row.fullName} back in ARAL with you as their ARAL teacher. They will
+        <Callout role="status" title="You will become this learner's ARAL tutor">
+          Saving puts {row.fullName} back in ARAL with you as their ARAL tutor. They will
           appear in your Weekly Attendance and Monthly Reading Level.
         </Callout>
       ) : null}

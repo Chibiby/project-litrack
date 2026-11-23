@@ -68,7 +68,7 @@ export const markAttendance = action("markAttendance", async (formData: FormData
   if (!learner) throw resourceNotFound("Learner");
 
   assertSameSchool(user.schoolId, learner.schoolId, "Learner");
-  // The designated ARAL teacher, not merely the adviser: attendance here is the
+  // The designated ARAL tutor, not merely the adviser: attendance here is the
   // ARAL programme's record, and the teacher running it for this learner is the
   // one entitled to write it.
   if (!teacherIsAralTeacherFor(learner, user.id)) throw resourceNotFound("Learner");
@@ -259,7 +259,7 @@ export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async
       id: { in: learnerIds },
       schoolId: user.schoolId,
       gradeLevelId: grade.id,
-      // The designated ARAL teacher only. An adviser is not entitled to encode the
+      // The designated ARAL tutor only. An adviser is not entitled to encode the
       // ARAL week for a learner somebody else runs the programme for, even
       // though the learner sits in their class.
       ...aralLearnerScope(user.id),
@@ -448,7 +448,7 @@ export const saveAralWeeklyAttendance = action("saveAralWeeklyAttendance", async
   }
   for (const p of paths) revalidatePath(p);
   revalidateLearnerScoped({ schoolId: user.schoolId, teacherId: user.id });
-  // The acting teacher may be the ARAL teacher while somebody else advises the
+  // The acting teacher may be the ARAL tutor while somebody else advises the
   // learner (or vice versa) — bust every affected teacher's metrics.
   for (const id of otherTeacherIds) revalidateTeacherDashboard(id);
 

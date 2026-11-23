@@ -208,7 +208,7 @@ export function AralCoveragePanel({
       subtitle="Learners currently in the ARAL program"
       icon={Sparkles}
       iconTile="icon-glass text-aral-strong"
-      action={{ label: "Designate ARAL teachers", href }}
+      action={{ label: "Designate ARAL tutors", href }}
     >
       <div className="lg:flex lg:items-center lg:gap-6">
         <Donut

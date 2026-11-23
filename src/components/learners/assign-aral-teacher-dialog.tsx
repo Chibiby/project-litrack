@@ -30,14 +30,14 @@ import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
 
 /**
- * The one place a teacher names an ARAL teacher from the roster.
+ * The one place a teacher names an ARAL tutor from the roster.
  *
  * Enrolment and reassignment are the same decision — who tracks this learner's
  * weekly ARAL progress — so they are the same dialog rather than two that differ
  * only in a verb. `target.enrolling` picks the wording; the action behind it
  * assigns or moves as each learner requires.
  *
- * The ARAL teacher list is fetched when the dialog first opens, not shipped with the
+ * The ARAL tutor list is fetched when the dialog first opens, not shipped with the
  * page: the roster mounts one of these for every visit and most visits never
  * open it. Once fetched it is kept, so the second and later openings are instant.
  */
@@ -61,13 +61,13 @@ export type AssignAralTeacherTarget = {
   /** One learner's name when a single row opened this; null for a bulk pick. */
   learnerName: string | null;
   /**
-   * ARAL teacher to pre-select — the learner's current one, where the caller knows it.
+   * ARAL tutor to pre-select — the learner's current one, where the caller knows it.
    * Null falls back to "Myself", which is the right default for an enrolment.
    */
   currentTeacherId: string | null;
   /**
    * False when every selected learner is already in ARAL, which makes this a
-   * change of ARAL teacher rather than an enrolment. Wording only: the action decides
+   * change of ARAL tutor rather than an enrolment. Wording only: the action decides
    * per learner what actually has to happen.
    */
   enrolling: boolean;
@@ -125,7 +125,7 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
     if (open && !requested.current) load();
   }, [open, load]);
 
-  // Each opening starts from its own learner's ARAL teacher, never the previous row's.
+  // Each opening starts from its own learner's ARAL tutor, never the previous row's.
   // Adjusted during render (React docs "adjusting state when a prop changes"
   // pattern) rather than an effect.
   const [prevTarget, setPrevTarget] = useState(target);
@@ -155,7 +155,7 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
 
   function handleSubmit() {
     if (!target || !chosenId) return;
-    // Keeping them yourself sends no ARAL teacher at all rather than your own id: the
+    // Keeping them yourself sends no ARAL tutor at all rather than your own id: the
     // schema documents omission as that default, so the wire says what happened
     // — the teacher named nobody — instead of implying a choice.
     const aralTeacherId = assignedToSelf ? undefined : chosenId;
@@ -163,7 +163,7 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
 
     startTransition(async () => {
       const toastId = toast.loading(
-        enrolling ? "Enrolling in ARAL…" : "Changing ARAL teacher…"
+        enrolling ? "Enrolling in ARAL…" : "Changing ARAL tutor…"
       );
       const res = await callAction(() =>
         enrollRosterLearnersToAral({
@@ -206,12 +206,12 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
   const title = enrolling
     ? `Enroll ${subject} in ARAL`
     : target?.learnerName
-      ? `Change ${target.learnerName}'s ARAL teacher`
-      : `Change ARAL teacher for ${subject}`;
+      ? `Change ${target.learnerName}'s ARAL tutor`
+      : `Change ARAL tutor for ${subject}`;
 
   const description = enrolling
-    ? "Pick who will be their ARAL teacher, then confirm. They join the ARAL roster and appear in the weekly attendance and reading grids."
-    : "Pick who takes over. The learner stays in ARAL — only the ARAL teacher changes.";
+    ? "Pick who will be their ARAL tutor, then confirm. They join the ARAL roster and appear in the weekly attendance and reading grids."
+    : "Pick who takes over. The learner stays in ARAL — only the ARAL tutor changes.";
 
   return (
     <Dialog
@@ -234,7 +234,7 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
         </DialogHeader>
 
         <div className="space-y-1.5">
-          <Label htmlFor="assign-aral-teacher">ARAL teacher</Label>
+          <Label htmlFor="assign-aral-teacher">ARAL tutor</Label>
 
           {loadError ? (
             <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
@@ -266,7 +266,7 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
               <p className="text-xs text-muted-foreground">
                 {otherTeachers.length === 0
                   ? "You are the only teacher who can be designated right now."
-                  : "Any teacher at your school can be designated — DepEd or Non-DepEd ARAL teacher, advisory class or not. They are told who assigned them."}
+                  : "Any teacher at your school can be designated — DepEd or Non-DepEd ARAL volunteer, advisory class or not. They are told who assigned them."}
               </p>
             </>
           )}
@@ -290,7 +290,7 @@ export function AssignAralTeacherDialog({ target, onClose, onDone }: Props) {
           >
             {enrolling
               ? `Enroll${count > 1 ? ` ${count}` : ""}`
-              : "Save ARAL teacher"}
+              : "Save ARAL tutor"}
           </Button>
         </DialogFooter>
       </DialogContent>

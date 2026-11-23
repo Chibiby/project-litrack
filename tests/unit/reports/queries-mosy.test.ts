@@ -407,7 +407,7 @@ describe("buildMosyTable â€” ARAL profiles are optional", () => {
 
     const detail = table.blocks![5];
     expect(detail.rows[0][12]).toBe("Not completed");
-    // The ARAL Teacher column is what makes the advised-union-taught scope
+    // The ARAL Tutor column is what makes the advised-union-taught scope
     // visible on the sheet, formatted surname-first like the Learner column
     // next to it rather than as the raw `fullName` column.
     expect(detail.rows[0][5]).toBe("Dela Cruz, Jun");
@@ -426,7 +426,7 @@ describe("buildMosyTable â€” person-name conventions", () => {
     ]);
   });
 
-  it("selects the ARAL teacher's name parts, not fullName, for surname-first formatting", async () => {
+  it("selects the ARAL tutor's name parts, not fullName, for surname-first formatting", async () => {
     await buildMosyTable(ADMIN_SCOPE, {});
 
     const args = learnerFindMany.mock.calls[0][0] as {

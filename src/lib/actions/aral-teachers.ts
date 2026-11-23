@@ -14,7 +14,7 @@ export type AralTeacherPickerData = {
 };
 
 /**
- * The ARAL teacher list for a picker that opens on demand.
+ * The ARAL tutor list for a picker that opens on demand.
  *
  * The roster renders one dialog for the whole page and most visits never open it,
  * so the list is fetched when the dialog opens rather than shipped with every

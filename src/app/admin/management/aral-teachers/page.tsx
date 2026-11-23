@@ -48,7 +48,7 @@ async function directoryFilters(params: AralTeachersParams): Promise<ListFilterF
     schoolField(schools, params.schoolId),
     {
       ...gradeField(listGradeOptions(), params.grade),
-      help: "ARAL teachers with at least one ARAL learner in this grade.",
+      help: "ARAL tutors with at least one ARAL learner in this grade.",
     },
   ];
 }
@@ -67,7 +67,7 @@ async function AralTeachersCards({ params }: { params: AralTeachersParams }) {
   } catch (err) {
     console.error("[AdminAralTeachersPage] failed to load summary:", err);
   }
-  if (!loaded) return <SummaryUnavailable what="ARAL teacher" />;
+  if (!loaded) return <SummaryUnavailable what="ARAL tutor" />;
   return <AralTeachersSummaryCards summary={loaded.summary} scope={loaded.scope} />;
 }
 
@@ -93,7 +93,7 @@ async function AralTeachersBody({ params }: { params: AralTeachersParams }) {
     <>
       {!dbAvailable ? (
         <p className="mb-4 text-sm text-destructive">
-          Could not load ARAL teachers right now. The database may be unavailable.
+          Could not load ARAL tutors right now. The database may be unavailable.
         </p>
       ) : null}
       <AralTeachersTable
@@ -126,14 +126,14 @@ export default async function AdminAralTeachersPage({
 
   return (
     <AdminPage
-      title="ARAL Teachers"
+      title="ARAL Tutors"
       role={user.role}
       userName={user.fullName || user.email}
       hero={
         <SchoolHeadHero
           eyebrow="Management"
           eyebrowIcon={HandHelping}
-          title="ARAL Teachers"
+          title="ARAL Tutors"
           subtitle="Every teacher who handles ARAL learners, and how many learners each one has."
         />
       }

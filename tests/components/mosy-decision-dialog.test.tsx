@@ -391,10 +391,10 @@ describe("MosyDecisionDialog Transferred out", () => {
   });
 });
 
-const WARNING ="You will become this learner's ARAL teacher";
+const WARNING ="You will become this learner's ARAL tutor";
 
 describe("MosyDecisionDialog — Stay on a moved-out learner", () => {
-  it("warns that the adviser becomes the ARAL teacher", async () => {
+  it("warns that the adviser becomes the ARAL tutor", async () => {
     const row = makeRow({ isAralLearner: false, status: "moved_out", decision: "MOVE_OUT" });
     render(<MosyDecisionDialog state={{ row }} onClose={() => {}} />);
     expect(screen.queryByText(WARNING)).toBeNull();

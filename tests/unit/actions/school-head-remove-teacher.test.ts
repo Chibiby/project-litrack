@@ -209,7 +209,7 @@ describe("removeTeacher", () => {
     expect(revalidatePath).toHaveBeenCalledWith(SCHOOL_HEAD_ROUTES.schoolGradeLevels);
   });
 
-  it("still refuses while the teacher is someone's designated ARAL teacher", async () => {
+  it("still refuses while the teacher is someone's designated ARAL tutor", async () => {
     teacherLookup = { ...teacherLookup!, _count: { aralLearners: 3 } };
 
     const res = await removeTeacher(form());

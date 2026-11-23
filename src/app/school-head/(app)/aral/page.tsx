@@ -101,7 +101,7 @@ async function loadAralHero({
             denseOnPhone
           />
           <StatCard
-            title="With an ARAL teacher"
+            title="With an ARAL tutor"
             value={programWithTeacher}
             hint="Already designated"
             icon={UserCheck}
@@ -109,7 +109,7 @@ async function loadAralHero({
             denseOnPhone
           />
           <StatCard
-            title="Awaiting an ARAL teacher"
+            title="Awaiting an ARAL tutor"
             value={programWithoutTeacher}
             hint="Needs a designated teacher"
             icon={UserX}
@@ -184,14 +184,14 @@ async function AralLearnersBody({
       {/* Violet is the reserved ARAL accent, so the one place it earns a whole
           banner is here. */}
       <Callout variant="aral">
-        An ARAL teacher is independent of who advises the learner&apos;s section —
+        An ARAL tutor is independent of who advises the learner&apos;s section —
         designate any active teacher, including one who advises no section at all.
         Reassign here before removing a teacher who still holds ARAL learners.
       </Callout>
 
       {teacherOptions.length === 0 && !isSuperAdminView ? (
         <Callout title="No active teachers yet">
-          Approve a teacher before designating ARAL teachers.
+          Approve a teacher before designating ARAL tutors.
         </Callout>
       ) : null}
 

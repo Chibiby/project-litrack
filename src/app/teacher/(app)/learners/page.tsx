@@ -451,7 +451,7 @@ export default async function TeacherLearnersPage({
         <EmptyState
           icon={Sparkles}
           title="Open to DepEd advisers only"
-          description="The advisory roster belongs to the DepEd teacher who advises a section. As a Non-DepEd ARAL teacher you don't advise one, so there's nothing to manage here. Your ARAL learners are in the ARAL Program."
+          description="The advisory roster belongs to the DepEd teacher who advises a section. As a Non-DepEd ARAL volunteer you don't advise one, so there's nothing to manage here. Your ARAL learners are in the ARAL Program."
           actionHref="/teacher/aral"
           actionLabel="Go to ARAL Program"
         />

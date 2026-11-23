@@ -111,7 +111,7 @@ describe("deactivatedToast", () => {
 
   it("says how many moved and how many still need a tutor", () => {
     expect(deactivatedToast({ ok: true, data: { aralMoved: 3, aralKept: 1 } })).toBe(
-      "Teacher deactivated. 3 ARAL learners moved to their adviser. 1 ARAL learner has no adviser to take over. Assign an ARAL teacher on the Learners page."
+      "Teacher deactivated. 3 ARAL learners moved to their adviser. 1 ARAL learner has no adviser to take over. Assign an ARAL tutor on the Learners page."
     );
     expect(deactivatedToast({ ok: true, data: { aralMoved: 1, aralKept: 0 } })).toBe(
       "Teacher deactivated. 1 ARAL learner moved to their adviser."

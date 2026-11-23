@@ -168,7 +168,7 @@ describe("getLearnerProfile — teacher scope", () => {
     expect(res.data.archivedAt).toBe(formatLocalDateKey(new Date(2026, 6, 1)));
   });
 
-  it("returns a learner the teacher only holds as ARAL teacher", async () => {
+  it("returns a learner the teacher only holds as ARAL tutor", async () => {
     const res = await getLearnerProfile("own-aral");
     expect(res.ok).toBe(true);
     if (!res.ok) return;

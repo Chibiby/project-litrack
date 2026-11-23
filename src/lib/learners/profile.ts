@@ -96,7 +96,7 @@ export type LearnerProfileData = {
   aralEnrolledAt: string | null;
   aralTeacherName: string | null;
   /**
-   * The ARAL teacher's id, so a reassign picker can open on whoever holds the learner
+   * The ARAL tutor's id, so a reassign picker can open on whoever holds the learner
    * now instead of resetting to the viewing teacher.
    */
   aralTeacherId: string | null;

@@ -51,7 +51,7 @@ export default async function MonitoringDiscrepanciesPage({ searchParams }: Page
           eyebrow="Monitoring"
           eyebrowIcon={TriangleAlert}
           title="Discrepancies"
-          subtitle="Learners with no adviser or section, ARAL learners with no ARAL teacher, enrollments that do not match, and sections without an adviser."
+          subtitle="Learners with no adviser or section, ARAL learners with no ARAL tutor, enrollments that do not match, and sections without an adviser."
         />
       }
     >

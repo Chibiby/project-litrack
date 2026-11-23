@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 /**
- * The ARAL teachers pages moved to /aral-teachers. The old paths must keep
+ * The ARAL tutors pages moved to /aral-teachers. The old paths must keep
  * working as redirects (bookmarks, emailed links), and the old route folders must
  * be gone so the redirect is not shadowed by a page.
  *
@@ -19,7 +19,7 @@ async function redirects(): Promise<Redirect[]> {
   return mod.default.redirects();
 }
 
-describe("legacy ARAL teacher routes redirect", () => {
+describe("legacy ARAL tutor routes redirect", () => {
   it.each([
     ["/admin/management", "/admin/management/aral-teachers"],
     ["/school-head", "/school-head/aral-teachers"],

@@ -50,7 +50,7 @@ type Props = {
   /** Every other teacher who may hold the designation — "Myself" excluded. */
   teachers: AralTeacherPickOption[];
   selfId: string;
-  /** Selected ARAL teacher id — `selfId` means "Myself". */
+  /** Selected ARAL tutor id — `selfId` means "Myself". */
   value: string;
   onValueChange: (value: string) => void;
   disabled?: boolean;
@@ -58,7 +58,7 @@ type Props = {
 };
 
 /**
- * Searchable "who is this learner's ARAL teacher" picker, shared by the enroll
+ * Searchable "who is this learner's ARAL tutor" picker, shared by the enroll
  * and reassign flows. "Myself" is always the first row and is never filtered
  * out — it is how a teacher un-delegates, and searching should not hide it.
  */

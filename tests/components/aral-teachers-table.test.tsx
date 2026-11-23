@@ -69,9 +69,9 @@ describe("formatTeacherGrades", () => {
 });
 
 describe("AralTeachersTable", () => {
-  it("shows the empty state when no teacher is designated an ARAL teacher", () => {
+  it("shows the empty state when no teacher is designated an ARAL tutor", () => {
     renderTable();
-    expect(screen.getByText("No ARAL teachers yet")).not.toBeNull();
+    expect(screen.getByText("No ARAL tutors yet")).not.toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByText(/no teacher\./)).toBeNull();
   });
@@ -79,7 +79,7 @@ describe("AralTeachersTable", () => {
   it("says nothing matches, with a way back, when a search finds no teacher", () => {
     renderTable({ q: "zzz", totalCount: 0 });
     expect(screen.getByText("No teachers match")).not.toBeNull();
-    expect(screen.queryByText("No ARAL teachers yet")).toBeNull();
+    expect(screen.queryByText("No ARAL tutors yet")).toBeNull();
     expect(screen.getByRole("link", { name: "Clear filters" }).getAttribute("href")).toBe(BASE);
   });
 
@@ -120,7 +120,7 @@ describe("AralTeachersTable", () => {
 
   it("never nests a block element in a paragraph in the mobile card list", () => {
     renderTable({ rows: [row(), row({ id: "t2", employment: "NON_DEPED" })] });
-    const list = screen.getByRole("list", { name: "ARAL teachers" });
+    const list = screen.getByRole("list", { name: "ARAL tutors" });
     expect(list.querySelectorAll("p div")).toHaveLength(0);
     const chip = within(list).getAllByText("DepEd")[0]!;
     expect(chip.closest("p")).toBeNull();
@@ -128,7 +128,7 @@ describe("AralTeachersTable", () => {
 
   it("renders no dash in the mobile card when employment is unknown, but keeps it in the table", () => {
     renderTable({ rows: [row({ employment: null, employmentLabel: null })] });
-    const list = screen.getByRole("list", { name: "ARAL teachers" });
+    const list = screen.getByRole("list", { name: "ARAL tutors" });
     expect(within(list).queryByText("—")).toBeNull();
     expect(within(screen.getByRole("table")).getAllByText("—").length).toBeGreaterThan(0);
   });

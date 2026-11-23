@@ -5,7 +5,7 @@ import { NOT_ANSWERED } from "@/lib/summary/shape/section";
 import type { ScopeSchool } from "@/lib/summary/types";
 
 /**
- * Facet `aral-teachers` (ARAL teachers): teachers currently designated ARAL teacher,
+ * Facet `aral-teachers` (ARAL tutors): teachers currently designated ARAL tutor,
  * DepEd / Non-DepEd / Not answered, overall and per grade level.
  *
  * Counting rule (operator decision 2026-11-01): a teacher is counted under every
@@ -130,7 +130,7 @@ describe("shapeAralTeachers", () => {
 
   it("returns the aral-teachers facetId, title and a teachers + per-grade section", () => {
     expect(result.facetId).toBe("aral-teachers");
-    expect(result.title).toBe("ARAL teachers");
+    expect(result.title).toBe("ARAL tutors");
     expect(result.sections.map((s) => s.id)).toEqual(["teachers", "teachersByGrade"]);
   });
 
@@ -217,7 +217,7 @@ describe("shapeAralTeachers", () => {
   });
 });
 
-describe("ARAL teachers export list", () => {
+describe("ARAL tutors export list", () => {
   it("at school level: counts first, then teacher %, then per grade Total / DepEd / Non-DepEd, then a Total row", () => {
     const list = shape("school").exportList!;
     expect(list.id).toBe("aral-teachers-per-school");
@@ -225,16 +225,16 @@ describe("ARAL teachers export list", () => {
       "School",
       "School ID",
       "District",
-      "DepEd ARAL teachers",
-      "Non-DepEd ARAL teachers",
+      "DepEd ARAL tutors",
+      "Non-DepEd ARAL volunteers",
       "Not answered",
-      "Total ARAL teachers",
+      "Total ARAL tutors",
       "% DepEd",
       "% Non-DepEd",
-      "Grade 2 ARAL teachers",
+      "Grade 2 ARAL tutors",
       "Grade 2 DepEd",
       "Grade 2 Non-DepEd",
-      "Grade 3 ARAL teachers",
+      "Grade 3 ARAL tutors",
       "Grade 3 DepEd",
       "Grade 3 Non-DepEd",
     ]);
@@ -255,9 +255,9 @@ describe("ARAL teachers export list", () => {
     const list = shape("school", raw, [S1, S2]).exportList!;
     const total = list.rows.at(-1)!;
     const col = (name: string) => list.columns.indexOf(name);
-    expect(total[col("Total ARAL teachers")]).toBe(1);
-    expect(total[col("Grade 2 ARAL teachers")]).toBe(1);
-    expect(total[col("Grade 3 ARAL teachers")]).toBe(1);
+    expect(total[col("Total ARAL tutors")]).toBe(1);
+    expect(total[col("Grade 2 ARAL tutors")]).toBe(1);
+    expect(total[col("Grade 3 ARAL tutors")]).toBe(1);
   });
 
   it("drops the not-answered column when every teacher is DepEd or Non-DepEd, keeping the grade columns aligned", () => {
@@ -265,9 +265,9 @@ describe("ARAL teachers export list", () => {
     const list = shape("school", raw).exportList!;
     expect(list.columns).not.toContain("Not answered");
     expect(list.columns.slice(3, 8)).toEqual([
-      "DepEd ARAL teachers",
-      "Non-DepEd ARAL teachers",
-      "Total ARAL teachers",
+      "DepEd ARAL tutors",
+      "Non-DepEd ARAL volunteers",
+      "Total ARAL tutors",
       "% DepEd",
       "% Non-DepEd",
     ]);
@@ -279,7 +279,7 @@ describe("ARAL teachers export list", () => {
 
   it("at district level: one row per district plus a Total row, no School ID column", () => {
     const list = shape("district").exportList!;
-    expect(list.columns.slice(0, 2)).toEqual(["District", "DepEd ARAL teachers"]);
+    expect(list.columns.slice(0, 2)).toEqual(["District", "DepEd ARAL tutors"]);
     expect(list.columns).not.toContain("School ID");
     const byName = new Map(list.rows.map((r) => [r[0], r]));
     expect(byName.get("Alabel 1")).toEqual(["Alabel 1", 1, 3, 1, 5, 20, 60, 3, 1, 2, 3, 1, 1]);
@@ -296,14 +296,14 @@ describe("ARAL teachers export list", () => {
 
   it("per-grade columns appear only for grades that have teachers", () => {
     const cols = shape("overall").exportList!.columns.join("|");
-    expect(cols).toContain("Grade 2 ARAL teachers");
-    expect(cols).toContain("Grade 3 ARAL teachers");
+    expect(cols).toContain("Grade 2 ARAL tutors");
+    expect(cols).toContain("Grade 3 ARAL tutors");
     expect(cols).not.toContain("Grade 5");
     expect(cols).not.toContain("Grade 6");
   });
 });
 
-describe("ARAL teachers report table", () => {
+describe("ARAL tutors report table", () => {
   it("replaces the Category/Count blocks with the one-row-per-school block, Total row bold", () => {
     const table = SUMMARY_FACETS["aral-teachers"].toReportTable(shape("school"), FRAME);
     // Overall + PDF per-grade totals + three Excel per-grade sheets.

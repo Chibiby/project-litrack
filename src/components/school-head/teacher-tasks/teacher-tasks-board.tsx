@@ -50,12 +50,12 @@ export function TeacherTasksBoard({
   /** Super Admin school view: the export names the school explicitly. */
   readOnly: boolean;
   schoolId: string;
-  /** ARAL: ARAL teachers and their ARAL tasks only. */
+  /** ARAL: ARAL tutors and their ARAL tasks only. */
   scope?: "ALL" | "ARAL";
 }) {
   const kinds: readonly TeacherTaskKind[] = scope === "ARAL" ? ARAL_TASK_KINDS : TEACHER_TASK_KINDS;
-  const who = scope === "ARAL" ? "ARAL teacher" : "teacher";
-  const whoMany = scope === "ARAL" ? "ARAL teachers" : "teachers";
+  const who = scope === "ARAL" ? "ARAL tutor" : "teacher";
+  const whoMany = scope === "ARAL" ? "ARAL tutors" : "teachers";
   const uid = useId();
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<KindFilter>("ALL");
@@ -260,7 +260,7 @@ export function TeacherTasksBoard({
               title={`No ${whoMany} to track yet`}
               description={
                 scope === "ARAL"
-                  ? "Teachers appear here once they are the ARAL teacher of at least one ARAL learner."
+                  ? "Teachers appear here once they are the ARAL tutor of at least one ARAL learner."
                   : "Approved, active teachers appear here once they join this school."
               }
               className="m-4"

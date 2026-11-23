@@ -1164,7 +1164,7 @@ export const getAccountProfile = action(
               learnerCount: sections.reduce((total, s) => total + s.learnerCount, 0),
             }
           : null,
-        // An ARAL teacher is a TEACHER with learners pointing at them, not a
+        // An ARAL tutor is a TEACHER with learners pointing at them, not a
         // separate role, so there is nothing else to read.
         aral: isTeacher
           ? {

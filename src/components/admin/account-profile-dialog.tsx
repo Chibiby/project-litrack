@@ -258,7 +258,7 @@ export function AccountProfileDialog({
                   <h3 className="flex items-center gap-2 font-semibold text-foreground">
                     ARAL involvement
                     {profile.aral.isAralVolunteer ? (
-                      <Badge variant="violet">Non-DepEd ARAL teacher</Badge>
+                      <Badge variant="violet">Non-DepEd ARAL volunteer</Badge>
                     ) : null}
                   </h3>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-muted-foreground">

@@ -93,7 +93,7 @@ export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestL
     { id: "sh-term-subjects", role: "SCHOOL_HEAD", group: "Reports", label: "Term subjects", href: "/school-head/term-subjects" },
     { id: "sh-kinder-checklist", role: "SCHOOL_HEAD", group: "Reports", label: "Kindergarten checklist", href: "/school-head/terms-reports/kinder" },
     { id: "sh-learners", role: "SCHOOL_HEAD", group: "Management", label: "Learners", href: "/school-head/learners" },
-    { id: "sh-aral-teachers", role: "SCHOOL_HEAD", group: "Management", label: "ARAL teachers", href: "/school-head/aral-teachers" },
+    { id: "sh-aral-teachers", role: "SCHOOL_HEAD", group: "Management", label: "ARAL tutors", href: "/school-head/aral-teachers" },
     { id: "sh-monitoring-non-compliance", role: "SCHOOL_HEAD", group: "Monitoring", label: "Non-compliance", href: "/school-head/monitoring/non-compliance" },
     { id: "sh-monitoring-aral", role: "SCHOOL_HEAD", group: "Monitoring", label: "ARAL Monitoring", href: "/school-head/monitoring/aral" },
     { id: "sh-monitoring-discrepancies", role: "SCHOOL_HEAD", group: "Monitoring", label: "Discrepancies", href: "/school-head/monitoring/discrepancies" },

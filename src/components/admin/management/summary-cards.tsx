@@ -169,11 +169,11 @@ export function DistrictAdminsSummaryCards({
 
 export function AralTeachersSummaryCards({ summary, scope }: { summary: AralTeachersSummary; scope: string }) {
   return (
-    <SummaryGrid scope={scope} label="ARAL teacher overview">
-      <StatCard title="ARAL teachers" value={n(summary.teachers)} hint="Teachers handling ARAL learners" icon={HandHelping} tone="violet" {...card} />
-      <StatCard title="Learners with an ARAL teacher" value={n(summary.learnersWithTeacher)} hint="ARAL learners" icon={Sparkles} tone="violet" {...card} />
+    <SummaryGrid scope={scope} label="ARAL tutor overview">
+      <StatCard title="ARAL tutors" value={n(summary.teachers)} hint="Teachers handling ARAL learners" icon={HandHelping} tone="violet" {...card} />
+      <StatCard title="Learners with an ARAL tutor" value={n(summary.learnersWithTeacher)} hint="ARAL learners" icon={Sparkles} tone="violet" {...card} />
       <StatCard
-        title="Learners without an ARAL teacher"
+        title="Learners without an ARAL tutor"
         value={n(summary.learnersWithoutTeacher)}
         hint="Assign one from a learner's profile"
         icon={UserX}

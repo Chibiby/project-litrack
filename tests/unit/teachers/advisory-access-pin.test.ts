@@ -7,31 +7,32 @@ import {
 } from "@/lib/validators/profile.schema";
 
 /**
- * Pins "keep today's access" after the ARAL-teacher rename: the
- * stored designation string is unchanged (it is data in TeacherProfile and in the
- * backfill migration), only the label shown on screens changed.
+ * Pins "keep today's access" across the ARAL tutor/teacher renames: the
+ * stored designation string never changes (it is data in TeacherProfile and in
+ * the backfill migration). Screens show it as stored again since the rename
+ * back to ARAL Tutor (2026-11-23).
  */
 describe("the stored volunteer designation is unchanged", () => {
   it("is still the literal 'Non-DepEd ARAL Volunteer'", () => {
     expect(ARAL_VOLUNTEER_DESIGNATION).toBe("Non-DepEd ARAL Volunteer");
   });
 
-  it("the display label is 'Non-DepEd ARAL Teacher' and differs from the stored value", () => {
-    expect(ARAL_VOLUNTEER_LABEL).toBe("Non-DepEd ARAL Teacher");
-    expect(ARAL_VOLUNTEER_LABEL).not.toBe(ARAL_VOLUNTEER_DESIGNATION);
+  it("the display label is the stored value, 'Non-DepEd ARAL Volunteer'", () => {
+    expect(ARAL_VOLUNTEER_LABEL).toBe("Non-DepEd ARAL Volunteer");
+    expect(ARAL_VOLUNTEER_LABEL).toBe(ARAL_VOLUNTEER_DESIGNATION);
   });
 });
 
 describe("designationLabel", () => {
-  it("shows the stored volunteer value as 'Non-DepEd ARAL Teacher'", () => {
-    expect(designationLabel("Non-DepEd ARAL Volunteer")).toBe("Non-DepEd ARAL Teacher");
-    expect(designationLabel(ARAL_VOLUNTEER_DESIGNATION)).toBe("Non-DepEd ARAL Teacher");
+  it("shows the stored volunteer value as 'Non-DepEd ARAL Volunteer'", () => {
+    expect(designationLabel("Non-DepEd ARAL Volunteer")).toBe("Non-DepEd ARAL Volunteer");
+    expect(designationLabel(ARAL_VOLUNTEER_DESIGNATION)).toBe("Non-DepEd ARAL Volunteer");
   });
 
   it("passes every other value through unchanged", () => {
     expect(designationLabel("Teacher")).toBe("Teacher");
     expect(designationLabel("Master Teacher I")).toBe("Master Teacher I");
-    expect(designationLabel("Non-DepEd ARAL Teacher")).toBe("Non-DepEd ARAL Teacher");
+    expect(designationLabel("Non-DepEd ARAL Volunteer")).toBe("Non-DepEd ARAL Volunteer");
   });
 
   it("passes null and undefined through as null", () => {
@@ -49,7 +50,7 @@ describe("advisoryRosterDenial keeps today's access", () => {
     }
   });
 
-  it("does not deny on the new display label: only the stored value is the volunteer", () => {
+  it("does not deny on the old 'Non-DepEd ARAL Teacher' label: only the stored value is the volunteer", () => {
     expect(
       advisoryRosterDenial({ isSuperAdmin: false, designation: "Non-DepEd ARAL Teacher", advisoryMode: "DEFAULT" })
     ).toBeNull();

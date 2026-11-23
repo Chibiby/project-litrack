@@ -157,7 +157,7 @@ export type FacetResult = {
   /**
    * Export-only: a list the file prints in place of the tables. The on-screen
    * view ignores it. Compliance sets it at school level (one row per flagged
-   * school, with a Remarks column); ARAL learners and ARAL teachers and Advisory set it at
+   * school, with a Remarks column); ARAL learners and ARAL tutors and Advisory set it at
    * every level (one row per school, district or scope, counts first).
    */
   exportList?: SummaryList;

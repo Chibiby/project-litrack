@@ -39,7 +39,7 @@ export function deactivatedToast(res: unknown): string {
   }
   if (kept > 0) {
     parts.push(
-      `${kept} ARAL learner${kept === 1 ? " has" : "s have"} no adviser to take over. Assign an ARAL teacher on the Learners page.`
+      `${kept} ARAL learner${kept === 1 ? " has" : "s have"} no adviser to take over. Assign an ARAL tutor on the Learners page.`
     );
   }
   return parts.length === 1 ? "Teacher deactivated" : parts.join(" ");

@@ -537,7 +537,7 @@ describe("AppSidebar — school head", () => {
     ).toBe("/school-head/teachers");
   });
 
-  it("lists Transfer under Management, after ARAL Teachers", () => {
+  it("lists Transfer under Management, after ARAL Tutors", () => {
     pathname.value = "/school-head";
     render(<AppSidebar role="SCHOOL_HEAD" userName="Head" expanded />);
     expect(

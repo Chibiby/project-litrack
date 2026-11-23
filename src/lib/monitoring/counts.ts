@@ -6,7 +6,7 @@ import type {
 } from "@/lib/teacher-tasks/types";
 
 /**
- * The tasks a teacher owes as an ARAL teacher (tutor of ARAL learners). MOSY and
+ * The tasks a teacher owes as an ARAL tutor (tutor of ARAL learners). MOSY and
  * end-of-term sheets belong to the advisory class, so they are not here.
  */
 export const ARAL_TASK_KINDS = ["ATTENDANCE", "READING_LEVEL", "ARAL_PROFILING"] as const satisfies readonly TeacherTaskKind[];
@@ -22,7 +22,7 @@ export function hasPendingAralTask(row: TeacherTaskRow): boolean {
 }
 
 /**
- * The ARAL teachers only, each row narrowed to its ARAL tasks: `pendingKinds`
+ * The ARAL tutors only, each row narrowed to its ARAL tasks: `pendingKinds`
  * keeps ARAL kinds only, so filters and counts on the ARAL page read the same
  * way they do on Non-compliance.
  */

@@ -23,7 +23,7 @@ export type ProfilingAdvisoryOption = { id: string; label: string };
  * ARAL Profiling's own search + Advisory + Status row. The advisory filter is
  * the same purple, grade-grouped picker as Learners: All advisories, then each
  * grade as a heading over its sections. It writes `section` only, since a
- * section id already names its grade; Profiling lists an ARAL teacher's
+ * section id already names its grade; Profiling lists an ARAL tutor's
  * learners across every grade they are assigned to.
  *
  * URL-driven: `q`, `section` and `status` all live in the query string, and

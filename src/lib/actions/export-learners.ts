@@ -123,7 +123,7 @@ function sectionFilterClause(sectionId?: string) {
 
 /**
  * `teacherId` scopes the export to the learners in that teacher's care —
- * their advisory roster plus any learner whose ARAL teacher they are.
+ * their advisory roster plus any learner whose ARAL tutor they are.
  */
 function learnerWhere(opts: {
   schoolId: string;

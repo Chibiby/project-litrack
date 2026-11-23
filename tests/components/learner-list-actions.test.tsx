@@ -278,7 +278,7 @@ describe("LearnerListClient — Actions column", () => {
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog.textContent).toContain("Enroll Ana Santos in ARAL");
-    expect(dialog.textContent).toContain("ARAL teacher");
+    expect(dialog.textContent).toContain("ARAL tutor");
     expect(listAralTeacherOptions).toHaveBeenCalled();
 
     // The picker is the gate, not a formality: the spark opens a choice and

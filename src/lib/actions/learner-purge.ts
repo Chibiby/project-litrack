@@ -35,7 +35,7 @@ const purgeArchivedLearnerSchema = z.object({
  * Reach is the TEACHER branch of `restoreLearner` and no wider: the learner must
  * be removed (an active learner is NOT_FOUND), in the caller's school, NOT yet
  * soft-deleted (`deletedAt` set is NOT_FOUND), the caller must be the adviser or
- * designated ARAL teacher, and the removal must still be inside the 30-day window
+ * designated ARAL tutor, and the removal must still be inside the 30-day window
  * (past it: LEARNER_REMOVAL_EXPIRED, checked only after the tenancy and access
  * checks so nothing leaks across tenants).
  * Unlike restore, purge is TEACHER-only: a School Head cannot purge here, and a

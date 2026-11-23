@@ -23,7 +23,7 @@ const COPY: Record<Scope, { title: string; subtitle: string; route: string }> = 
   ARAL: {
     title: "ARAL Monitoring",
     subtitle:
-      "ARAL teachers who are behind on weekly attendance, the monthly reading level or ARAL profiling for their ARAL learners.",
+      "ARAL tutors who are behind on weekly attendance, the monthly reading level or ARAL profiling for their ARAL learners.",
     route: SCHOOL_HEAD_ROUTES.monitoringAral,
   },
 };

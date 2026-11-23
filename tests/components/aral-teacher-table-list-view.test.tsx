@@ -87,7 +87,7 @@ describe("AralTeacherTable — mobile list view", () => {
     expect(list.querySelectorAll("li")).toHaveLength(ROWS.length);
   });
 
-  it("gives the mobile ARAL teacher select a unique id, distinct from the desktop one", () => {
+  it("gives the mobile ARAL tutor select a unique id, distinct from the desktop one", () => {
     render(<AralTeacherTable rows={ROWS} teachers={TEACHERS} list={LIST} />);
 
     const desktopSelect = document.querySelector("#aral-teacher-learner-1");

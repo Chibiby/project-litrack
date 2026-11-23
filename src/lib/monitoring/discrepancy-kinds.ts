@@ -61,9 +61,9 @@ export const DISCREPANCY_META: Record<DiscrepancyKind, DiscrepancyMeta> = {
     subject: "learner",
   },
   ARAL_NO_TUTOR: {
-    title: "ARAL learners with no active ARAL teacher",
-    description: "These ARAL learners have no ARAL teacher, or their ARAL teacher is inactive or removed.",
-    fix: "Assign an ARAL teacher on the Learners page.",
+    title: "ARAL learners with no active ARAL tutor",
+    description: "These ARAL learners have no ARAL tutor, or their ARAL tutor is inactive or removed.",
+    fix: "Assign an ARAL tutor on the Learners page.",
     subject: "learner",
   },
   NO_ENROLLMENT: {

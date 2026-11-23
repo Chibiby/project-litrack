@@ -523,7 +523,7 @@ describe("getNavGroups — admin", () => {
       "Learners",
       "IP Learners",
       "Teachers",
-      "ARAL Teachers",
+      "ARAL Tutors",
       "School Heads",
       "Schools",
       "District Admins",
@@ -637,7 +637,7 @@ describe("getNavGroups — school head", () => {
     expect(groups[1].items.map((i) => i.label)).toEqual([
       "Learners",
       "Teachers",
-      "ARAL Teachers",
+      "ARAL Tutors",
       "Transfer",
     ]);
     expect(groups[1].items.map((i) => i.href)).toEqual([

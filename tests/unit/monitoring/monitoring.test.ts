@@ -55,7 +55,7 @@ describe("learnerDiscrepancies", () => {
     ]);
   });
 
-  it("flags an ARAL learner whose ARAL teacher is missing or inactive", () => {
+  it("flags an ARAL learner whose ARAL tutor is missing or inactive", () => {
     const ctx = { hasActiveYear: true, enrollment: enrolled };
     expect(learnerDiscrepancies(learner({ isAralLearner: true }), ctx)).toEqual(["ARAL_NO_TUTOR"]);
     expect(
@@ -128,7 +128,7 @@ const tasks: TeacherTaskSummary = {
 };
 
 describe("aralTeacherSummary", () => {
-  it("keeps ARAL teachers only, narrowed to ARAL tasks", () => {
+  it("keeps ARAL tutors only, narrowed to ARAL tasks", () => {
     const s = aralTeacherSummary(tasks);
     expect(s.rows.map((r) => r.teacherId)).toEqual(["aral-behind", "aral-done"]);
     expect(s.rows[0]!.pendingKinds).toEqual(["ATTENDANCE"]);
@@ -146,7 +146,7 @@ describe("buildMonitoringAttention", () => {
   });
   const hrefs = { nonCompliance: "/nc", aral: "/aral", discrepancies: "/d" };
 
-  it("lists teachers, ARAL teachers and learner issues with links to who", () => {
+  it("lists teachers, ARAL tutors and learner issues with links to who", () => {
     const items = buildMonitoringAttention(buildMonitoringCounts(tasks, discrepancies), hrefs);
     expect(items.map((i) => [i.id, i.href, i.badge])).toEqual([
       ["monitoring:teachers", "/nc", "2 of 3"],

@@ -158,8 +158,8 @@ function pdfPartsFor(list: SummaryList): { pdfParts?: { heading?: string; column
 }
 
 /**
- * ARAL teachers' export blocks. Each grade group in the list is three columns
- * (ARAL teachers, DepEd, Non-DepEd), after the lead columns and the overall
+ * ARAL tutors' export blocks. Each grade group in the list is three columns
+ * (ARAL tutors, DepEd, Non-DepEd), after the lead columns and the overall
  * figures.
  *
  * - PDF: the overall figures, then one ARAL-teacher total per grade level.
@@ -205,7 +205,7 @@ function aralTeacherBlocks(list: SummaryList, level: SummaryLevel, boldLast: boo
   // PDF: the name column and one total per grade, split into readable parts.
   const pdfGradeCols = [0, ...groups.map((g) => g.start)];
   const pdfGrades = pick(pdfGradeCols, [list.columns[0]!, ...groups.map((g) => g.label)], {
-    heading: "ARAL teachers per grade level",
+    heading: "ARAL tutors per grade level",
     formats: ["pdf"],
   });
   if (pdfGradeCols.length > MAX_PDF_PART_COLUMNS) {
@@ -224,14 +224,14 @@ function aralTeacherBlocks(list: SummaryList, level: SummaryLevel, boldLast: boo
   return [
     overall,
     pdfGrades,
-    perGrade(0, "Total per grade level", "ARAL teachers per grade level"),
-    perGrade(1, "DepEd", "DepEd ARAL teachers per grade level"),
-    perGrade(2, "Non-DepEd", "Non-DepEd ARAL teachers per grade level"),
+    perGrade(0, "Total per grade level", "ARAL tutors per grade level"),
+    perGrade(1, "DepEd", "DepEd ARAL tutors per grade level"),
+    perGrade(2, "Non-DepEd", "Non-DepEd ARAL volunteers per grade level"),
   ];
 }
 
 /**
- * ARAL learners' and ARAL teachers' and Advisory's `toReportTable`: the result's `exportList`
+ * ARAL learners' and ARAL tutors' and Advisory's `toReportTable`: the result's `exportList`
  * (one row per school, district or scope, counts before percentages) replaces
  * the Category/Count blocks, at every level.
  */

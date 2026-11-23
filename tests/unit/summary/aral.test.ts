@@ -15,7 +15,7 @@ import type { ScopeSchool } from "@/lib/summary/types";
 /**
  * Facet `aral`: (1) ARAL learners per grade level, showing only grades with a
  * learner somewhere in the result (enum order; the full list if none), and
- * (2) teachers currently designated ARAL teacher, split DepEd / Non-DepEd / Not
+ * (2) teachers currently designated ARAL tutor, split DepEd / Non-DepEd / Not
  * answered by a pure TS rule so the mapping itself is under test, not just the
  * raw buckets passed through. Pure shaping only — no Prisma.
  */

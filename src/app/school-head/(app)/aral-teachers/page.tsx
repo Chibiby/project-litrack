@@ -38,7 +38,7 @@ async function AralTeachersCards({ view }: { view: SchoolHeadView }) {
     summary = await getAralTeachersSummary({ kind: "school", schoolId: view.schoolId });
   } catch (err) {
     console.error("[SchoolHeadAralTeachersPage] failed to load summary:", err);
-    return <SummaryUnavailable what="ARAL teacher" />;
+    return <SummaryUnavailable what="ARAL tutor" />;
   }
   return <AralTeachersSummaryCards summary={summary} scope={view.schoolName ?? "Your school"} />;
 }
@@ -66,7 +66,7 @@ async function AralTeachersBody({
     <>
       {!dbAvailable ? (
         <p className="mb-4 text-sm text-destructive">
-          Could not load ARAL teachers right now. The database may be unavailable.
+          Could not load ARAL tutors right now. The database may be unavailable.
         </p>
       ) : null}
       <AralTeachersTable
@@ -74,7 +74,7 @@ async function AralTeachersBody({
         filters={[
           {
             ...gradeField(listGradeOptions(), params.grade),
-            help: "ARAL teachers with at least one ARAL learner in this grade.",
+            help: "ARAL tutors with at least one ARAL learner in this grade.",
           },
         ]}
         sort={params.sort}
@@ -106,13 +106,13 @@ export default async function SchoolHeadAralTeachersPage({ searchParams }: PageP
 
   return (
     <SchoolHeadPage
-      title="ARAL Teachers"
+      title="ARAL Tutors"
       view={view}
       hero={
         <SchoolHeadHero
           eyebrow="Management"
           eyebrowIcon={HandHelping}
-          title="ARAL Teachers"
+          title="ARAL Tutors"
           subtitle="The teachers who handle ARAL learners in your school, and how many learners each one has."
         />
       }

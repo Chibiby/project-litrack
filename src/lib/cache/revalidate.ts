@@ -43,7 +43,7 @@ function expireTag(tag: string) {
  *
  * What does work now is the tag: `schoolTeachers(schoolId)` busts the Data
  * Cache entries holding this school's teacher list — `listAralTeachers`, read by
- * the ARAL teacher pickers on `/teacher/aral`, the two ARAL grade sheets,
+ * the ARAL tutor pickers on `/teacher/aral`, the two ARAL grade sheets,
  * `/school-head/aral`, and the `listAralTeacherOptions` action. Those readers are
  * `force-dynamic` too, so they have a Data Cache entry and still no Full Route
  * Cache entry — two different caches, and only the first one is invalidated
@@ -77,7 +77,7 @@ export function revalidateSchoolHeadTeachers(schoolId: string) {
   expireTag(tags.adminDashboard);
 }
 
-/** One school's cached teacher list (ARAL teacher pickers). */
+/** One school's cached teacher list (ARAL tutor pickers). */
 export function revalidateSchoolTeachers(schoolId: string) {
   expireTag(tags.schoolTeachers(schoolId));
 }
@@ -198,7 +198,7 @@ export function revalidateLearnerScoped(opts: {
   schoolId: string;
   teacherId?: string | null;
   /**
-   * Designated ARAL teacher, when the learner has one. Their dashboard/sidebar
+   * Designated ARAL tutor, when the learner has one. Their dashboard/sidebar
    * is derived from the learners they track, so it must be busted alongside the
    * adviser's — an ARAL-only teacher has no other path into these caches.
    */
@@ -234,7 +234,7 @@ export function revalidateLearnerScoped(opts: {
  * - `revalidateSchoolHeadTeachers`, which also busts `schoolDashboard` and so
  *   the per-section counts and the pending-request figure.
  * - Each affected teacher's dashboard and sidebar: the previous advisers, the
- *   new adviser and each learner's ARAL teacher. `revalidateTeacherCaches` per id
+ *   new adviser and each learner's ARAL tutor. `revalidateTeacherCaches` per id
  *   is what `revalidateLearnerScoped({ teacherShell: true })` does per teacher,
  *   without re-expiring the school dashboard once per id.
  *

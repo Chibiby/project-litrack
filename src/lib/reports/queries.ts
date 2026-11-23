@@ -1073,7 +1073,7 @@ export async function buildMosyTable(
       sex: learner.gender === "MALE" || learner.gender === "FEMALE" ? learner.gender : null,
       isAralLearner: learner.isAralLearner,
       // Scope is advised UNION ARAL-taught (`teacherLearnerScope`), as in
-      // every other builder, so the ARAL teacher's name is what makes visible which
+      // every other builder, so the ARAL tutor's name is what makes visible which
       // learners are here on the ARAL axis rather than the advisory one.
       aralTeacherName: learner.aralTeacher
         ? formatListingNameFromRecord(learner.aralTeacher)

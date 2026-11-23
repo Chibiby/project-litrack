@@ -16,11 +16,11 @@ import {
 } from "@/lib/summary/queries/aral";
 
 /**
- * "ARAL Teachers": every live, approved, switched-on teacher who is the ARAL
+ * "ARAL Tutors": every live, approved, switched-on teacher who is the ARAL
  * teacher (`Learner.aralTeacherId`) of at least one live, un-archived ARAL
  * learner, DepEd or Non-DepEd volunteer alike. "Active" is the Teachers page's
  * definition (`isActive` + `approvalStatus APPROVED`), the same rule
- * `aralTeacherScope` applies to the ARAL teacher picker.
+ * `aralTeacherScope` applies to the ARAL tutor picker.
  *
  * Used by /school-head/aral-teachers (scope `school`) and
  * /admin/management/aral-teachers (scope `admin`).
@@ -80,7 +80,7 @@ export type AralTeachersParams = {
   /** Admin filters; the school-scope loader ignores both. */
   district?: string;
   schoolId?: string;
-  /** ARAL teachers with at least one live ARAL learner in this grade. */
+  /** ARAL tutors with at least one live ARAL learner in this grade. */
   grade?: GradeLevelType;
   sort: AralTeacherSort;
 };
@@ -125,11 +125,11 @@ export type AralTeacherRow = {
   designation: string | null;
   /** "Grade 3 · Sampaguita, Grade 4 · Rizal", or null when they advise nothing. */
   advisorySummary: string | null;
-  /** Live, un-archived ARAL learners this teacher is the ARAL teacher of. */
+  /** Live, un-archived ARAL learners this teacher is the ARAL tutor of. */
   aralLearnerCount: number;
   /** Grades those learners are in, Kinder first, with per-grade counts. */
   grades: { grade: GradeLevelType; label: string; count: number }[];
-  /** The ARAL teacher's school. Shown on the admin page; present on both. */
+  /** The ARAL tutor's school. Shown on the admin page; present on both. */
   school: { id: string; name: string };
 };
 
@@ -139,11 +139,11 @@ export type AralTeachersPage = {
 };
 
 export type AralTeachersSummary = {
-  /** ARAL teachers in scope (ignores search and the grade filter). */
+  /** ARAL tutors in scope (ignores search and the grade filter). */
   teachers: number;
-  /** Live ARAL learners in scope with an ARAL teacher. */
+  /** Live ARAL learners in scope with an ARAL tutor. */
   learnersWithTeacher: number;
-  /** Live ARAL learners in scope with no ARAL teacher. */
+  /** Live ARAL learners in scope with no ARAL tutor. */
   learnersWithoutTeacher: number;
 };
 
@@ -154,7 +154,7 @@ const LIVE_ARAL_LEARNER = {
   isAralLearner: true,
 } as const;
 
-/** Where for the ARAL teachers (page + count). Exported for tests. */
+/** Where for the ARAL tutors (page + count). Exported for tests. */
 export function aralTeachersWhere(
   scope: AralTeachersScope,
   q: string,
@@ -208,7 +208,7 @@ export function aralTeachersWhere(
   return { AND: and };
 }
 
-/** Where for the live ARAL learners of the same scope the ARAL teacher list covers. Exported for tests. */
+/** Where for the live ARAL learners of the same scope the ARAL tutor list covers. Exported for tests. */
 export function aralLearnersWhere(
   scope: AralTeachersScope,
   demoVisible: boolean
@@ -228,7 +228,7 @@ export function aralLearnersWhere(
 }
 
 /**
- * The three summary cards: ARAL teachers, ARAL learners with an ARAL teacher,
+ * The three summary cards: ARAL tutors, ARAL learners with an ARAL tutor,
  * ARAL learners without one. Three counts, same scope and demo rule as the
  * list; search and the grade filter do not narrow them.
  */
@@ -258,7 +258,7 @@ function gradeRank(grade: GradeLevelType): number {
 }
 
 /**
- * One page of ARAL teachers, surname / first name / id order.
+ * One page of ARAL tutors, surname / first name / id order.
  *
  * `school` scope: the caller's schoolId must come from
  * `requireSchoolUser("SCHOOL_HEAD")` or `resolveSchoolContext`. Page params'
