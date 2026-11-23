@@ -142,6 +142,7 @@ function makeTx() {
     schoolYear: { findFirst: vi.fn(async () => null) },
     learner: { update: vi.fn(async () => ({})) },
     sectionTransferRequest: { updateMany: (a: Record<string, unknown>) => requestUpdateMany(a) },
+    schoolTransferRequest: { updateMany: async () => ({ count: 0 }) },
   };
 }
 const transaction = vi.fn(async (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => cb(makeTx()));

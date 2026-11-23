@@ -163,6 +163,7 @@ function makeTx() {
       }),
     },
     sectionTransferRequest: { updateMany: vi.fn(async () => ({ count: 0 })) },
+    schoolTransferRequest: { updateMany: vi.fn(async () => ({ count: 0 })) },
   };
 }
 

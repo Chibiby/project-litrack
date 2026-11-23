@@ -7,17 +7,27 @@ import { parseInput } from "@/lib/errors/validation";
 import { resolveTransferActor } from "@/lib/transfers/actor";
 import {
   canTransferBetween,
+  effectiveStatus,
   expiresAtFor,
   transferKindForTeacher,
+  type SkipReason,
 } from "@/lib/transfers/school-transfer-rules";
+import { applyLearnerSchoolMove } from "@/lib/transfers/apply-learner-move";
+import { applyStaffSchoolMove } from "@/lib/transfers/apply-staff-move";
+import { writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
 import { notifySchoolTransfer } from "@/lib/transfers/notify";
 import {
+  acceptSchoolTransfersSchema,
   cancelSchoolTransfersSchema,
   declineSchoolTransfersSchema,
   requestSchoolTransfersSchema,
 } from "@/lib/validators/school-transfer.schema";
 import { assertSchoolYearOpen } from "@/lib/school-year/gate";
-import { revalidateSchoolTransfers } from "@/lib/cache/revalidate";
+import {
+  revalidateLearnerScoped,
+  revalidateSchoolTransfers,
+  revalidateTeacherCaches,
+} from "@/lib/cache/revalidate";
 
 /**
  * Cross-school transfers of learners, teachers and ARAL volunteers
@@ -188,4 +198,132 @@ export const declineSchoolTransfers = action(
     return { ok: true, data: { count } };
   },
   { verb: "decline the transfer" }
+);
+
+/**
+ * Receiver: accept transfers. Rows that can no longer be accepted (answered,
+ * expired, the person moved or was removed at the sending school) are skipped
+ * and reported; the rest move in one transaction. Learner rows of one accept
+ * share one placement, picked by the receiver; the section's adviser becomes
+ * the learner's adviser, or none when the section has no adviser yet.
+ */
+export const acceptSchoolTransfers = action(
+  "acceptSchoolTransfers",
+  async (
+    input: unknown
+  ): Promise<{ ok: true; data: { accepted: number; skipped: { id: string; reason: SkipReason }[] } }> => {
+    const parsed = parseInput(acceptSchoolTransfersSchema, input);
+    const { user, schoolId } = await resolveTransferActor(parsed.schoolId);
+    const now = new Date();
+
+    const rows = await prisma.schoolTransferRequest.findMany({
+      where: { id: { in: parsed.ids }, toSchoolId: schoolId },
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        expiresAt: true,
+        schoolId: true,
+        learnerId: true,
+        userId: true,
+        learner: { select: { schoolId: true, deletedAt: true, archivedAt: true } },
+        user: { select: { schoolId: true, deletedAt: true, isActive: true } },
+      },
+    });
+    if (rows.length === 0) throw resourceNotFound("Transfer");
+
+    const skipped: { id: string; reason: SkipReason }[] = [];
+    const ready: typeof rows = [];
+    for (const r of rows) {
+      const status = effectiveStatus(r, now);
+      const person = r.learner ?? r.user;
+      if (status === "EXPIRED") skipped.push({ id: r.id, reason: "EXPIRED" });
+      else if (status !== "PENDING") skipped.push({ id: r.id, reason: "NOT_PENDING" });
+      else if (
+        !person ||
+        person.deletedAt ||
+        (r.learner && r.learner.archivedAt) ||
+        (r.user && !r.user.isActive)
+      ) {
+        skipped.push({ id: r.id, reason: "REMOVED" });
+      } else if (person.schoolId !== r.schoolId) skipped.push({ id: r.id, reason: "MOVED" });
+      else ready.push(r);
+    }
+
+    let placement: { gradeLevelId: string; sectionId: string; teacherId: string | null } | null = null;
+    if (ready.some((r) => r.kind === "LEARNER")) {
+      if (!parsed.placement) throw fieldError("placement", "Choose a grade and section for the learners");
+      const section = await prisma.section.findFirst({
+        where: {
+          id: parsed.placement.sectionId,
+          schoolId,
+          gradeLevelId: parsed.placement.gradeLevelId,
+          deletedAt: null,
+          gradeLevel: { deletedAt: null, type: { not: "FLOATING" } },
+        },
+        select: { id: true, gradeLevelId: true, adviser: { select: { id: true, isActive: true, deletedAt: true } } },
+      });
+      if (!section) throw fieldError("placement", "That section was not found. Choose another section.");
+      const adviser = section.adviser && section.adviser.isActive && !section.adviser.deletedAt ? section.adviser.id : null;
+      placement = { gradeLevelId: section.gradeLevelId, sectionId: section.id, teacherId: adviser };
+    }
+
+    if (ready.length > 0) {
+      await assertSchoolYearOpen(schoolId);
+      for (const from of new Set(ready.map((r) => r.schoolId))) await assertSchoolYearOpen(from);
+
+      await prisma.$transaction(async (tx) => {
+        for (const r of ready) {
+          const { count } = await tx.schoolTransferRequest.updateMany({
+            where: { id: r.id, status: "PENDING" },
+            data: { status: "ACCEPTED", decidedById: user.id, decidedAt: now },
+          });
+          if (count !== 1) throw new AppError("TRANSFER_REQUESTS_CHANGED");
+          if (r.kind === "LEARNER") {
+            await applyLearnerSchoolMove(tx, {
+              learnerId: r.learnerId as string,
+              toSchoolId: schoolId,
+              gradeLevelId: placement!.gradeLevelId,
+              sectionId: placement!.sectionId,
+              teacherId: placement!.teacherId,
+              actorId: user.id,
+            });
+          } else {
+            await applyStaffSchoolMove(tx, {
+              userId: r.userId as string,
+              fromSchoolId: r.schoolId,
+              toSchoolId: schoolId,
+            });
+          }
+        }
+      });
+
+      const staff = ready.filter((r) => r.kind !== "LEARNER");
+      if (staff.length > 0) {
+        await writeAuditMany(
+          staff.map((r) => ({
+            userId: user.id,
+            schoolId,
+            action: AUDIT_ACTIONS.STAFF_SCHOOL_TRANSFER_ACCEPTED,
+            resource: "User",
+            resourceId: r.userId as string,
+            metadata: { userId: r.userId, fromSchoolId: r.schoolId, toSchoolId: schoolId, transferId: r.id },
+          }))
+        );
+      }
+
+      await notifySchoolTransfer({ type: "DECIDED", ids: ready.map((r) => r.id), actorId: user.id });
+      const schools = [schoolId, ...new Set(ready.map((r) => r.schoolId))];
+      revalidateSchoolTransfers(schools);
+      if (ready.some((r) => r.kind === "LEARNER")) {
+        for (const id of schools) {
+          revalidateLearnerScoped({ schoolId: id, teacherId: placement?.teacherId, teacherShell: true });
+        }
+      }
+      for (const r of staff) revalidateTeacherCaches(r.userId as string);
+    }
+
+    return { ok: true, data: { accepted: ready.length, skipped } };
+  },
+  { verb: "accept the transfer" }
 );

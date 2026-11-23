@@ -1,6 +1,7 @@
 "use server";
 
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
+import { applyLearnerSchoolMove } from "@/lib/transfers/apply-learner-move";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSchoolUser } from "@/lib/auth/session";
@@ -432,58 +433,16 @@ export const transferLearnerCrossSchool = action(
 
     const previousGradeId = learner.gradeLevelId;
 
-    await prisma.$transaction(async (tx) => {
-      const active = await tx.enrollment.findFirst({
-        where: { learnerId: learner.id, status: "ACTIVE" },
-      });
-
-      if (active) {
-        await tx.enrollment.update({
-          where: { id: active.id },
-          data: { status: "TRANSFERRED", endedAt: new Date() },
-        });
-      }
-
-      const activeYear = await tx.schoolYear.findFirst({
-        where: { schoolId: targetSchoolId, isActive: true },
-      });
-
-      await tx.learner.update({
-        where: { id: learner.id },
-        data: {
-          schoolId: targetSchoolId,
-          gradeLevelId: targetGradeLevelId,
-          sectionId: resolvedSectionId,
-          teacherId: targetTeacherId,
-          // The designated ARAL teacher belongs to the origin school; keeping the
-          // pointer would be a cross-tenant reference.
-          aralTeacherId: null,
-          archivedAt: null,
-        },
-      });
-
-      // A request still waiting at the old school would block every future
-      // request for this learner (the pending unique index is per learner) and
-      // nobody at the new school can see it. Cancel it with the acting admin.
-      await tx.sectionTransferRequest.updateMany({
-        where: { learnerId: learner.id, status: "PENDING" },
-        data: { status: "CANCELLED", decidedById: user.id, decidedAt: new Date() },
-      });
-
-      if (activeYear) {
-        await tx.enrollment.create({
-          data: {
-            learnerId: learner.id,
-            schoolId: targetSchoolId,
-            schoolYearId: activeYear.id,
-            gradeLevelId: targetGradeLevelId,
-            sectionId: resolvedSectionId,
-            teacherId: targetTeacherId,
-            status: "ACTIVE",
-          },
-        });
-      }
-    });
+    await prisma.$transaction((tx) =>
+      applyLearnerSchoolMove(tx, {
+        learnerId: learner.id,
+        toSchoolId: targetSchoolId,
+        gradeLevelId: targetGradeLevelId,
+        sectionId: resolvedSectionId,
+        teacherId: targetTeacherId,
+        actorId: user.id,
+      })
+    );
 
     await writeAudit({
       userId: user.id,
