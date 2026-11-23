@@ -70,9 +70,9 @@ function props(over: Partial<TransferWorkspaceProps> = {}): TransferWorkspacePro
     division: "Division of X",
     targets: [{ id: "school-c", name: "Charlie ES" }],
     candidates: [
-      { id: "l1", name: "Cruz, Ana", detail: "Grade 4 · Mabini", pendingTo: null },
-      { id: "l2", name: "Dela Cruz, Ben", detail: "Grade 4 · Mabini", pendingTo: null },
-      { id: "l3", name: "Reyes, Carla", detail: "Grade 5 · Rizal", pendingTo: "Charlie ES" },
+      { id: "l1", name: "Cruz, Ana", detail: "Grade 4 · Mabini", pendingTo: null, group: "Grade 4" },
+      { id: "l2", name: "Dela Cruz, Ben", detail: "Grade 4 · Mabini", pendingTo: null, group: "Grade 4" },
+      { id: "l3", name: "Reyes, Carla", detail: "Grade 5 · Rizal", pendingTo: "Charlie ES", group: "Grade 5" },
     ],
     rows: { outgoing: [], incoming: [], history: [] },
     placement: {
@@ -171,6 +171,28 @@ describe("TransferWorkspace", () => {
     expect(acceptSchoolTransfers).toHaveBeenCalledWith({ schoolId: "school-b", ids: ["t1", "t2"], placement: undefined });
   });
 
+  it("narrows a big school's list by name and grade, drawing at most 100 rows", () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({
+      id: `m${i}`,
+      name: `Learner ${String(i).padStart(3, "0")}`,
+      detail: i < 120 ? "Grade 1 · A" : "Grade 2 · B",
+      pendingTo: null,
+      group: i < 120 ? "Grade 1" : "Grade 2",
+    }));
+    render(<TransferWorkspace {...props({ candidates: many })} />);
+    expect(within(desktop()).getAllByRole("row")).toHaveLength(101);
+    expect(screen.getByText("Showing 100 of 150. Search or pick a grade to narrow the list.")).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Grade" }), { target: { value: "Grade 2" } });
+    expect(within(desktop()).getAllByRole("row")).toHaveLength(31);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search learners" }), { target: { value: "learner 149" } });
+    expect(within(desktop()).getAllByRole("row")).toHaveLength(2);
+    // Select all takes only what is on screen.
+    fireEvent.click(within(desktop()).getByRole("checkbox", { name: "Select all learners" }));
+    expect(screen.getByRole("button", { name: "Transfer to another school (1)" })).toBeTruthy();
+  });
+
   it("tells a school with no division to set one", () => {
     render(<TransferWorkspace {...props({ division: null, targets: [] })} />);
     expect(screen.getByText(/Set this school's division before transferring/)).toBeTruthy();
@@ -192,7 +214,8 @@ describe("TransferWorkspace", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Send transfer" }));
     expect(dialog.querySelector("#transfer-to-school-error")?.textContent).toBe("Choose a school");
     expect(requestSchoolTransfers).not.toHaveBeenCalled();
-    fireEvent.change(within(dialog).getByLabelText("Receiving school"), { target: { value: "school-c" } });
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Search schools" }), { target: { value: "charlie" } });
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Charlie ES" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Send transfer" }));
     await waitFor(() =>
       expect(requestSchoolTransfers).toHaveBeenCalledWith({

@@ -47,6 +47,30 @@ describe("listTransferTargets", () => {
 });
 
 describe("listSchoolTransfers", () => {
+  it("hides the learner's new section from the sending school once they moved", async () => {
+    db.transfers = [
+      {
+        id: "t2",
+        batchId: "b2",
+        status: "ACCEPTED",
+        expiresAt: new Date(Date.now() + 1000),
+        createdAt: new Date(),
+        reason: null,
+        decisionNote: null,
+        schoolId: "a",
+        fromSchool: { name: "Alpha ES" },
+        toSchool: { name: "Bravo ES" },
+        requestedBy: null,
+        learner: { fullName: "Cruz, Ana", schoolId: "b", gradeLevel: { type: "G3" }, section: { name: "Canja" } },
+        user: null,
+      },
+    ];
+    const sender = await listSchoolTransfers("a", "LEARNER", "history");
+    expect(sender[0].detail).toBe("");
+    const receiver = await listSchoolTransfers("b", "LEARNER", "history");
+    expect(receiver[0].detail).toBe("Grade 3 · Canja");
+  });
+
   it("shows an expired waiting row as EXPIRED", async () => {
     db.transfers = [
       {
@@ -61,7 +85,7 @@ describe("listSchoolTransfers", () => {
         fromSchool: { name: "Alpha ES" },
         toSchool: { name: "Bravo ES" },
         requestedBy: { fullName: "Head A" },
-        learner: { fullName: "Cruz, Ana", gradeLevel: { type: "GRADE_4" }, section: { name: "Mabini" } },
+        learner: { fullName: "Cruz, Ana", schoolId: "a", gradeLevel: { type: "GRADE_4" }, section: { name: "Mabini" } },
         user: null,
       },
     ];

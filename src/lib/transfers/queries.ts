@@ -19,6 +19,8 @@ export type TransferCandidate = {
   detail: string;
   /** Receiving school's name while a transfer is waiting, else null. */
   pendingTo: string | null;
+  /** Filter group: the learner's grade; empty for staff. */
+  group: string;
 };
 
 export type TransferRow = {
@@ -90,6 +92,7 @@ export async function listTransferCandidates(
       name: l.fullName,
       detail: [gradeLabel(l.gradeLevel?.type), l.section?.name].filter(Boolean).join(" · "),
       pendingTo: l.schoolTransferRequests[0]?.toSchool.name ?? null,
+      group: l.gradeLevel ? gradeLabel(l.gradeLevel.type) : "No grade",
     }));
   }
 
@@ -116,6 +119,7 @@ export async function listTransferCandidates(
         name: t.fullName,
         detail: [t.teacherProfile?.designation, advisory ? `Advises ${advisory}` : null].filter(Boolean).join(" — "),
         pendingTo: t.schoolTransfers[0]?.toSchool.name ?? null,
+        group: "",
       };
     });
 }
@@ -162,7 +166,12 @@ export async function listSchoolTransfers(
       toSchool: { select: { name: true } },
       requestedBy: { select: { fullName: true } },
       learner: {
-        select: { fullName: true, gradeLevel: { select: { type: true } }, section: { select: { name: true } } },
+        select: {
+          fullName: true,
+          schoolId: true,
+          gradeLevel: { select: { type: true } },
+          section: { select: { name: true } },
+        },
       },
       user: { select: { fullName: true, teacherProfile: { select: { designation: true } } } },
     },
@@ -170,9 +179,18 @@ export async function listSchoolTransfers(
 
   return rows.map((r) => {
     const outgoing = r.schoolId === schoolId;
-    // Before acceptance the receiver sees only name and grade/section labels.
+    // A learner's grade and section are shown only while they belong to the
+    // viewing school, or to the sender of a transfer still waiting (what the
+    // receiver decides on). Once moved, the sender never sees where at the
+    // other school the learner was placed.
+    const status = effectiveStatus(r, now);
+    const placementVisible =
+      r.learner &&
+      (r.learner.schoolId === schoolId || (status === "PENDING" && r.learner.schoolId === r.schoolId));
     const detail = r.learner
-      ? [gradeLabel(r.learner.gradeLevel?.type), r.learner.section?.name].filter(Boolean).join(" · ")
+      ? placementVisible
+        ? [gradeLabel(r.learner.gradeLevel?.type), r.learner.section?.name].filter(Boolean).join(" · ")
+        : ""
       : r.user?.teacherProfile?.designation ?? "";
     return {
       id: r.id,
@@ -180,7 +198,7 @@ export async function listSchoolTransfers(
       personName: r.learner?.fullName ?? r.user?.fullName ?? "Removed",
       detail,
       otherSchoolName: outgoing ? r.toSchool.name : r.fromSchool.name,
-      status: effectiveStatus(r, now),
+      status,
       reason: r.reason,
       decisionNote: r.decisionNote,
       createdAt: r.createdAt.toISOString(),

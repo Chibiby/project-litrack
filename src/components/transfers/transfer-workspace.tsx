@@ -8,6 +8,8 @@ import type { SchoolTransferKind } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Surface } from "@/components/ui/surface";
+import { Label } from "@/components/ui/label";
+import { SearchInput, SEARCH_BAR_WIDTH } from "@/components/ui/search-input";
 import { ConfirmAction } from "@/components/confirm-action";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import { cancelSchoolTransfers } from "@/lib/actions/school-transfer";
@@ -17,11 +19,14 @@ import { callAction } from "@/lib/ui/call-action";
 import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { cn } from "@/lib/utils";
 import { CandidateTable, TransferRowTable } from "./transfer-table";
-import { countOf, SendTransferDialog } from "./send-transfer-dialog";
+import { countOf, SELECT_CLASS, SendTransferDialog } from "./send-transfer-dialog";
 import { AcceptTransferDialog, DeclineTransferDialog } from "./accept-transfer-dialog";
 
 export type TransferView = "send" | "outgoing" | "incoming" | "history";
 type RowView = Exclude<TransferView, "send">;
+
+/** Rows drawn at once on Send; a large school narrows by search or grade. */
+export const SEND_LIST_LIMIT = 100;
 
 export interface TransferWorkspaceProps {
   /** The school whose side every action acts on. */
@@ -72,9 +77,17 @@ export function TransferWorkspace({
   const [acceptIds, setAcceptIds] = useState<string[] | null>(null);
   const [declineIds, setDeclineIds] = useState<string[] | null>(null);
 
+  const [query, setQuery] = useState("");
+  const [group, setGroup] = useState("");
+  const groups = [...new Set(candidates.map((c) => c.group).filter(Boolean))];
+  const needle = query.trim().toLowerCase();
+  const matching = candidates.filter(
+    (c) => (!needle || c.name.toLowerCase().includes(needle)) && (!group || c.group === group)
+  );
+  const shownCandidates = matching.slice(0, SEND_LIST_LIMIT);
   const people = SCHOOL_TRANSFER_KIND_LABELS[kind].toLowerCase();
   const peopleLabel = kind === "ARAL_VOLUNTEER" ? "ARAL volunteers" : people;
-  const listItems = view === "send" ? candidates : rows[view];
+  const listItems = view === "send" ? shownCandidates : rows[view];
   const selectableIds = new Set(
     view === "send"
       ? candidates.filter((c) => c.pendingTo === null).map((c) => c.id)
@@ -107,7 +120,19 @@ export function TransferWorkspace({
       else next.delete(id);
       return next;
     });
-  const toggleAll = (on: boolean) => setSelected(on ? new Set(selectableIds) : new Set());
+  // On Send, "select all" means the people on screen (after search and grade).
+  const toggleAll = (on: boolean) => {
+    if (view !== "send") return setSelected(on ? new Set(selectableIds) : new Set());
+    const onScreen = shownCandidates.filter((c) => c.pendingTo === null).map((c) => c.id);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of onScreen) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
 
   const cancel = async (ids: string[]) => {
     const res = await callAction(() => cancelSchoolTransfers({ schoolId, ids }));
@@ -129,7 +154,7 @@ export function TransferWorkspace({
 
   return (
     <Surface as="section" aria-label={`${SCHOOL_TRANSFER_KIND_LABELS[kind]} transfers`} className="space-y-4 rounded-lg px-3 py-4 sm:px-4">
-      <div role="tablist" aria-label="Transfer lists" className="flex overflow-x-auto border-b border-border/70">
+      <div role="tablist" aria-label="Transfer lists" className="flex overflow-x-auto overflow-y-hidden border-b border-border/70">
         {(Object.keys(VIEW_LABELS) as TransferView[]).map((v) => (
           <button
             key={v}
@@ -173,7 +198,46 @@ export function TransferWorkspace({
           </Callout>
         ) : (
           <>
-            {view !== "history" && listItems.length > 0 ? (
+            {view === "send" && candidates.length > 10 ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <SearchInput
+                  label={`Search ${peopleLabel}`}
+                  placeholder="Search by name"
+                  value={query}
+                  onValueChange={setQuery}
+                  className={SEARCH_BAR_WIDTH}
+                />
+                {groups.length > 1 ? (
+                  <div className="w-full space-y-1 sm:w-44">
+                    <Label htmlFor="transfer-group" className="sr-only">
+                      Grade
+                    </Label>
+                    <select
+                      id="transfer-group"
+                      value={group}
+                      onChange={(e) => setGroup(e.target.value)}
+                      className={SELECT_CLASS}
+                    >
+                      <option value="">All grades</option>
+                      {groups.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {view === "send" && matching.length > shownCandidates.length ? (
+              <p className="text-xs text-muted-foreground">
+                Showing {shownCandidates.length} of {matching.length}. Search or pick a grade to narrow the list.
+              </p>
+            ) : null}
+            {view === "send" && candidates.length > 0 && matching.length === 0 ? (
+              <p className="py-6 text-sm text-muted-foreground">No {peopleLabel} match your search.</p>
+            ) : null}
+            {view !== "history" && (view === "send" ? candidates.length > 0 : listItems.length > 0) ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-muted-foreground">
                   {view === "send"
@@ -217,14 +281,14 @@ export function TransferWorkspace({
               </div>
             ) : null}
 
-            {listItems.length === 0 ? (
+            {view === "send" && candidates.length > 0 && matching.length === 0 ? null : listItems.length === 0 ? (
               <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                 <Inbox className="size-4" aria-hidden />
                 {EMPTY[view](peopleLabel)}
               </p>
             ) : view === "send" ? (
               <CandidateTable
-                candidates={candidates}
+                candidates={shownCandidates}
                 selected={selected}
                 onToggle={toggle}
                 onToggleAll={toggleAll}

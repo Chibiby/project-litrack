@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchInput } from "@/components/ui/search-input";
+import { cn } from "@/lib/utils";
 import { requestSchoolTransfers } from "@/lib/actions/school-transfer";
 import { SCHOOL_TRANSFER_KIND_SINGULAR_LABELS } from "@/lib/constants/enum-labels";
 import type { TransferTarget } from "@/lib/transfers/queries";
@@ -49,6 +51,7 @@ export function SendTransferDialog({
   const [pending, startTransition] = useTransition();
   const [toSchoolId, setToSchoolId] = useState("");
   const [reason, setReason] = useState("");
+  const [schoolQuery, setSchoolQuery] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [prevIds, setPrevIds] = useState(ids);
@@ -56,10 +59,15 @@ export function SendTransferDialog({
     setPrevIds(ids);
     setToSchoolId("");
     setReason("");
+    setSchoolQuery("");
     setErrors({});
   }
 
   const count = ids?.length ?? 0;
+  const needle = schoolQuery.trim().toLowerCase();
+  const chosen = targets.find((t) => t.id === toSchoolId);
+  // The chosen school stays listed while the search hides others.
+  const shownTargets = targets.filter((t) => !needle || t.name.toLowerCase().includes(needle) || t.id === toSchoolId);
   const close = () => {
     if (!pending) onClose();
   };
@@ -100,23 +108,55 @@ export function SendTransferDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="transfer-to-school">Receiving school</Label>
-            <select
+            <p className="text-sm font-medium leading-none">Receiving school</p>
+            {/*
+              A division can hold hundreds of schools, so this searches. It is
+              inline, not a popover: a portaled popover inside this Dialog
+              loses focus to the dialog's trap (Dialog and Popover ship
+              separate focus-scope copies), so its search cannot be typed in.
+            */}
+            <SearchInput
               id="transfer-to-school"
-              value={toSchoolId}
-              onChange={(e) => setToSchoolId(e.target.value)}
+              label="Search schools"
+              placeholder="Search schools"
+              value={schoolQuery}
+              onValueChange={setSchoolQuery}
+              escapeClears={false}
               disabled={pending}
+            />
+            <div
+              role="radiogroup"
+              aria-label="Receiving school"
               aria-invalid={errors.toSchoolId ? true : undefined}
               aria-describedby={errors.toSchoolId ? "transfer-to-school-error" : undefined}
-              className={SELECT_CLASS}
+              className="max-h-48 overflow-y-auto rounded-md border border-input p-1"
             >
-              <option value="">Choose a school</option>
-              {targets.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+              {shownTargets.length === 0 ? (
+                <p className="p-3 text-center text-sm text-muted-foreground">No school in your division matches.</p>
+              ) : (
+                shownTargets.map((t) => (
+                  <label
+                    key={t.id}
+                    className={cn(
+                      "flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm lg:min-h-9",
+                      t.id === toSchoolId ? "bg-accent text-accent-foreground" : "hover:bg-muted/60"
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="transfer-to-school"
+                      value={t.id}
+                      checked={t.id === toSchoolId}
+                      onChange={() => setToSchoolId(t.id)}
+                      disabled={pending}
+                      className="size-4 accent-primary"
+                    />
+                    <span className="min-w-0 truncate">{t.name}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            {chosen ? <p className="text-xs text-muted-foreground">Sending to {chosen.name}</p> : null}
             {errors.toSchoolId ? (
               <p id="transfer-to-school-error" className="text-xs text-destructive">
                 {errors.toSchoolId}

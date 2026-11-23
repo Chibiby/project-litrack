@@ -35,7 +35,9 @@ function SelectionTable({
   onToggleAll,
   label,
   factHeaders,
+  showState = true,
 }: {
+  showState?: boolean;
   items: Item[];
   selectable: boolean;
   selected: Set<string>;
@@ -82,7 +84,7 @@ function SelectionTable({
               {factHeaders.map((h) => (
                 <TableHead key={h}>{h}</TableHead>
               ))}
-              <TableHead>Status</TableHead>
+              {showState ? <TableHead>Status</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -100,7 +102,7 @@ function SelectionTable({
                     {f.value ? <CellText title={f.value}>{f.value}</CellText> : <NoValue />}
                   </TableCell>
                 ))}
-                <TableCell>{item.state ?? <NoValue />}</TableCell>
+                {showState ? <TableCell>{item.state ?? <NoValue />}</TableCell> : null}
               </TableRow>
             ))}
           </TableBody>
@@ -173,6 +175,8 @@ export function CandidateTable({
       onToggleAll={onToggleAll}
       label={label}
       factHeaders={[]}
+      // Only a waiting transfer has a status; a column of dashes says nothing.
+      showState={candidates.some((c) => c.pendingTo !== null)}
     />
   );
 }
