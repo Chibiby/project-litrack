@@ -75,3 +75,71 @@ export async function applyLearnerSchoolMove(
     });
   }
 }
+
+/**
+ * Move many learners from one sending school to one placement at the
+ * receiving school, inside an open transaction, in a fixed number of
+ * statements whatever the batch size (the accept step of cross-school
+ * transfer requests). A per-learner loop costs about eight round trips each,
+ * and at production latency a handful of learners blows the transaction
+ * budget (see `src/lib/db/bulk-write.ts`).
+ *
+ * Same four steps as `applyLearnerSchoolMove`, with one difference: the
+ * learner update is guarded. It only moves learners still live at the sending
+ * school (not archived, not removed, not moved elsewhere since the caller's
+ * check), and returns how many it moved. When that is fewer than asked, it
+ * writes nothing more and the caller must throw so the transaction rolls back.
+ */
+export async function applyLearnerSchoolMoves(
+  tx: Prisma.TransactionClient,
+  params: {
+    learnerIds: string[];
+    fromSchoolId: string;
+    toSchoolId: string;
+    gradeLevelId: string;
+    sectionId: string | null;
+    teacherId: string | null;
+    actorId: string;
+  }
+): Promise<{ moved: number }> {
+  const { learnerIds, fromSchoolId, toSchoolId, gradeLevelId, sectionId, teacherId, actorId } = params;
+  const now = new Date();
+  const ids = { in: learnerIds };
+
+  const { count: moved } = await tx.learner.updateMany({
+    where: { id: ids, schoolId: fromSchoolId, deletedAt: null, archivedAt: null },
+    data: { schoolId: toSchoolId, gradeLevelId, sectionId, teacherId, aralTeacherId: null },
+  });
+  if (moved !== learnerIds.length) return { moved };
+
+  // Close before create: one ACTIVE row per learner (partial unique index).
+  await tx.enrollment.updateMany({
+    where: { learnerId: ids, status: "ACTIVE" },
+    data: { status: "TRANSFERRED", endedAt: now },
+  });
+  const activeYear = await tx.schoolYear.findFirst({ where: { schoolId: toSchoolId, isActive: true } });
+
+  await tx.sectionTransferRequest.updateMany({
+    where: { learnerId: ids, status: "PENDING" },
+    data: { status: "CANCELLED", decidedById: actorId, decidedAt: now },
+  });
+  await tx.schoolTransferRequest.updateMany({
+    where: { learnerId: ids, status: "PENDING" },
+    data: { status: "CANCELLED", decidedById: actorId, decidedAt: now },
+  });
+
+  if (activeYear) {
+    await tx.enrollment.createMany({
+      data: learnerIds.map((learnerId) => ({
+        learnerId,
+        schoolId: toSchoolId,
+        schoolYearId: activeYear.id,
+        gradeLevelId,
+        sectionId,
+        teacherId,
+        status: "ACTIVE" as const,
+      })),
+    });
+  }
+  return { moved };
+}

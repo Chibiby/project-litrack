@@ -12,10 +12,12 @@ import {
   transferKindForTeacher,
   type SkipReason,
 } from "@/lib/transfers/school-transfer-rules";
-import { applyLearnerSchoolMove } from "@/lib/transfers/apply-learner-move";
+import { applyLearnerSchoolMoves } from "@/lib/transfers/apply-learner-move";
+import { BULK_TX_OPTIONS } from "@/lib/db/bulk-write";
+import { requireSchoolUser } from "@/lib/auth/session";
 import { applyStaffSchoolMove } from "@/lib/transfers/apply-staff-move";
 import { writeAuditMany, AUDIT_ACTIONS } from "@/lib/audit";
-import { notifySchoolTransfer } from "@/lib/transfers/notify";
+import { markSchoolTransferNoticesRead, notifySchoolTransfer } from "@/lib/transfers/notify";
 import {
   acceptSchoolTransfersSchema,
   cancelSchoolTransfersSchema,
@@ -201,6 +203,14 @@ export const declineSchoolTransfers = action(
 );
 
 /**
+ * Staff rows per accept. One staff move is about a dozen round trips (the
+ * re-tutoring plus the advisory release), so ten fit well inside
+ * `BULK_TX_OPTIONS.timeout` at production latency. Learners move set-based and
+ * are limited only by the id cap.
+ */
+const MAX_STAFF_PER_ACCEPT = 10;
+
+/**
  * Receiver: accept transfers. Rows that can no longer be accepted (answered,
  * expired, the person moved or was removed at the sending school) are skipped
  * and reported; the rest move in one transaction. Learner rows of one accept
@@ -250,6 +260,13 @@ export const acceptSchoolTransfers = action(
       else ready.push(r);
     }
 
+    if (ready.filter((r) => r.kind !== "LEARNER").length > MAX_STAFF_PER_ACCEPT) {
+      throw fieldError(
+        "ids",
+        `Accept at most ${MAX_STAFF_PER_ACCEPT} teachers and ARAL volunteers at a time`
+      );
+    }
+
     let placement: { gradeLevelId: string; sectionId: string; teacherId: string | null } | null = null;
     if (ready.some((r) => r.kind === "LEARNER")) {
       if (!parsed.placement) throw fieldError("placement", "Choose a grade and section for the learners");
@@ -272,45 +289,68 @@ export const acceptSchoolTransfers = action(
       await assertSchoolYearOpen(schoolId);
       for (const from of new Set(ready.map((r) => r.schoolId))) await assertSchoolYearOpen(from);
 
-      await prisma.$transaction(async (tx) => {
-        for (const r of ready) {
-          const { count } = await tx.schoolTransferRequest.updateMany({
-            where: { id: r.id, status: "PENDING" },
-            data: { status: "ACCEPTED", decidedById: user.id, decidedAt: now },
-          });
-          if (count !== 1) throw new AppError("TRANSFER_REQUESTS_CHANGED");
-          if (r.kind === "LEARNER") {
-            await applyLearnerSchoolMove(tx, {
-              learnerId: r.learnerId as string,
-              toSchoolId: schoolId,
-              gradeLevelId: placement!.gradeLevelId,
-              sectionId: placement!.sectionId,
-              teacherId: placement!.teacherId,
-              actorId: user.id,
-            });
-          } else {
-            await applyStaffSchoolMove(tx, {
-              userId: r.userId as string,
-              fromSchoolId: r.schoolId,
-              toSchoolId: schoolId,
-            });
-          }
-        }
-      });
-
+      const learners = ready.filter((r) => r.kind === "LEARNER");
       const staff = ready.filter((r) => r.kind !== "LEARNER");
-      if (staff.length > 0) {
-        await writeAuditMany(
-          staff.map((r) => ({
-            userId: user.id,
-            schoolId,
-            action: AUDIT_ACTIONS.STAFF_SCHOOL_TRANSFER_ACCEPTED,
-            resource: "User",
-            resourceId: r.userId as string,
-            metadata: { userId: r.userId, fromSchoolId: r.schoolId, toSchoolId: schoolId, transferId: r.id },
-          }))
-        );
-      }
+
+      // Learners move set-based, one fixed-size group of statements per
+      // sending school; a staff move is about a dozen round trips, so staff
+      // are capped per accept to stay inside the transaction budget.
+      await prisma.$transaction(async (tx) => {
+        const { count } = await tx.schoolTransferRequest.updateMany({
+          where: { id: { in: ready.map((r) => r.id) }, status: "PENDING" },
+          data: { status: "ACCEPTED", decidedById: user.id, decidedAt: now },
+        });
+        if (count !== ready.length) throw new AppError("TRANSFER_REQUESTS_CHANGED");
+
+        for (const fromSchoolId of new Set(learners.map((r) => r.schoolId))) {
+          const learnerIds = learners.filter((r) => r.schoolId === fromSchoolId).map((r) => r.learnerId as string);
+          const { moved } = await applyLearnerSchoolMoves(tx, {
+            learnerIds,
+            fromSchoolId,
+            toSchoolId: schoolId,
+            gradeLevelId: placement!.gradeLevelId,
+            sectionId: placement!.sectionId,
+            teacherId: placement!.teacherId,
+            actorId: user.id,
+          });
+          if (moved !== learnerIds.length) throw new AppError("TRANSFER_REQUESTS_CHANGED");
+        }
+        for (const r of staff) {
+          await applyStaffSchoolMove(tx, {
+            userId: r.userId as string,
+            fromSchoolId: r.schoolId,
+            toSchoolId: schoolId,
+          });
+        }
+      }, BULK_TX_OPTIONS);
+
+      // Both are cross-tenant moves, so both leave a security record (IDs only).
+      const audits = [
+        ...learners.map((r) => ({
+          userId: user.id,
+          schoolId,
+          action: AUDIT_ACTIONS.LEARNER_TRANSFER_CROSS_SCHOOL,
+          resource: "Learner",
+          resourceId: r.learnerId as string,
+          metadata: {
+            learnerId: r.learnerId,
+            fromSchoolId: r.schoolId,
+            toSchoolId: schoolId,
+            toGradeLevelId: placement!.gradeLevelId,
+            toSectionId: placement!.sectionId,
+            transferId: r.id,
+          },
+        })),
+        ...staff.map((r) => ({
+          userId: user.id,
+          schoolId,
+          action: AUDIT_ACTIONS.STAFF_SCHOOL_TRANSFER_ACCEPTED,
+          resource: "User",
+          resourceId: r.userId as string,
+          metadata: { userId: r.userId, fromSchoolId: r.schoolId, toSchoolId: schoolId, transferId: r.id },
+        })),
+      ];
+      if (audits.length > 0) await writeAuditMany(audits);
 
       await notifySchoolTransfer({ type: "DECIDED", ids: ready.map((r) => r.id), actorId: user.id });
       const schools = [schoolId, ...new Set(ready.map((r) => r.schoolId))];
@@ -326,4 +366,22 @@ export const acceptSchoolTransfers = action(
     return { ok: true, data: { accepted: ready.length, skipped } };
   },
   { verb: "accept the transfer" }
+);
+
+/**
+ * The signed-in School Head opened the Transfer page: clear their transfer
+ * notices for their own school. Called from the browser after the page mounts
+ * (`MarkTransferNoticesRead`), never during the server render, because a hover
+ * prefetch of a Transfer link runs the render and would clear the bell unseen.
+ * A Super Admin viewing the page leaves the School Head's notices alone.
+ */
+export const markMyTransferNoticesRead = action(
+  "markMyTransferNoticesRead",
+  async (): Promise<{ ok: true }> => {
+    const user = await requireSchoolUser("SCHOOL_HEAD");
+    if (user.role !== "SCHOOL_HEAD") return { ok: true };
+    await markSchoolTransferNoticesRead({ recipientId: user.id, schoolId: user.schoolId });
+    return { ok: true };
+  },
+  { verb: "update your notifications" }
 );

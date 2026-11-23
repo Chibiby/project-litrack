@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+const release = vi.hoisted(() => vi.fn(async () => ({ sectionIds: ["s-mine"], learnerCount: 2 })));
+vi.mock("@/lib/teachers/release-advisory", () => ({ releaseTeacherAdvisory: release }));
 
 import { applyStaffSchoolMove } from "@/lib/transfers/apply-staff-move";
 
 type Row = Record<string, unknown>;
 
 /** A transaction fake holding only what the staff move touches. */
-function fakeTx() {
+function fakeTx(opts: { accountLive?: boolean } = {}) {
   const db = {
     sections: [
       { id: "s-mine", schoolId: "a", adviserId: "t1" },
@@ -21,7 +23,6 @@ function fakeTx() {
       { id: "advised", schoolId: "a", aralTeacherId: null, teacherId: "t1", sectionId: "s-mine" },
     ] as Row[],
     users: [{ id: "t1", schoolId: "a", advisorySectionId: "s-mine" }] as Row[],
-    teacherSections: [{ teacherId: "t1", sectionId: "s-mine" }] as Row[],
   };
   const sectionOf = (id: unknown) => db.sections.find((s) => s.id === id) ?? null;
   const tx = {
@@ -29,11 +30,6 @@ function fakeTx() {
       findMany: vi.fn(async ({ where }: { where: Row }) =>
         db.sections.filter((s) => s.schoolId === where.schoolId && s.adviserId === where.adviserId)
       ),
-      updateMany: vi.fn(async ({ where, data }: { where: { id: { in: string[] } }; data: Row }) => {
-        const hit = db.sections.filter((s) => where.id.in.includes(s.id as string));
-        for (const s of hit) Object.assign(s, data);
-        return { count: hit.length };
-      }),
     },
     learner: {
       findMany: vi.fn(async ({ where }: { where: Row }) =>
@@ -41,27 +37,18 @@ function fakeTx() {
           .filter((l) => l.schoolId === where.schoolId && l.aralTeacherId === where.aralTeacherId)
           .map((l) => ({ id: l.id, section: sectionOf(l.sectionId) }))
       ),
-      updateMany: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
-        const hit = db.learners.filter((l) =>
-          "id" in where
-            ? (where.id as { in: string[] }).in.includes(l.id as string)
-            : l.schoolId === where.schoolId && l.teacherId === where.teacherId
-        );
+      updateMany: vi.fn(async ({ where, data }: { where: { id: { in: string[] } }; data: Row }) => {
+        const hit = db.learners.filter((l) => where.id.in.includes(l.id as string));
         for (const l of hit) Object.assign(l, data);
         return { count: hit.length };
       }),
     },
-    teacherSection: {
-      deleteMany: vi.fn(async ({ where }: { where: Row }) => {
-        const before = db.teacherSections.length;
-        db.teacherSections = db.teacherSections.filter((t) => t.teacherId !== where.teacherId);
-        return { count: before - db.teacherSections.length };
-      }),
-    },
     user: {
-      update: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
-        const u = db.users.find((row) => row.id === where.id)!;
-        return Object.assign(u, data);
+      updateMany: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
+        if (opts.accountLive === false) return { count: 0 };
+        const hit = db.users.filter((u) => u.id === where.id && u.schoolId === where.schoolId);
+        for (const u of hit) Object.assign(u, data);
+        return { count: hit.length };
       }),
     },
   };
@@ -69,11 +56,12 @@ function fakeTx() {
 }
 
 const byId = (rows: Row[], id: string) => rows.find((r) => r.id === id)!;
+const move = { userId: "t1", fromSchoolId: "a", toSchoolId: "b" };
 
 describe("applyStaffSchoolMove", () => {
   it("re-tutors ARAL learners to their own section's adviser, else leaves them untutored", async () => {
     const { db, tx } = fakeTx();
-    const result = await applyStaffSchoolMove(tx as never, { userId: "t1", fromSchoolId: "a", toSchoolId: "b" });
+    const result = await applyStaffSchoolMove(tx as never, move);
 
     expect(byId(db.learners, "aral-in-x").aralTeacherId).toBe("x");
     expect(byId(db.learners, "aral-in-mine").aralTeacherId).toBeNull();
@@ -81,20 +69,42 @@ describe("applyStaffSchoolMove", () => {
     expect(result).toEqual({ clearedSections: 1, retutored: 1, untutored: 2 });
   });
 
-  it("leaves the advisory section with no adviser and clears adviser pointers", async () => {
-    const { db, tx } = fakeTx();
-    await applyStaffSchoolMove(tx as never, { userId: "t1", fromSchoolId: "a", toSchoolId: "b" });
+  it("releases the advisory at the old school the way removal does", async () => {
+    release.mockClear();
+    const { tx } = fakeTx();
+    await applyStaffSchoolMove(tx as never, move);
 
-    expect(byId(db.sections, "s-mine").adviserId).toBeNull();
-    expect(byId(db.sections, "s-x").adviserId).toBe("x");
-    expect(byId(db.learners, "advised").teacherId).toBeNull();
-    expect(db.teacherSections).toHaveLength(0);
+    // releaseTeacherAdvisory clears Section.adviserId, Learner.teacherId, the
+    // ACTIVE Enrollment.teacherId and the taughtGrades/TeacherSection mirrors
+    // together, scoped to the old school.
+    expect(release).toHaveBeenCalledWith(tx, { teacherId: "t1", schoolId: "a" });
   });
 
-  it("moves the account to the new school", async () => {
-    const { db, tx } = fakeTx();
-    await applyStaffSchoolMove(tx as never, { userId: "t1", fromSchoolId: "a", toSchoolId: "b" });
+  it("re-tutors before the release, so tutored learners are not just cleared", async () => {
+    release.mockClear();
+    const { tx } = fakeTx();
+    await applyStaffSchoolMove(tx as never, move);
 
+    const retutor = tx.learner.updateMany.mock.invocationCallOrder[0];
+    expect(retutor).toBeLessThan(release.mock.invocationCallOrder[0]);
+  });
+
+  it("moves the account only while it is live at the sending school", async () => {
+    const { db, tx } = fakeTx();
+    await applyStaffSchoolMove(tx as never, move);
+
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: { id: "t1", schoolId: "a", deletedAt: null, isActive: true },
+      data: { schoolId: "b", advisorySectionId: null },
+    });
     expect(db.users[0]).toMatchObject({ schoolId: "b", advisorySectionId: null });
+  });
+
+  it("refuses when the account was removed or moved after the check", async () => {
+    release.mockClear();
+    const { tx } = fakeTx({ accountLive: false });
+
+    await expect(applyStaffSchoolMove(tx as never, move)).rejects.toMatchObject({ code: "TRANSFER_REQUESTS_CHANGED" });
+    expect(release).not.toHaveBeenCalled();
   });
 });

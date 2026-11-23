@@ -2,12 +2,12 @@ import { Suspense } from "react";
 import { ArrowRightLeft } from "lucide-react";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { resolveSchoolHeadView } from "@/lib/school-head/view";
-import { markSchoolTransferNoticesRead } from "@/lib/transfers/notify";
 import { parseTransferKind } from "@/lib/transfers/queries";
 import { SchoolHeadPage, schoolHeadHref } from "@/components/school-head/school-head-page";
 import { SchoolHeadHero } from "@/components/school-head/school-head-hero";
 import { TableSectionSkeleton } from "@/components/loading";
 import { TransferPanel } from "@/components/transfers/transfer-panel";
+import { MarkTransferNoticesRead } from "@/components/transfers/mark-transfer-notices-read";
 
 export const dynamic = "force-dynamic";
 
@@ -21,15 +21,8 @@ interface PageProps {
  */
 export default async function SchoolHeadTransferPage({ searchParams }: PageProps) {
   const raw = await searchParams;
-  const { user, view } = await resolveSchoolHeadView(raw.schoolId, SCHOOL_HEAD_ROUTES.transfer);
+  const { view } = await resolveSchoolHeadView(raw.schoolId, SCHOOL_HEAD_ROUTES.transfer);
   const { param } = parseTransferKind(raw.kind);
-
-  // Opening the page answers the bell. A Super Admin's look leaves it alone.
-  if (!view.isSuperAdminView) {
-    await markSchoolTransferNoticesRead({ recipientId: user.id, schoolId: view.schoolId }).catch((err) =>
-      console.error("[SchoolHeadTransferPage] mark notices read failed:", err)
-    );
-  }
 
   return (
     <SchoolHeadPage
@@ -45,6 +38,8 @@ export default async function SchoolHeadTransferPage({ searchParams }: PageProps
         />
       }
     >
+      {/* Opening the page answers the bell, in the browser only; a Super Admin's look leaves it alone. */}
+      {view.isSuperAdminView ? null : <MarkTransferNoticesRead />}
       <Suspense key={param} fallback={<TableSectionSkeleton rows={8} columns={4} />}>
         <TransferPanel
           schoolId={view.schoolId}

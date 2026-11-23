@@ -1,5 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
+import { AppError } from "@/lib/errors/app-error";
+import { releaseTeacherAdvisory } from "@/lib/teachers/release-advisory";
 
 /**
  * Move a teacher or ARAL volunteer account to another school inside an open
@@ -20,6 +22,15 @@ export async function applyStaffSchoolMove(
   params: { userId: string; fromSchoolId: string; toSchoolId: string }
 ): Promise<{ clearedSections: number; retutored: number; untutored: number }> {
   const { userId, fromSchoolId, toSchoolId } = params;
+
+  // Guarded first: the caller checked the account before the transaction, and
+  // it may have been removed, deactivated or moved since. Nothing else moves
+  // then, and the caller's transaction rolls back.
+  const { count } = await tx.user.updateMany({
+    where: { id: userId, schoolId: fromSchoolId, deletedAt: null, isActive: true },
+    data: { schoolId: toSchoolId, advisorySectionId: null },
+  });
+  if (count !== 1) throw new AppError("TRANSFER_REQUESTS_CHANGED");
 
   const advised = await tx.section.findMany({
     where: { schoolId: fromSchoolId, adviserId: userId },
@@ -47,23 +58,11 @@ export async function applyStaffSchoolMove(
     else untutored += ids.length;
   }
 
-  if (advisedIds.size > 0) {
-    await tx.section.updateMany({
-      where: { id: { in: [...advisedIds] } },
-      data: { adviserId: null },
-    });
-  }
-  await tx.teacherSection.deleteMany({
-    where: { teacherId: userId, section: { schoolId: fromSchoolId } },
-  });
-  await tx.learner.updateMany({
-    where: { schoolId: fromSchoolId, teacherId: userId },
-    data: { teacherId: null },
-  });
-  await tx.user.update({
-    where: { id: userId },
-    data: { schoolId: toSchoolId, advisorySectionId: null },
-  });
+  // After the re-tutoring, so it only finds learners still naming them. The
+  // same release the removal paths use: Section.adviserId, Learner.teacherId,
+  // the ACTIVE Enrollment.teacherId and the TeacherSection / taughtGrades
+  // mirrors move together, scoped to the old school.
+  const released = await releaseTeacherAdvisory(tx, { teacherId: userId, schoolId: fromSchoolId });
 
-  return { clearedSections: advisedIds.size, retutored, untutored };
+  return { clearedSections: released.sectionIds.length, retutored, untutored };
 }
