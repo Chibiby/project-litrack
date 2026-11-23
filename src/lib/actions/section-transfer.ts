@@ -156,6 +156,15 @@ async function pendingLearnerIds(schoolId: string, learnerIds: string[]): Promis
   return new Set(rows.map((r) => r.learnerId));
 }
 
+/** Learners tagged for a cross-school move that is still waiting (not expired). */
+async function pendingSchoolTransferIds(learnerIds: string[]): Promise<Set<string>> {
+  const rows = await prisma.schoolTransferRequest.findMany({
+    where: { learnerId: { in: learnerIds }, status: "PENDING", expiresAt: { gt: new Date() } },
+    select: { learnerId: true },
+  });
+  return new Set(rows.map((r) => r.learnerId).filter((id): id is string => id !== null));
+}
+
 /** School Head: move one or many learners to another section of their grade. */
 export const transferLearnersToSection = action(
   "transferLearnersToSection",
@@ -185,6 +194,7 @@ export const transferLearnersToSection = action(
     }
 
     const pending = await pendingLearnerIds(user.schoolId, ids);
+    const schoolPending = await pendingSchoolTransferIds(ids);
 
     const moves: LearnerRow[] = [];
     let unchanged = 0;
@@ -196,6 +206,7 @@ export const transferLearnersToSection = action(
         learner: learnerFacts(l),
         destination: destinationFacts(destination),
         hasPendingRequest: pending.has(l.id),
+        hasPendingSchoolTransfer: schoolPending.has(l.id),
       });
       if (!verdict.ok) blocked.push(verdict.reason);
       else if (verdict.kind === "unchanged") unchanged += 1;
@@ -290,6 +301,7 @@ export const requestSectionTransfers = action(
     }
 
     const pending = await pendingLearnerIds(user.schoolId, ids);
+    const schoolPending = await pendingSchoolTransferIds(ids);
 
     const moves: LearnerRow[] = [];
     let unchanged = 0;
@@ -300,6 +312,7 @@ export const requestSectionTransfers = action(
         learner: learnerFacts(l),
         destination: destinationFacts(destination),
         hasPendingRequest: pending.has(l.id),
+        hasPendingSchoolTransfer: schoolPending.has(l.id),
         advisedSectionIds: advisedIds,
       });
       if (!verdict.ok) blocked.push(verdict.reason);

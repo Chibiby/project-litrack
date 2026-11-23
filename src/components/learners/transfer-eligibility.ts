@@ -129,6 +129,7 @@ export const LEFT_OUT_LABELS: Record<TransferBlockReason, string> = {
   "moved-since-request": "Moved since the request",
   "not-in-advisory": "Not in your advisory section",
   "pending-request": "A transfer request is already waiting",
+  "school-transfer-pending": "Waiting to move to another school",
 };
 
 export function plural(n: number, word: string): string {

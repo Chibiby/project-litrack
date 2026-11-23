@@ -85,6 +85,8 @@ let db: {
   requests: RequestRow[];
   enrollments: EnrollmentRow[];
   activeYear: { id: string } | null;
+  /** Pending cross-school transfers: learner id + expiry only. */
+  schoolTransfers: { learnerId: string; status: string; expiresAt: Date }[];
 };
 
 function learner(id: string, over: Partial<LearnerRow> = {}): LearnerRow {
@@ -180,6 +182,16 @@ function makeClient() {
       }),
       findMany: vi.fn(async (args: { where: Where }) =>
         db.sections.filter((s) => matches(s, args.where)).map(sectionView)
+      ),
+    },
+    schoolTransferRequest: {
+      findMany: vi.fn(async (args: { where: { learnerId: { in: string[] } } }) =>
+        db.schoolTransfers.filter(
+          (t) =>
+            args.where.learnerId.in.includes(t.learnerId) &&
+            t.status === "PENDING" &&
+            t.expiresAt.getTime() > Date.now()
+        )
       ),
     },
     sectionTransferRequest: {
@@ -342,6 +354,7 @@ beforeEach(() => {
     requests: [],
     enrollments: [activeEnrollment("l-1"), activeEnrollment("l-2")],
     activeYear: { id: "sy-1" },
+    schoolTransfers: [],
   };
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -440,6 +453,24 @@ describe("transferLearnersToSection (School Head)", () => {
     expect(res).toMatchObject({ ok: false, code: "TRANSFER_REQUEST_PENDING" });
     expect(calls.transaction).toBe(0);
     expect(byId("l-1").sectionId).toBe("sec-a");
+  });
+
+  it("a pending transfer to another school blocks a direct transfer of that learner", async () => {
+    db.schoolTransfers.push({ learnerId: "l-2", status: "PENDING", expiresAt: new Date(Date.now() + 60_000) });
+
+    const res = await transferLearnersToSection({ learnerIds: ["l-1", "l-2"], toSectionId: "sec-b" });
+
+    expect(res).toMatchObject({ ok: false });
+    expect((res as { error: string }).error).toContain("pending transfer to another school");
+    expect(calls.transaction).toBe(0);
+  });
+
+  it("an expired transfer to another school does not block", async () => {
+    db.schoolTransfers.push({ learnerId: "l-2", status: "PENDING", expiresAt: new Date(Date.now() - 1) });
+
+    const res = await transferLearnersToSection({ learnerIds: ["l-1", "l-2"], toSectionId: "sec-b" });
+
+    expect(res).toMatchObject({ ok: true });
   });
 
   it("one pending learner inside a multi-learner batch blocks the whole batch, nothing written", async () => {

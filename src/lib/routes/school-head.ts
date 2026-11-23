@@ -53,6 +53,8 @@ export const SCHOOL_HEAD_ROUTES = {
 
   /** Read-only learner directory for the school (Management group). */
   learners: "/school-head/learners",
+  /** Cross-school transfers of learners, teachers and ARAL volunteers (Management group). */
+  transfer: "/school-head/transfer",
   /** Teachers who are the ARAL teacher of ARAL learners (Management group). */
   aralTeachers: "/school-head/aral-teachers",
 
@@ -94,6 +96,4 @@ export const SCHOOL_HEAD_LEGACY_ROUTES = {
   "/school-head/school-info": SCHOOL_HEAD_ROUTES.schoolInfo,
   /** Soft-deprecated well before this restructure: sections live under grade levels. */
   "/school-head/sections": SCHOOL_HEAD_ROUTES.schoolGradeLevels,
-  /** Transfers and Change grade start from a learner's row on the Learners page. */
-  "/school-head/transfer": SCHOOL_HEAD_ROUTES.learners,
 } as const;

@@ -268,6 +268,17 @@ export function revalidateTransferRequests(schoolId: string) {
 }
 
 /**
+ * A cross-school transfer was sent, answered or cancelled. Busts both schools'
+ * Transfer pages, the District admin page, and each school's dashboard (the
+ * "Incoming transfers to review" attention item).
+ */
+export function revalidateSchoolTransfers(schoolIds: string[]) {
+  revalidatePath(SCHOOL_HEAD_ROUTES.transfer);
+  revalidatePath("/district/transfers");
+  for (const id of new Set(schoolIds)) revalidateSchoolDashboard(id);
+}
+
+/**
  * A support ticket changed state.
  *
  * Busts the admin inbox and the requester's own list. Takes the requester id

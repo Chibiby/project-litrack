@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { SCHOOL_HEAD_LEGACY_ROUTES } from "@/lib/routes/school-head";
+import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 
 interface PageProps {
   searchParams: Promise<{ schoolId?: string }>;
@@ -15,5 +15,5 @@ export default async function TransferPage({ searchParams }: PageProps) {
   const qs = params.schoolId
     ? `?schoolId=${encodeURIComponent(params.schoolId)}`
     : "";
-  redirect(`${SCHOOL_HEAD_LEGACY_ROUTES["/school-head/transfer"]}${qs}`);
+  redirect(`${SCHOOL_HEAD_ROUTES.learners}${qs}`);
 }

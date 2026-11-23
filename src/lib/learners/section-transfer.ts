@@ -43,7 +43,8 @@ export type TransferBlockReason =
   | "no-adviser"
   | "moved-since-request"
   | "not-in-advisory"
-  | "pending-request";
+  | "pending-request"
+  | "school-transfer-pending";
 
 export type TransferVerdict =
   | { ok: true; kind: "move"; teacherId: string }
@@ -57,6 +58,8 @@ export type EvaluateSectionTransferInput = {
   /** Approval only: the section the learner was in when the request was made. */
   expectedFromSectionId?: string | null;
   hasPendingRequest: boolean;
+  /** The learner is tagged for a move to another school (not yet answered). */
+  hasPendingSchoolTransfer?: boolean;
   /** Teacher request only: the sections the teacher advises. */
   advisedSectionIds?: string[];
 };
@@ -71,6 +74,7 @@ export const TRANSFER_BLOCK_REASON_LABELS: Record<TransferBlockReason, string> =
   "moved-since-request": "the learner has already moved to a different section since the request",
   "not-in-advisory": "the learner is not in a section you advise",
   "pending-request": "a transfer request is already waiting for a decision",
+  "school-transfer-pending": "the learner has a pending transfer to another school",
 };
 
 /** Checks run in this fixed order; the first failure is the one reported. */
@@ -111,6 +115,7 @@ export function evaluateSectionTransfer(input: EvaluateSectionTransferInput): Tr
   }
   // 8. a request is already waiting
   if (hasPendingRequest) return block("pending-request");
+  if (input.hasPendingSchoolTransfer) return block("school-transfer-pending");
   // 9. already there: fine, nothing to do
   if (learner.sectionId === destination.id) return { ok: true, kind: "unchanged" };
 
