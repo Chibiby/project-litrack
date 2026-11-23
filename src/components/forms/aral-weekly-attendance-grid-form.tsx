@@ -146,13 +146,13 @@ type GridCell = {
 /** The cells whose status or reason differs from the baseline — exactly what a save sends. */
 function changedCells(
   learners: WeeklyAttendanceGridLearner[],
-  days: Day[],
+  daysFor: (learner: WeeklyAttendanceGridLearner) => Day[],
   initial: Record<string, RowState>,
   rows: Record<string, RowState>
 ): GridCell[] {
   const cells: GridCell[] = [];
   for (const learner of learners) {
-    for (const day of days) {
+    for (const day of daysFor(learner)) {
       if (day.locked) continue;
       const beforeStatus = initial[learner.id]?.statuses[day.key] ?? "";
       const afterStatus = rows[learner.id]?.statuses[day.key] ?? "";
@@ -170,6 +170,55 @@ function changedCells(
     }
   }
   return cells;
+}
+
+type SaveResult = Awaited<ReturnType<typeof saveAralWeeklyAttendance>>;
+
+/**
+ * Sends the changed cells, one save per grade. A single-grade grid makes one
+ * call, exactly as before. The all-grades grid holds several grades, and the
+ * save action is keyed to one grade, so each grade's cells travel on their own.
+ * On a failure the grades already saved stay saved: `savedLearnerIds` lets the
+ * caller move only their baseline, so the rest are still unsaved and retried.
+ */
+async function saveCellsByGrade(
+  cells: GridCell[],
+  weekStart: string,
+  gradeOf: (learnerId: string) => string
+): Promise<
+  | { ok: true }
+  | { ok: false; failure: Extract<SaveResult, { ok: false }>; savedLearnerIds: Set<string> }
+> {
+  const byGrade = new Map<string, GridCell[]>();
+  for (const cell of cells) {
+    const grade = gradeOf(cell.learnerId);
+    const list = byGrade.get(grade);
+    if (list) list.push(cell);
+    else byGrade.set(grade, [cell]);
+  }
+  const savedLearnerIds = new Set<string>();
+  for (const [gradeId, gradeCells] of byGrade) {
+    const res = await callAction(() =>
+      saveAralWeeklyAttendance({ gradeId, weekStart, cells: gradeCells })
+    );
+    if (!res.ok) return { ok: false, failure: res, savedLearnerIds };
+    for (const cell of gradeCells) savedLearnerIds.add(cell.learnerId);
+  }
+  return { ok: true };
+}
+
+/** The baseline after a partial save: saved learners take what was sent. */
+function withSavedRows(
+  baseline: Record<string, RowState>,
+  sent: Record<string, RowState>,
+  savedLearnerIds: Set<string>
+): Record<string, RowState> {
+  if (savedLearnerIds.size === 0) return baseline;
+  const next = { ...baseline };
+  for (const id of savedLearnerIds) {
+    if (sent[id]) next[id] = sent[id];
+  }
+  return next;
 }
 
 /**
@@ -311,6 +360,37 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
     [weekStartKey, holidayKeys]
   );
   /**
+   * The columns as one learner's row sees them. Only the all-grades view gives a
+   * learner holidays of its own: a day one grade keeps as a holiday locks that
+   * grade's rows while the other grades stay open. Cached per grade, so each row
+   * gets a stable array and `AttendanceGridRow`'s memoization still holds.
+   */
+  const daysByGrade = useMemo(() => {
+    const byGrade = new Map<string, Day[]>();
+    for (const learner of learners) {
+      if (!learner.gradeId || !learner.holidayKeys?.length) continue;
+      if (byGrade.has(learner.gradeId)) continue;
+      byGrade.set(
+        learner.gradeId,
+        buildDays(weekStartKey, [...holidayKeys, ...learner.holidayKeys])
+      );
+    }
+    return byGrade;
+  }, [learners, weekStartKey, holidayKeys]);
+  const daysFor = useCallback(
+    (learner: WeeklyAttendanceGridLearner): Day[] =>
+      (learner.gradeId && daysByGrade.get(learner.gradeId)) || days,
+    [daysByGrade, days]
+  );
+  const learnerById = useMemo(
+    () => new Map(learners.map((l) => [l.id, l])),
+    [learners]
+  );
+  const gradeOf = useCallback(
+    (learnerId: string) => learnerById.get(learnerId)?.gradeId ?? gradeId,
+    [learnerById, gradeId]
+  );
+  /**
    * What the week looked like when it loaded. Saves send the difference, so an
    * untouched cell is never rewritten — that is what preserves a legacy LATE row
    * and what makes "No changes to save" honest.
@@ -385,7 +465,8 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
   const clearRow = useCallback(
     (learnerId: string) => {
       if (readOnly || pending) return;
-      const editable = days.filter((d) => !d.locked);
+      const learner = learnerById.get(learnerId);
+      const editable = (learner ? daysFor(learner) : days).filter((d) => !d.locked);
       setRows((prev) => {
         const row = prev[learnerId];
         if (!row) return prev;
@@ -399,7 +480,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
       });
       toast.success("Row cleared. Save to keep the change.");
     },
-    [readOnly, pending, days]
+    [readOnly, pending, days, daysFor, learnerById]
   );
 
   const applyBulk = useCallback(
@@ -410,13 +491,13 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
         toast("Select at least one learner first");
         return;
       }
-      const editable = days.filter((d) => !d.locked);
 
       setRows((prev) => {
         const next = { ...prev };
         for (const learner of targets) {
           const row = next[learner.id];
           if (!row) continue;
+          const editable = daysFor(learner).filter((d) => !d.locked);
           const statuses = { ...row.statuses };
           const notes = { ...row.notes };
           for (const day of editable) {
@@ -448,12 +529,12 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
             : `Remark applied to ${who}`;
       toast.success(`${label}. Save to keep the change.`);
     },
-    [readOnly, pending, learners, selected, days]
+    [readOnly, pending, learners, selected, daysFor]
   );
 
   const dirty = useMemo(
-    () => changedCells(learners, days, initial, rows).length > 0,
-    [learners, days, initial, rows]
+    () => changedCells(learners, daysFor, initial, rows).length > 0,
+    [learners, daysFor, initial, rows]
   );
 
   useEffect(() => {
@@ -482,15 +563,16 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
   const quietSave = useCallback(async (): Promise<boolean> => {
     if (readOnly) return false;
     const snapshot = rows;
-    const cells = changedCells(learners, days, initial, snapshot);
+    const cells = changedCells(learners, daysFor, initial, snapshot);
     if (cells.length === 0) return true;
-    const res = await callAction(() =>
-      saveAralWeeklyAttendance({ gradeId, weekStart: weekStartKey, cells })
-    );
-    if (!res.ok) return false;
+    const res = await saveCellsByGrade(cells, weekStartKey, gradeOf);
+    if (!res.ok) {
+      setInitial((prev) => withSavedRows(prev, snapshot, res.savedLearnerIds));
+      return false;
+    }
     setInitial(snapshot);
     return true;
-  }, [readOnly, rows, learners, days, initial, gradeId, weekStartKey]);
+  }, [readOnly, rows, learners, daysFor, initial, gradeOf, weekStartKey]);
 
   const autosave = useAutosave({
     enabled: !readOnly,
@@ -509,7 +591,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
       return Promise.resolve(false);
     }
 
-    const cells = changedCells(learners, days, initial, rows);
+    const cells = changedCells(learners, daysFor, initial, rows);
 
     if (cells.length === 0) {
       toast("Everything here is already saved.");
@@ -521,15 +603,11 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
         let ok = false;
         try {
           const toastId = toast.loading("Saving weekly attendance…");
-          const res = await callAction(() =>
-            saveAralWeeklyAttendance({
-              gradeId,
-              weekStart: weekStartKey,
-              cells,
-            })
-          );
+          const sent = rows;
+          const res = await saveCellsByGrade(cells, weekStartKey, gradeOf);
           if (!res.ok) {
-            toastFailure(res, { id: toastId });
+            setInitial((prev) => withSavedRows(prev, sent, res.savedLearnerIds));
+            toastFailure(res.failure, { id: toastId });
             return;
           }
 
@@ -547,11 +625,11 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
   }, [
     readOnly,
     pending,
-    days,
+    daysFor,
     learners,
     initial,
     rows,
-    gradeId,
+    gradeOf,
     weekStartKey,
     router,
   ]);
@@ -584,7 +662,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
 
   const totals = learners.reduce(
     (acc, learner) => {
-      const row = countRow(rows[learner.id], days);
+      const row = countRow(rows[learner.id], daysFor(learner));
       acc.present += row.present;
       acc.absent += row.absent;
       acc.excused += row.excused;
@@ -647,7 +725,7 @@ export const AralWeeklyAttendanceGridForm = forwardRef<
                 learner={learner}
                 index={index}
                 showSection={showSection}
-                days={days}
+                days={daysFor(learner)}
                 rowState={rows[learner.id]}
                 selected={!!selected[learner.id]}
                 disabled={!!readOnly || pending}

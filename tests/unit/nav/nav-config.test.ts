@@ -99,12 +99,18 @@ describe("getNavGroups — teacher", () => {
     expect(aral.items[1].href).toBe("/teacher/aral/g1/reading-level");
   });
 
-  it("deep-links ARAL items to the first ARAL grade when there are several", () => {
-    // Each row must open its own page, not the ARAL Program picker; both pages
-    // switch grades in place.
+  it("opens Weekly Attendance on every grade, and Reading Level on the first, when there are several", () => {
+    // Each row must open its own page, not the ARAL Program picker. Weekly
+    // Attendance defaults to all grades at once; Reading Level switches grades
+    // in place from the first.
     const [, , aral] = getNavGroups("TEACHER", twoAral);
-    expect(aral.items[0].href).toBe("/teacher/aral/g1/attendance");
+    expect(aral.items[0].href).toBe("/teacher/aral/attendance");
     expect(aral.items[1].href).toBe("/teacher/aral/g1/reading-level");
+  });
+
+  it("keeps Weekly Attendance lit on the all-grades page", () => {
+    const items = flattenNavGroups(getNavGroups("TEACHER", twoAral));
+    expect(resolveActiveItemId("/teacher/aral/attendance", items)).toBe("teacher-aral-attendance");
   });
 
   it("keeps each ARAL row lit on every grade's copy of its page", () => {

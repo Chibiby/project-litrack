@@ -58,9 +58,6 @@ vi.mock("@/components/learners/learner-add-menu", () => ({
   LearnerAddMenu: () => null,
   LearnerAddMenuDisabled: () => null,
 }));
-vi.mock("@/components/learners/advisory-hero-control", () => ({
-  AdvisoryHeroControl: () => null,
-}));
 vi.mock("@/components/learners/learner-list-client", () => ({
   LearnerListClient: () => null,
 }));

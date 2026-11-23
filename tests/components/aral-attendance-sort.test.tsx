@@ -79,11 +79,9 @@ function renderPanel() {
   return render(
     <AralWeeklyAttendancePanel
       gradeId="grade-1"
-      grades={[{ id: "grade-1", label: "Grade 3" }]}
       basePath="/teacher/aral/grade-1/attendance"
       initialWeekKey={WEEK_START}
       section="all"
-      sections={[{ id: "s1", name: "Sampaguita" }]}
       showSection
       learners={LEARNERS}
       initialExisting={EXISTING}

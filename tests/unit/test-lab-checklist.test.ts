@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { ALIASES, buildTestLabChecklist, type TestLabChecklistFixtures } from "@/lib/test-lab/checklist";
+import {
+  ALIASES,
+  buildTestLabChecklist,
+  checklistItemPersona,
+  type TestLabChecklistFixtures,
+} from "@/lib/test-lab/checklist";
+import { TEST_LAB_SET_PASSWORD_PATH, isAllowedTestLabNext, testLabRoleHome } from "@/lib/test-lab/personas";
 
 /**
  * Coverage test for the Page Test Lab checklist (docs/test-lab-spec.md, T3).
@@ -59,13 +65,14 @@ const SAMPLE_FIXTURES: TestLabChecklistFixtures = {
   secondGradeId: "22222222-2222-4222-8222-222222222222",
   learnerId: "33333333-3333-4333-8333-333333333333",
   aralLearnerId: "44444444-4444-4444-8444-444444444444",
+  schoolId: "55555555-5555-4555-8555-555555555555",
 };
 
 const checklist = buildTestLabChecklist(SAMPLE_FIXTURES);
 const checklistHrefs = checklist.map((item) => item.href);
 
 describe("buildTestLabChecklist coverage", () => {
-  it.each(["school-head", "teacher"] as const)("covers every page.tsx under src/app/%s", (root) => {
+  it.each(["school-head", "teacher", "district"] as const)("covers every page.tsx under src/app/%s", (root) => {
     const pageFiles = findPageFiles(path.join(APP_DIR, root));
     expect(pageFiles.length).toBeGreaterThan(0);
 
@@ -85,13 +92,37 @@ describe("buildTestLabChecklist coverage", () => {
   });
 
   it("gives every checklist item a role matching its own path", () => {
+    const home = { SCHOOL_HEAD: "/school-head", TEACHER: "/teacher", DISTRICT_ADMIN: "/district" } as const;
     for (const item of checklist) {
-      expect(item.href.startsWith(item.role === "SCHOOL_HEAD" ? "/school-head" : "/teacher")).toBe(true);
+      if (item.href === TEST_LAB_SET_PASSWORD_PATH) continue;
+      expect(item.href.startsWith(home[item.role]), item.href).toBe(true);
     }
   });
 
+  it("opens every row as a persona of its own role, at a destination that persona accepts", () => {
+    const home = { SCHOOL_HEAD: "/school-head", TEACHER: "/teacher", DISTRICT_ADMIN: "/district" } as const;
+    for (const item of checklist) {
+      const persona = checklistItemPersona(item);
+      expect(testLabRoleHome(persona), item.id).toBe(home[item.role]);
+      expect(isAllowedTestLabNext(persona, item.href), item.id).toBe(true);
+    }
+  });
+
+  it("opens the first-run wizard rows as the unprofiled accounts", () => {
+    expect(checklist.find((i) => i.id === "t-profiling-first-run")?.persona).toBe("teacher-unprofiled");
+    expect(checklist.find((i) => i.id === "t-profiling-volunteer")?.persona).toBe("volunteer-unprofiled");
+  });
+
+  it("lets the set-password page through for school accounts only", () => {
+    expect(isAllowedTestLabNext("teacher", TEST_LAB_SET_PASSWORD_PATH)).toBe(true);
+    expect(isAllowedTestLabNext("head", TEST_LAB_SET_PASSWORD_PATH)).toBe(true);
+    expect(isAllowedTestLabNext("district", TEST_LAB_SET_PASSWORD_PATH)).toBe(false);
+    expect(isAllowedTestLabNext("teacher", `${TEST_LAB_SET_PASSWORD_PATH}/x`)).toBe(false);
+    expect(isAllowedTestLabNext("teacher", "/account/other")).toBe(false);
+  });
+
   it("builds only well-formed, single-role app paths from fixture ids", () => {
-    const wellFormed = /^\/(school-head|teacher)(\/[A-Za-z0-9._-]+)*$/;
+    const wellFormed = /^\/(school-head|teacher|district|account\/set-password)(\/[A-Za-z0-9._-]+)*$/;
     for (const item of checklist) {
       expect(item.href, item.href).toMatch(wellFormed);
       expect(item.href).not.toContain("//");

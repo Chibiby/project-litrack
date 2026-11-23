@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { startTestLabSession } from "@/lib/actions/accounts";
-import type { TestLabChecklistItem } from "@/lib/test-lab/checklist";
+import { checklistItemPersona, type TestLabChecklistItem } from "@/lib/test-lab/checklist";
 
 const STORAGE_KEY = "litrack:test-lab:checklist-checked";
 
@@ -32,13 +32,10 @@ function writeChecked(ids: Set<string>): void {
   }
 }
 
-function personaFor(role: TestLabChecklistItem["role"]): "head" | "teacher" {
-  return role === "SCHOOL_HEAD" ? "head" : "teacher";
-}
-
 const ROLE_LABELS: Record<TestLabChecklistItem["role"], string> = {
   SCHOOL_HEAD: "School Head",
   TEACHER: "Teacher",
+  DISTRICT_ADMIN: "Demo District Admin",
 };
 
 function ChecklistRow({
@@ -55,7 +52,7 @@ function ChecklistRow({
   function open() {
     startTransition(async () => {
       const fd = new FormData();
-      fd.set("persona", personaFor(item.role));
+      fd.set("persona", checklistItemPersona(item));
       fd.set("next", item.href);
       const res = await callAction(() => startTestLabSession(fd));
       // Success redirects, so only a failure returns here.
@@ -119,7 +116,7 @@ export function TestLabChecklist({ items }: { items: TestLabChecklistItem[] }) {
     );
   }
 
-  const roles: TestLabChecklistItem["role"][] = ["SCHOOL_HEAD", "TEACHER"];
+  const roles: TestLabChecklistItem["role"][] = ["SCHOOL_HEAD", "TEACHER", "DISTRICT_ADMIN"];
   const checkedCount = hydrated ? items.filter((i) => checked.has(i.id)).length : 0;
 
   return (

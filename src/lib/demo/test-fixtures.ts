@@ -92,6 +92,19 @@ const DEMO_TEACHERS: Record<TeacherKey, DemoTeacherSpec> = {
 };
 
 const PENDING_TEACHER_NAME = { firstName: "Ramon", middleName: "Diaz", lastName: "Bautista" };
+
+/**
+ * Approved, active accounts that have not finished profiling yet — what a
+ * teacher sees on their first sign-in after approval. Profiling under Test Lab
+ * is a dry run, so these stay unprofiled however often the wizard is walked.
+ */
+const ONBOARDING_TEACHERS: Record<
+  "teacher-unprofiled" | "volunteer-unprofiled",
+  { firstName: string; middleName: string; lastName: string; volunteer: boolean }
+> = {
+  "teacher-unprofiled": { firstName: "Mark Anthony", middleName: "Flores", lastName: "Mendoza", volunteer: false },
+  "volunteer-unprofiled": { firstName: "Grace", middleName: "Navarro", lastName: "Torres", volunteer: true },
+};
 const DEMO_HEAD_NAME = { firstName: "Rosario", middleName: "Castro", lastName: "Villanueva" };
 const DEMO_DISTRICT_ADMIN_NAME = { firstName: "Carmela", middleName: "Ramos", lastName: "Aquino" };
 
@@ -166,6 +179,10 @@ export type TestLabFixtures = {
   floatingTeacherId: string | null;
   volunteerTeacherId: string | null;
   pendingTeacherId: string | null;
+  /** Approved DepEd teacher who has not finished profiling. */
+  unprofiledTeacherId: string | null;
+  /** Approved Non-DepEd ARAL Volunteer who has not finished profiling. */
+  unprofiledVolunteerId: string | null;
   /** The demo district admin, assigned to `DEMO_DISTRICT_NAME` only. */
   districtAdminId: string | null;
   /** Every learner rostered under the demo teacher, across both sections. */
@@ -189,6 +206,8 @@ const EMPTY_FIXTURES: TestLabFixtures = {
   floatingTeacherId: null,
   volunteerTeacherId: null,
   pendingTeacherId: null,
+  unprofiledTeacherId: null,
+  unprofiledVolunteerId: null,
   districtAdminId: null,
   learnerIds: [],
   aralLearnerIds: [],
@@ -240,6 +259,8 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
   const floatingTeacher = await findTeacher("teacher-floating");
   const volunteerTeacher = await findTeacher("teacher-volunteer");
   const pendingTeacher = await findTeacher("pending-teacher");
+  const unprofiledTeacher = await findTeacher("teacher-unprofiled");
+  const unprofiledVolunteer = await findTeacher("volunteer-unprofiled");
   const districtAdmin = await findDemoDistrictAdmin();
 
   const learners = teacher
@@ -262,6 +283,8 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
       floatingTeacher &&
       volunteerTeacher &&
       pendingTeacher &&
+      unprofiledTeacher &&
+      unprofiledVolunteer &&
       districtAdmin &&
       learners.length > 0
   );
@@ -281,6 +304,8 @@ export async function findTestLabFixtures(): Promise<TestLabFixtures> {
     floatingTeacherId: floatingTeacher?.id ?? null,
     volunteerTeacherId: volunteerTeacher?.id ?? null,
     pendingTeacherId: pendingTeacher?.id ?? null,
+    unprofiledTeacherId: unprofiledTeacher?.id ?? null,
+    unprofiledVolunteerId: unprofiledVolunteer?.id ?? null,
     districtAdminId: districtAdmin?.id ?? null,
     learnerIds: learners.map((l) => l.id),
     aralLearnerIds: learners.filter((l) => l.isAralLearner).map((l) => l.id),
@@ -535,6 +560,37 @@ async function ensurePendingTeacher(schoolId: string): Promise<string> {
   return created.id;
 }
 
+/**
+ * An approved, active teacher with no profile yet. Re-asserts the onboarding
+ * state on every Prepare, so a persona someone changed by hand is put back.
+ * An existing `TeacherProfile` is left alone: it is ignored while
+ * `profileCompleted` is false, and deleting rows here is not this step's job.
+ */
+async function ensureOnboardingTeacher(
+  persona: keyof typeof ONBOARDING_TEACHERS,
+  schoolId: string,
+  createdById: string
+): Promise<string> {
+  const { volunteer, ...name } = ONBOARDING_TEACHERS[persona];
+  const email = testLabPersonaEmail(persona);
+  const existing = await prisma.user.findFirst({
+    where: { email, role: "TEACHER", schoolId, deletedAt: null },
+    select: { id: true },
+  });
+  const id = existing?.id ?? (await createTeacherAuthUser({ email, schoolId, ...name })).id;
+  await prisma.user.update({
+    where: { id },
+    data: {
+      isActive: true,
+      approvalStatus: "APPROVED",
+      ...(existing ? {} : { approvedAt: new Date(), approvedById: createdById }),
+      profileCompleted: false,
+      registeredAsAralVolunteer: volunteer,
+    },
+  });
+  return id;
+}
+
 /** The demo district admin, only while it is assigned to the demo district alone. */
 function findDemoDistrictAdmin() {
   return prisma.user.findFirst({
@@ -733,6 +789,8 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
   const floatingTeacherId = await teacherOf("floating", []);
   const volunteerTeacherId = await teacherOf("volunteer", []);
   const pendingTeacherId = await ensurePendingTeacher(school);
+  const unprofiledTeacherId = await ensureOnboardingTeacher("teacher-unprofiled", school, createdById);
+  const unprofiledVolunteerId = await ensureOnboardingTeacher("volunteer-unprofiled", school, createdById);
   const districtAdminId = await ensureDemoDistrictAdmin(createdById);
 
   const teacherIds: Record<TeacherKey, string> = {
@@ -794,6 +852,8 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
       floatingTeacherId,
       volunteerTeacherId,
       pendingTeacherId,
+      unprofiledTeacherId,
+      unprofiledVolunteerId,
       districtAdminId,
       learnerCount: learnerIds.length + g2.learnerIds.length,
       aralLearnerCount: aralLearnerIds.length + g2.aralLearnerIds.length,
@@ -815,6 +875,8 @@ export async function prepareTestLabFixtures(createdById: string): Promise<TestL
     floatingTeacherId,
     volunteerTeacherId,
     pendingTeacherId,
+    unprofiledTeacherId,
+    unprofiledVolunteerId,
     districtAdminId,
     learnerIds,
     aralLearnerIds,

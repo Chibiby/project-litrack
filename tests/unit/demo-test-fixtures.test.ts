@@ -39,6 +39,7 @@ type Usr = {
   approvedAt: Date | null;
   approvedById: string | null;
   deletedAt: Date | null;
+  registeredAsAralVolunteer?: boolean;
 };
 type Profile = {
   userId: string;
@@ -405,10 +406,10 @@ describe("prepareTestLabFixtures — idempotency", () => {
     // Kinder, Grade 1 and Grade 2, one section each.
     expect(grades).toHaveLength(3);
     expect(sections).toHaveLength(3);
-    // Six new auth users: the four kinds of teacher, the pending teacher and
-    // the demo district admin.
-    expect(users).toHaveLength(7);
-    expect(createUserMock).toHaveBeenCalledTimes(6);
+    // Eight new auth users: the four kinds of teacher, the pending teacher, the
+    // two approved-but-unprofiled teachers and the demo district admin.
+    expect(users).toHaveLength(9);
+    expect(createUserMock).toHaveBeenCalledTimes(8);
     expect(learners.length).toBeGreaterThan(0);
     expect(enrollments).toHaveLength(learners.length);
     // Every learner's Enrollment points at the same grade/section/teacher as
@@ -442,7 +443,7 @@ describe("prepareTestLabFixtures — idempotency", () => {
     expect(users).toHaveLength(counts.users);
     expect(learners).toHaveLength(counts.learners);
     expect(enrollments).toHaveLength(counts.enrollments);
-    expect(createUserMock).toHaveBeenCalledTimes(6); // no new auth users
+    expect(createUserMock).toHaveBeenCalledTimes(8); // no new auth users
     expect(second).toEqual(first);
   });
 });
@@ -493,9 +494,46 @@ describe("prepareTestLabFixtures — partial failure", () => {
     const inputs = createUserMock.mock.calls.map(
       (c) => c[0] as { email: string; password: { hash: string } }
     );
-    expect(inputs).toHaveLength(6);
-    expect(new Set(inputs.map((i) => i.email)).size).toBe(6);
-    expect(new Set(inputs.map((i) => i.password.hash)).size).toBe(6);
+    expect(inputs).toHaveLength(8);
+    expect(new Set(inputs.map((i) => i.email)).size).toBe(8);
+    expect(new Set(inputs.map((i) => i.password.hash)).size).toBe(8);
+  });
+});
+
+describe("prepareTestLabFixtures — accounts still signing up", () => {
+  it("creates approved, active, unprofiled teachers, the volunteer flagged at sign-up", async () => {
+    seedLiveDemoSchool();
+    const result = await prepareTestLabFixtures(ADMIN_ID);
+
+    const teacher = users.find((u) => u.id === result.unprofiledTeacherId)!;
+    const volunteer = users.find((u) => u.id === result.unprofiledVolunteerId)!;
+    for (const [account, persona] of [
+      [teacher, "teacher-unprofiled"],
+      [volunteer, "volunteer-unprofiled"],
+    ] as const) {
+      expect(account).toMatchObject({
+        role: "TEACHER",
+        email: testLabPersonaEmail(persona),
+        isActive: true,
+        approvalStatus: "APPROVED",
+        profileCompleted: false,
+      });
+      // No profile row: the wizard must start from nothing.
+      expect(profiles.some((p) => p.userId === account.id)).toBe(false);
+    }
+    expect(teacher.registeredAsAralVolunteer).toBe(false);
+    expect(volunteer.registeredAsAralVolunteer).toBe(true);
+  });
+
+  it("puts a finished profile flag back to unfinished on the next Prepare", async () => {
+    seedLiveDemoSchool();
+    const first = await prepareTestLabFixtures(ADMIN_ID);
+    const teacher = users.find((u) => u.id === first.unprofiledTeacherId)!;
+    teacher.profileCompleted = true;
+
+    const second = await prepareTestLabFixtures(ADMIN_ID);
+    expect(second.unprofiledTeacherId).toBe(first.unprofiledTeacherId);
+    expect(users.find((u) => u.id === first.unprofiledTeacherId)?.profileCompleted).toBe(false);
   });
 });
 

@@ -13,8 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AralDateNav } from "@/components/aral/date-nav";
-import { type AralGradeOption } from "@/components/aral/aral-filter-popover";
-import { AralGradeSelect, AralSectionSelect } from "@/components/aral/aral-scope-select";
+import {
+  AralAdvisoryFilter,
+  type AralAdvisoryGroup,
+} from "@/components/aral/aral-scope-select";
 import { AttendanceWeekStats } from "@/components/aral/attendance-week-stats";
 import { computeWeekStats } from "@/lib/attendance/week-stats";
 import {
@@ -29,7 +31,14 @@ import {
   type WeeklyAttendanceGridExisting,
   type WeeklyAttendanceGridLearner,
 } from "@/components/forms/aral-weekly-attendance-grid-form";
-import { fetchAralAttendanceForWeek } from "@/lib/actions/aral-grid";
+import {
+  fetchAralAttendanceAllGradesForWeek,
+  fetchAralAttendanceForWeek,
+} from "@/lib/actions/aral-grid";
+import {
+  ALL_GRADES_ATTENDANCE_PATH,
+  commonHolidayKeys,
+} from "@/lib/aral/all-grades";
 import { callAction } from "@/lib/ui/call-action";
 import { toastFailure } from "@/lib/ui/toast-failure";
 import { runGuarded } from "@/lib/ui/unsaved-guard";
@@ -52,7 +61,6 @@ import {
 } from "@/lib/week-range";
 import { getMonday, cn } from "@/lib/utils";
 import type { LearnerListSectionFilter } from "@/lib/learners/pagination";
-import type { SectionOption } from "@/components/learners/learner-list-toolbar";
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -96,11 +104,9 @@ function lockInfo(
 
 type Props = {
   gradeId: string;
-  grades: AralGradeOption[];
   basePath: string;
   initialWeekKey: string;
   section: LearnerListSectionFilter;
-  sections: SectionOption[];
   showSection: boolean;
   schoolId?: string;
   learners: WeeklyAttendanceGridLearner[];
@@ -118,15 +124,21 @@ type Props = {
    * the pre-switch behaviour rather than silently unlocking everything.
    */
   lockingEnabled?: boolean;
+  /**
+   * Set on the all-grades page: one grid for every grade, each learner carrying
+   * its own `gradeId`. Holidays are kept per grade, because a holiday one grade
+   * keeps must lock only that grade's rows. Absent on the per-grade page.
+   */
+  allGrades?: { holidayKeysByGrade: Record<string, string[]> };
+  /** Every grade this teacher works in, with its sections, for the advisory filter. */
+  advisoryGroups?: AralAdvisoryGroup[];
 };
 
 export function AralWeeklyAttendancePanel({
   gradeId,
-  grades,
   basePath,
   initialWeekKey,
   section,
-  sections,
   showSection,
   schoolId,
   learners,
@@ -135,7 +147,10 @@ export function AralWeeklyAttendancePanel({
   readOnly,
   unlockedWeeks = [],
   lockingEnabled = true,
+  allGrades,
+  advisoryGroups = [],
 }: Props) {
+  const isAllGrades = allGrades !== undefined;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
@@ -144,7 +159,10 @@ export function AralWeeklyAttendancePanel({
   /** Week whose records are currently in the grid. */
   const [loadedWeek, setLoadedWeek] = useState(initialWeekKey);
   const [existing, setExisting] = useState(initialExisting);
-  const [holidayKeys, setHolidayKeys] = useState(initialHolidayKeys);
+  const [holidayKeysByGrade, setHolidayKeysByGrade] = useState(
+    allGrades?.holidayKeysByGrade ?? {}
+  );
+  const [gradeHolidayKeys, setHolidayKeys] = useState(initialHolidayKeys);
   const [loading, setLoading] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -200,14 +218,30 @@ export function AralWeeklyAttendancePanel({
 
     const requestId = ++requestIdRef.current;
     void (async () => {
-      const res = await callAction(() =>
-        fetchAralAttendanceForWeek({
-          gradeId,
+      const res = await callAction(async () => {
+        if (!isAllGrades) {
+          return fetchAralAttendanceForWeek({
+            gradeId,
+            weekKey: normalized,
+            section: section !== "all" ? section : undefined,
+            schoolId,
+          });
+        }
+        const all = await fetchAralAttendanceAllGradesForWeek({
           weekKey: normalized,
-          section: section !== "all" ? section : undefined,
           schoolId,
-        })
-      );
+          section: section !== "all" ? section : undefined,
+        });
+        if (!all.ok) return all;
+        return {
+          ok: true as const,
+          data: {
+            records: all.data.records,
+            holidayKeys: [] as string[],
+            holidayKeysByGrade: all.data.holidayKeysByGrade,
+          },
+        };
+      });
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
         toastFailure(res);
@@ -224,6 +258,9 @@ export function AralWeeklyAttendancePanel({
       }
       setExisting(res.data.records);
       setHolidayKeys(res.data.holidayKeys);
+      if ("holidayKeysByGrade" in res.data) {
+        setHolidayKeysByGrade(res.data.holidayKeysByGrade);
+      }
       loadedWeekRef.current = normalized;
       setLoadedWeek(normalized);
       setLoading(false);
@@ -260,9 +297,32 @@ export function AralWeeklyAttendancePanel({
     return counts;
   }, [existing]);
 
+  // All grades: each row learns its own grade's holidays, and only a day every
+  // grade on screen keeps as a holiday locks the whole column.
+  const gridLearners = useMemo(
+    () =>
+      isAllGrades
+        ? learners.map((l) => ({
+            ...l,
+            holidayKeys: (l.gradeId && holidayKeysByGrade[l.gradeId]) || [],
+          }))
+        : learners,
+    [isAllGrades, learners, holidayKeysByGrade]
+  );
+  const holidayKeys = useMemo(
+    () =>
+      isAllGrades
+        ? commonHolidayKeys(
+            holidayKeysByGrade,
+            learners.flatMap((l) => (l.gradeId ? [l.gradeId] : []))
+          )
+        : gradeHolidayKeys,
+    [isAllGrades, holidayKeysByGrade, learners, gradeHolidayKeys]
+  );
+
   const sortedLearners = useMemo(
-    () => sortAttendanceLearners(learners, sort, absencesByLearner),
-    [learners, sort, absencesByLearner]
+    () => sortAttendanceLearners(gridLearners, sort, absencesByLearner),
+    [gridLearners, sort, absencesByLearner]
   );
 
   // Section is only an option where this grade actually has sections — with
@@ -387,25 +447,18 @@ export function AralWeeklyAttendancePanel({
           pending={loading}
           filter={
               <>
-                <AralGradeSelect
-                  gradeId={gradeId}
-                  grades={grades}
+                {/* One grouped advisory filter (grade headings over their
+                    sections) replaces the grade and section selects. */}
+                <AralAdvisoryFilter
+                  groups={advisoryGroups}
+                  value={section}
                   schoolId={schoolId}
+                  allHref={ALL_GRADES_ATTENDANCE_PATH}
                   pathForGrade={(id) => `/teacher/aral/${id}/attendance`}
                   preserveParams={{ week: pickerWeek }}
-                  className="w-full sm:w-56"
+                  currentGradeId={isAllGrades ? undefined : gradeId}
+                  className="w-full max-sm:col-span-2 sm:w-56"
                 />
-                {showSection ? (
-                  <AralSectionSelect
-                    gradeId={gradeId}
-                    section={section}
-                    sections={sections}
-                    schoolId={schoolId}
-                    pathForGrade={(id) => `/teacher/aral/${id}/attendance`}
-                    preserveParams={{ week: pickerWeek }}
-                    className="w-full sm:w-48"
-                  />
-                ) : null}
                 <Select
                   value={sort}
                   onValueChange={(value) => setSort(value as AralAttendanceSort)}

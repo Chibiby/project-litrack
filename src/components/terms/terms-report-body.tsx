@@ -26,6 +26,7 @@ export async function TermsReportBody({
   readOnly,
   canSave,
   exportScope,
+  scopeControl,
 }: {
   schoolId: string;
   schoolYearId: string;
@@ -38,6 +39,8 @@ export async function TermsReportBody({
   readOnly: boolean;
   canSave: boolean;
   exportScope: Pick<TermGradesExportInput, "gradeLevelId" | "section" | "sectionIds">;
+  /** The advisory picker, shown beside the search box. Multi-advisory only. */
+  scopeControl?: React.ReactNode;
 }) {
   const data = await loadTermSheet({
     schoolId,
@@ -71,6 +74,7 @@ export async function TermsReportBody({
           page={data.page}
           totalPages={data.pageCount}
           totalCount={data.totalCount}
+          scopeControl={scopeControl}
         />
       </div>
     </>

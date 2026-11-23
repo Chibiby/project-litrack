@@ -129,11 +129,9 @@ describe("weekly attendance grid", () => {
         <Link href="/teacher/dashboard">Dashboard</Link>
         <AralWeeklyAttendancePanel
           gradeId="grade-1"
-          grades={[{ id: "grade-1", label: "Grade 3" }]}
           basePath="/teacher/aral/grade-1/attendance"
           initialWeekKey={WEEK}
           section="all"
-          sections={[]}
           showSection={false}
           learners={LEARNERS}
           initialExisting={EXISTING}

@@ -103,6 +103,16 @@ export type WeeklyAttendanceGridLearner = {
    * column shows and what the panel's "Alphabetical" sort compares. */
   listingName: string;
   sectionName: string | null;
+  /**
+   * The learner's own grade. Set only in the all-grades view, where one grid
+   * holds several grades and each save goes to the learner's own grade.
+   */
+  gradeId?: string;
+  /**
+   * Holidays of the learner's own grade this week (`YYYY-MM-DD`). All-grades
+   * view only: a holiday one grade keeps locks that grade's rows, not the column.
+   */
+  holidayKeys?: string[];
 };
 
 export type WeeklyAttendanceGridExisting = {

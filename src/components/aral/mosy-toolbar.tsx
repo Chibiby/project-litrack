@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { Search, Users, X } from "lucide-react";
+import { ARAL_SCOPE_TRIGGER } from "@/components/learners/advisory-select";
+import { cn } from "@/lib/utils";
 import { useListNavigate } from "@/components/nav/list-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +34,13 @@ const gradeValue = (gradeId: string) => `g:${gradeId}`;
 const sectionValue = (gradeId: string, sectionId: string) => `s:${gradeId}:${sectionId}`;
 
 /**
- * MOSY's own search + Grade & section + ARAL status row. One grouped select
- * carries both facets (`grade` and `section` in the URL), so every change here
- * resets `page` and keeps `schoolId` and whichever params it did not touch.
+ * MOSY's own search + Advisory + ARAL status row. The advisory filter is the
+ * same purple, grade-grouped picker as Learners and Weekly Attendance: All
+ * advisories, then each grade as a heading over its sections, with no "All of
+ * Kinder" row. It still writes both URL facets (`grade` and `section`), so
+ * every change here resets `page` and keeps `schoolId` and whichever params
+ * it did not touch. A grade-only link from before keeps working: that grade
+ * shows as one extra row so the trigger never reads blank.
  */
 export function MosyToolbar({
   q,
@@ -151,20 +157,25 @@ export function MosyToolbar({
       </div>
 
       <Select value={facetValue} onValueChange={handleFacetChange}>
-        <SelectTrigger aria-label="Grade and section" className="h-11 sm:w-48 lg:h-9">
-          <SelectValue placeholder="All grades" />
+        <SelectTrigger aria-label="Advisory" className={cn(ARAL_SCOPE_TRIGGER, "w-full sm:w-56")}>
+          <Users className="size-4 shrink-0 text-aral-foreground" aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-left">
+            <SelectValue placeholder="All advisories" />
+          </span>
         </SelectTrigger>
         <SelectContent>
           {facetStale ? (
             <SelectItem value={STALE} disabled>
-              Unknown grade or section
+              Unknown advisory
             </SelectItem>
           ) : null}
-          <SelectItem value={ALL}>All grades &amp; sections</SelectItem>
+          <SelectItem value={ALL}>All advisories</SelectItem>
+          {selectedGrade && !selectedSection ? (
+            <SelectItem value={gradeValue(selectedGrade.id)}>{selectedGrade.label}</SelectItem>
+          ) : null}
           {grades.map((g) => (
             <SelectGroup key={g.id}>
               <SelectLabel>{g.label}</SelectLabel>
-              <SelectItem value={gradeValue(g.id)}>All of {g.label}</SelectItem>
               {g.sections.map((s) => (
                 <SelectItem key={s.id} value={sectionValue(g.id, s.id)}>
                   {g.label} - {s.name}
@@ -183,7 +194,7 @@ export function MosyToolbar({
           onClick={() => navigate({ grade: undefined, section: undefined })}
         >
           <X className="size-4" aria-hidden />
-          Clear grade &amp; section filter
+          Clear advisory filter
         </Button>
       ) : null}
 

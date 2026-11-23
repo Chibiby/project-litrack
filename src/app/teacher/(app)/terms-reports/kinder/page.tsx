@@ -199,16 +199,6 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
         touched={touched}
         total={total}
         pct={pct}
-        topRight={
-          <KinderAdvisoryHeroControl
-            schoolId={schoolId}
-            advisories={advisories}
-            value={advisory.sectionId}
-            numericSectionIds={numericPlacements.map((p) => p.sectionId)}
-            numericBasePath="/teacher/terms-reports"
-            className="h-11 w-32 text-xs sm:w-44 sm:text-sm lg:w-56"
-          />
-        }
       />
 
       <KinderChecklistClient
@@ -223,6 +213,18 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
         schoolName={school?.name ?? "School"}
         advisoryLabel={advisory.label}
         schoolYearLabel={schoolYear.label}
+        scopeControl={
+          advisories.length > 1 ? (
+            <KinderAdvisoryHeroControl
+              schoolId={schoolId}
+              advisories={advisories}
+              value={advisory.sectionId}
+              numericSectionIds={numericPlacements.map((p) => p.sectionId)}
+              numericBasePath="/teacher/terms-reports"
+              className="h-11 w-full lg:h-10"
+            />
+          ) : undefined
+        }
       />
     </AppShell>
   );

@@ -135,6 +135,46 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.79.0",
+    date: "2026-11-23",
+    title: "Weekly Attendance for all your grades at once, and pickers beside the search box",
+    announce: false,
+    fixes: [
+      {
+        text: "Page Test Lab can now open an approved teacher and a Non-DepEd ARAL Volunteer who have not finished profiling yet, so the first-time profiling wizard can be checked as a new account sees it.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "The Page Test Lab checklist now lists every District Admin page, the first sign-in password page, and the waiting-for-approval page, each opening in the right demo account.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Each demo account in Page Test Lab now says in one line who it is, grouped into working accounts and accounts still signing up.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "If you advise more than one section, the advisory picker on Learners and End-of-Term Reports now sits right beside the search box, in purple, instead of in the page banner. Learners still opens on All advisories.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "If you handle ARAL learners in more than one grade, Weekly Attendance now opens on All grades: every learner in one list, saved in one go. Pick an advisory from the purple filter to see just that section.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "Every advisory filter now lists each grade as a heading with its sections under it, like Kinder - A and Kinder - B. MOSY and BOSY Reports use this same purple advisory filter in place of their grade and section filter.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "The grade picker on Monthly Reading Level is now purple too, and on a phone it no longer hides inside the Filter button.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "This update only changes the practice school used for training. Nothing on your pages changed.",
+        roles: ["SCHOOL_HEAD", "DISTRICT_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.78.0",
     date: "2026-11-21",
     title: "Rate limits you can change, and a rounder Assistant button",

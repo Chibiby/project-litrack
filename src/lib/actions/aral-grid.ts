@@ -18,6 +18,10 @@ import { getMonday } from "@/lib/utils";
 import { aralLearnerScope, teacherGradeScope } from "@/lib/teachers/scope";
 import { action } from "@/lib/errors/action";
 import { fieldError, resourceNotFound } from "@/lib/errors/app-error";
+import {
+  allGradesAttendanceScope,
+  readAllGradesAttendanceWeek,
+} from "@/lib/aral/all-grades-attendance";
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -145,6 +149,47 @@ export const fetchAralAttendanceForWeek = action(
         holidayKeys: holidays.map((h) => formatLocalDateKey(h.date)),
       },
     };
+  },
+  { verb: "load the week's attendance" }
+);
+
+/**
+ * The all-grades view's week: every grade the teacher works in at once, with
+ * each grade's holidays kept apart (a holiday locks only its own grade's rows).
+ *
+ * Read-only. Authorization: `requireUser("TEACHER")`. Tenancy and learner
+ * scope are `allGradesAttendanceScope`'s — the same rule as the page.
+ */
+export const fetchAralAttendanceAllGradesForWeek = action(
+  "fetchAralAttendanceAllGradesForWeek",
+  async (input: {
+    weekKey: string;
+    schoolId?: string;
+    section?: string;
+  }): Promise<{
+    ok: true;
+    data: {
+      records: AralWeeklyAttendanceRecord[];
+      holidayKeysByGrade: Record<string, string[]>;
+    };
+  }> => {
+    const parsed = parseDateKey(input.weekKey);
+    if (!parsed) throw fieldError("weekKey", "Invalid week");
+    const weekStart = getMonday(parsed);
+
+    const user = await requireUser("TEACHER");
+    const { grades, learnerWhere } = await allGradesAttendanceScope(
+      user,
+      input.schoolId,
+      input.section
+    );
+    const data = await readAllGradesAttendanceWeek({
+      learnerWhere,
+      gradeIds: grades.map((g) => g.id),
+      weekStart,
+      nextWeekStart: addDays(weekStart, 7),
+    });
+    return { ok: true, data };
   },
   { verb: "load the week's attendance" }
 );

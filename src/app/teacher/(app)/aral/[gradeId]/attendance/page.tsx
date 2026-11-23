@@ -323,15 +323,29 @@ async function AralWeeklyAttendanceGrid({
 
   const unlockedWeeks = [...unlock.unlockedKeys];
 
+  // The advisory filter lists every grade this teacher works in, each with its
+  // sections, so it needs the other grades' sections too (cached, like this one).
+  const allSections =
+    grades.length > 1
+      ? await getGradeSections({
+          schoolId: grade.schoolId,
+          gradeLevelIds: grades.map((g) => g.id),
+        })
+      : gradeSections;
+  const advisoryGroups = grades.map((g) => ({
+    gradeId: g.id,
+    gradeLabel: g.label,
+    sections: allSections.filter((s) => s.gradeLevelId === g.id),
+  }));
+
   return (
     <AralWeeklyAttendancePanel
       key={`${list.section}:${sp.schoolId ?? ""}`}
       gradeId={grade.id}
-      grades={grades}
+      advisoryGroups={advisoryGroups}
       basePath={basePath}
       initialWeekKey={weekKey}
       section={list.section}
-      sections={gradeSections}
       showSection={showSection}
       schoolId={sp.schoolId}
       learners={gridLearners}

@@ -19,7 +19,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { useListNavigate } from "@/components/nav/list-navigation";
 import {
   Select,
   SelectContent,
@@ -28,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AralDateNav } from "@/components/aral/date-nav";
+import { AralGradeSelect } from "@/components/aral/aral-scope-select";
 import { type AralGradeOption } from "@/components/aral/aral-filter-popover";
 import {
   AralMonthlyReadingLevelGridForm,
@@ -243,7 +243,6 @@ export function AralMonthlyReadingLevelPanel({
   unlockedMonths = [],
 }: Props) {
   const router = useRouter();
-  const listNavigate = useListNavigate();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
   /** Month shown in the nav and the banner — updates immediately on click. */
@@ -406,35 +405,11 @@ export function AralMonthlyReadingLevelPanel({
 
   const busy = loading || savePending;
 
-  const showGradeFilter = grades.length > 1;
   const activeFilterCount =
     (showSection && section !== "all" ? 1 : 0) + (gender !== "all" ? 1 : 0);
 
-  function changeGrade(nextGradeId: string) {
-    if (nextGradeId === gradeId) return;
-    // Section IDs are grade-scoped, so it is dropped; gender is not, so it is
-    // carried across with the month.
-    listNavigate(
-      `/teacher/aral/${nextGradeId}/reading-level${buildQuery({
-        schoolId,
-        month: pickerMonth,
-        gender: gender !== "all" ? gender : undefined,
-      })}`
-    );
-  }
-
   const renderFilterFields = (stacked: boolean) => (
     <>
-      {showGradeFilter && (
-        <FacetSelect
-          name="Grade"
-          stacked={stacked}
-          value={gradeId}
-          disabled={busy}
-          onChange={changeGrade}
-          options={grades.map((g) => ({ value: g.id, label: g.label }))}
-        />
-      )}
       {showSection && (
         <FacetSelect
           name="Section"
@@ -505,6 +480,19 @@ export function AralMonthlyReadingLevelPanel({
           pending={loading}
           filter={
             <>
+              {/* The page's scope, never inside the Filter popover: the same
+                  purple grade picker Weekly Attendance shows. */}
+              <AralGradeSelect
+                gradeId={gradeId}
+                grades={grades}
+                schoolId={schoolId}
+                pathForGrade={(id) => `/teacher/aral/${id}/reading-level`}
+                preserveParams={{
+                  month: pickerMonth,
+                  gender: gender !== "all" ? gender : undefined,
+                }}
+                className="w-full sm:w-56"
+              />
               <Popover modal>
                   <PopoverTrigger asChild>
                     <Button
@@ -514,8 +502,8 @@ export function AralMonthlyReadingLevelPanel({
                       className="h-11 md:hidden"
                       aria-label={
                         activeFilterCount > 0
-                          ? `Filter by grade, section and gender, ${activeFilterCount} active`
-                          : "Filter by grade, section and gender"
+                          ? `Filter by section and gender, ${activeFilterCount} active`
+                          : "Filter by section and gender"
                       }
                     >
                       <Filter className="h-4 w-4" aria-hidden />
@@ -540,6 +528,8 @@ export function AralMonthlyReadingLevelPanel({
               <div className="hidden md:contents">{renderFilterFields(false)}</div>
               <FacetSelect
                 id="aral-reading-level-sort"
+                // Alone on its own row on a phone, so it takes the full width.
+                className="max-sm:col-span-2 max-sm:w-full"
                 name="Sort by"
                 ariaLabel="Sort by"
                 value={sort}
@@ -669,6 +659,7 @@ function FacetSelect({
   id,
   ariaLabel,
   stacked,
+  className,
 }: {
   /** Label above a full-width select (Filter popover) instead of the in-trigger caption. */
   stacked?: boolean;
@@ -681,6 +672,7 @@ function FacetSelect({
   /** Overrides the default "Filter by …" label — the sort control is not a
    * filter, and reading it as one misdescribes what it does. */
   ariaLabel?: string;
+  className?: string;
 }) {
   const generatedId = useId();
   const triggerId = id ?? generatedId;
@@ -688,11 +680,10 @@ function FacetSelect({
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
         id={triggerId}
-        className={
-          stacked
-            ? "h-11 w-full"
-            : "h-11 w-auto min-w-[8rem] gap-1.5 lg:h-9"
-        }
+        className={cn(
+          stacked ? "h-11 w-full" : "h-11 w-auto min-w-[8rem] gap-1.5 lg:h-9",
+          className
+        )}
         aria-label={ariaLabel ?? `Filter by ${name.toLowerCase()}`}
       >
         {!stacked && <span className="text-muted-foreground">{name}</span>}

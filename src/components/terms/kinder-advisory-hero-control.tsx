@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { kinderChecklistHref } from "@/components/terms/kinder-route";
+import { Users } from "lucide-react";
+import { ARAL_SCOPE_TRIGGER, AdvisoryGroupedItems } from "@/components/learners/advisory-select";
+import { cn } from "@/lib/utils";
 
 /**
  * The Kindergarten advisory switcher. Used in two places:
@@ -61,15 +63,14 @@ export function KinderAdvisoryHeroControl({
         router.push(kinderChecklistHref({ schoolId, advisory }), { scroll: false });
       }}
     >
-      <SelectTrigger aria-label="Kindergarten advisory" className={className}>
-        <SelectValue placeholder="Choose a section" />
+      <SelectTrigger aria-label="Kindergarten advisory" className={cn(ARAL_SCOPE_TRIGGER, className)}>
+        <Users className="size-4 shrink-0 text-aral-foreground" aria-hidden />
+        <span className="min-w-0 flex-1 truncate text-left">
+          <SelectValue placeholder="Choose a section" />
+        </span>
       </SelectTrigger>
       <SelectContent>
-        {advisories.map((a) => (
-          <SelectItem key={a.id} value={a.id}>
-            {a.label}
-          </SelectItem>
-        ))}
+        <AdvisoryGroupedItems advisories={advisories} />
       </SelectContent>
     </Select>
   );

@@ -66,6 +66,11 @@ type Props = {
   page: number;
   totalPages: number;
   totalCount: number;
+  /**
+   * The page's scope picker (the advisory dropdown), placed right beside the
+   * search box as on Learners. Multi-advisory teachers only.
+   */
+  scopeControl?: React.ReactNode;
 };
 
 /**
@@ -88,6 +93,7 @@ export function TermsReportPanel({
   page,
   totalPages,
   totalCount,
+  scopeControl,
 }: Props) {
   const router = useRouter();
   const [, startNav] = useTransition();
@@ -415,6 +421,7 @@ export function TermsReportPanel({
             the export/save buttons; sm and up keep the single row. */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {searchBox}
+          {scopeControl ? <div className="sm:w-56 sm:shrink-0">{scopeControl}</div> : null}
           <div className="flex items-center gap-2 sm:contents">
             {exportButton}
             {saveButton}
@@ -453,6 +460,7 @@ export function TermsReportPanel({
         {/* Desktop: one toolbar row across the top of the table. */}
         <div className="hidden flex-wrap items-center gap-3 border-b border-border/60 p-3 xl:flex">
           {searchBox}
+          {scopeControl ? <div className="w-56 shrink-0">{scopeControl}</div> : null}
           {facets("desktop")}
           <div className="ml-auto flex items-center gap-3">
             <UnsavedChangesBadge dirty={dirty} />

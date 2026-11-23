@@ -39,8 +39,7 @@ vi.mock("@/components/aral/attendance-week-stats", () => ({
   AttendanceWeekStats: () => null,
 }));
 vi.mock("@/components/aral/aral-scope-select", () => ({
-  AralGradeSelect: () => null,
-  AralSectionSelect: () => null,
+  AralAdvisoryFilter: () => null,
 }));
 vi.mock("@/components/aral/date-nav", () => ({
   AralDateNav: ({
@@ -73,11 +72,9 @@ function renderPanel() {
   return render(
     <AralWeeklyAttendancePanel
       gradeId="g1"
-      grades={[]}
       basePath="/teacher/aral/g1/attendance"
       initialWeekKey="2026-08-03"
       section="all"
-      sections={[]}
       showSection={false}
       learners={[]}
       initialExisting={[]}

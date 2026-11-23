@@ -1,3 +1,4 @@
+import { ALL_GRADES_ATTENDANCE_PATH } from "@/lib/aral/all-grades";
 import {
   Archive,
   ArrowRightLeft,
@@ -173,6 +174,16 @@ export function termsReportsHref(): string {
  * keeps the row lit on every grade's copy. Only a teacher with no ARAL grade
  * still lands on the picker, which explains how to enroll.
  */
+/**
+ * Weekly Attendance opens on every grade at once wherever its grade picker
+ * would offer a choice (more than one grade), the all-grades page being that
+ * picker's default. One grade keeps the per-grade page.
+ */
+function aralAttendanceNavHref(grades: NavGrade[]): string {
+  if (grades.length > 1 && grades.some((g) => g.hasAral)) return ALL_GRADES_ATTENDANCE_PATH;
+  return aralHref(grades, "attendance");
+}
+
 function aralHref(grades: NavGrade[], suffix: string): string {
   const first = grades.find((g) => g.hasAral);
   if (!first) return "/teacher/aral";
@@ -388,7 +399,7 @@ export function getNavGroups(
               id: "teacher-aral-attendance",
               alsoOwns: /^\/teacher\/aral\/[^\/]+\/(learners\/[^\/]+\/)?attendance(\/|$)/,
               label: "Weekly Attendance",
-              href: aralHref(grades, "attendance"),
+              href: aralAttendanceNavHref(grades),
               icon: CalendarDays,
             },
             {

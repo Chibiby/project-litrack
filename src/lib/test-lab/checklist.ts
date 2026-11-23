@@ -13,6 +13,9 @@
  * `[...missing]`/`error`/`loading` file).
  */
 
+import { SUMMARY_FACET_LIST } from "@/lib/summary/facet-meta";
+import { TEST_LAB_SET_PASSWORD_PATH, type TestLabPersona } from "@/lib/test-lab/personas";
+
 export type TestLabChecklistFixtures = {
   /** One demo section's grade, e.g. Grade 1-A's `gradeLevelId`. */
   gradeId: string;
@@ -22,15 +25,31 @@ export type TestLabChecklistFixtures = {
   learnerId: string;
   /** An ARAL learner inside `gradeId`'s roster, `aralTeacherId` = the demo teacher. */
   aralLearnerId: string;
+  /** The demo school, for the district portal's school page. */
+  schoolId: string;
 };
 
 export type TestLabChecklistItem = {
   id: string;
-  role: "SCHOOL_HEAD" | "TEACHER";
+  role: "SCHOOL_HEAD" | "TEACHER" | "DISTRICT_ADMIN";
   group: string;
   label: string;
   href: string;
+  /**
+   * Who opens the row. Defaults to the role's main persona (the head, the
+   * multi-advisory teacher, the demo district admin); set for pages only one
+   * kind of account reaches, such as the first-run profiling wizard.
+   */
+  persona?: TestLabPersona;
 };
+
+/** The persona a row opens as. */
+export function checklistItemPersona(item: TestLabChecklistItem): TestLabPersona {
+  if (item.persona) return item.persona;
+  if (item.role === "SCHOOL_HEAD") return "head";
+  if (item.role === "DISTRICT_ADMIN") return "district";
+  return "teacher";
+}
 
 /**
  * Routes that exist only to redirect (legacy bookmarks, descriptive aliases).
@@ -55,10 +74,11 @@ export const ALIASES: string[] = [
   "/teacher/profile",
   "/teacher/password",
   "/teacher/settings",
+  "/district/settings",
 ];
 
 export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestLabChecklistItem[] {
-  const { gradeId, secondGradeId, learnerId, aralLearnerId } = fixtures;
+  const { gradeId, secondGradeId, learnerId, aralLearnerId, schoolId } = fixtures;
 
   const schoolHead: TestLabChecklistItem[] = [
     { id: "sh-dashboard", role: "SCHOOL_HEAD", group: "Dashboard", label: "Dashboard", href: "/school-head" },
@@ -85,6 +105,7 @@ export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestL
     { id: "sh-settings-profile", role: "SCHOOL_HEAD", group: "Settings", label: "Profile", href: "/school-head/settings/profile" },
     { id: "sh-settings-security", role: "SCHOOL_HEAD", group: "Settings", label: "Security", href: "/school-head/settings/security" },
     { id: "sh-profiling", role: "SCHOOL_HEAD", group: "Onboarding", label: "Profiling wizard", href: "/school-head/profiling" },
+    { id: "sh-set-password", role: "SCHOOL_HEAD", group: "Onboarding", label: "First sign-in: set a password", href: TEST_LAB_SET_PASSWORD_PATH },
   ];
 
   const teacher: TestLabChecklistItem[] = [
@@ -93,6 +114,7 @@ export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestL
     { id: "t-aral-profiling", role: "TEACHER", group: "ARAL", label: "ARAL profiling", href: "/teacher/aral/profiling" },
     { id: "t-aral-bosy", role: "TEACHER", group: "ARAL", label: "BOSY report", href: "/teacher/aral/bosy" },
     { id: "t-aral-mosy", role: "TEACHER", group: "ARAL", label: "MOSY report", href: "/teacher/aral/mosy" },
+    { id: "t-aral-attendance-all", role: "TEACHER", group: "ARAL", label: "ARAL weekly attendance, all grades", href: "/teacher/aral/attendance" },
     { id: "t-aral-attendance", role: "TEACHER", group: "ARAL", label: "ARAL weekly attendance", href: `/teacher/aral/${gradeId}/attendance` },
     { id: "t-aral-reading-level", role: "TEACHER", group: "ARAL", label: "ARAL reading level", href: `/teacher/aral/${gradeId}/reading-level` },
     { id: "t-aral-terms-reports", role: "TEACHER", group: "ARAL", label: "ARAL term reports", href: `/teacher/aral/${gradeId}/terms-reports` },
@@ -111,7 +133,37 @@ export function buildTestLabChecklist(fixtures: TestLabChecklistFixtures): TestL
     { id: "t-settings-profile", role: "TEACHER", group: "Settings", label: "Profile", href: "/teacher/settings/profile" },
     { id: "t-settings-security", role: "TEACHER", group: "Settings", label: "Security", href: "/teacher/settings/security" },
     { id: "t-profiling", role: "TEACHER", group: "Onboarding", label: "Profiling wizard", href: "/teacher/profiling" },
+    { id: "t-profiling-first-run", role: "TEACHER", group: "Onboarding", label: "Profiling, first sign-in after approval", href: "/teacher/profiling", persona: "teacher-unprofiled" },
+    { id: "t-profiling-volunteer", role: "TEACHER", group: "Onboarding", label: "Profiling, Non-DepEd ARAL Volunteer", href: "/teacher/profiling", persona: "volunteer-unprofiled" },
+    { id: "t-set-password", role: "TEACHER", group: "Onboarding", label: "First sign-in: set a password", href: TEST_LAB_SET_PASSWORD_PATH },
+    { id: "t-pending-approval", role: "TEACHER", group: "Onboarding", label: "Waiting for approval", href: "/teacher", persona: "pending-teacher" },
   ];
 
-  return [...schoolHead, ...teacher];
+  const district: TestLabChecklistItem[] = [
+    { id: "d-dashboard", role: "DISTRICT_ADMIN", group: "Dashboard", label: "Dashboard", href: "/district" },
+    { id: "d-announcements", role: "DISTRICT_ADMIN", group: "Dashboard", label: "Announcements", href: "/district/announcements" },
+    { id: "d-support", role: "DISTRICT_ADMIN", group: "Dashboard", label: "Support", href: "/district/support" },
+    { id: "d-schools", role: "DISTRICT_ADMIN", group: "Schools", label: "Schools", href: "/district/schools" },
+    { id: "d-school", role: "DISTRICT_ADMIN", group: "Schools", label: "School page", href: `/district/schools/${schoolId}` },
+    { id: "d-learners", role: "DISTRICT_ADMIN", group: "People", label: "Learners", href: "/district/learners" },
+    { id: "d-ip-learners", role: "DISTRICT_ADMIN", group: "People", label: "IP learners", href: "/district/ip-learners" },
+    { id: "d-deleted-learners", role: "DISTRICT_ADMIN", group: "People", label: "Deleted learners", href: "/district/deleted-learners" },
+    { id: "d-teachers", role: "DISTRICT_ADMIN", group: "People", label: "Teachers", href: "/district/teachers" },
+    { id: "d-transfers", role: "DISTRICT_ADMIN", group: "Requests", label: "Transfers", href: "/district/transfers" },
+    { id: "d-unlocks", role: "DISTRICT_ADMIN", group: "Requests", label: "Unlocks", href: "/district/unlocks" },
+    { id: "d-summary", role: "DISTRICT_ADMIN", group: "Summary", label: "Summary", href: "/district/summary" },
+    ...SUMMARY_FACET_LIST.map(
+      (facet): TestLabChecklistItem => ({
+        id: `d-summary-${facet.id}`,
+        role: "DISTRICT_ADMIN",
+        group: "Summary",
+        label: `Summary: ${facet.label}`,
+        href: `/district/summary/${facet.id}`,
+      })
+    ),
+    { id: "d-settings-profile", role: "DISTRICT_ADMIN", group: "Settings", label: "Profile", href: "/district/settings/profile" },
+    { id: "d-settings-security", role: "DISTRICT_ADMIN", group: "Settings", label: "Security", href: "/district/settings/security" },
+  ];
+
+  return [...schoolHead, ...teacher, ...district];
 }

@@ -89,7 +89,7 @@ describe("getGradeSections — cache key composition", () => {
     // Pinned, not just compared: two calls that both produced a *constant* key
     // would satisfy the equality above while sharing nothing meaningful.
     expect(cacheCalls[0].keyParts).toEqual([
-      "grade-sections-v1",
+      "grade-sections-v2",
       SCHOOL_ID,
       "g-1,g-2,g-3",
     ]);

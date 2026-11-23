@@ -46,7 +46,13 @@ export default async function AdminTestLabPage() {
   ]);
 
   let checklist: TestLabChecklistItem[] = [];
-  if (fixtures.prepared && fixtures.g1GradeId && fixtures.kinderGradeId && fixtures.aralLearnerIds[0]) {
+  if (
+    fixtures.prepared &&
+    fixtures.schoolId &&
+    fixtures.g1GradeId &&
+    fixtures.kinderGradeId &&
+    fixtures.aralLearnerIds[0]
+  ) {
     const learnerId = fixtures.learnerIds.find((id) => !fixtures.aralLearnerIds.includes(id));
     if (learnerId) {
       checklist = buildTestLabChecklist({
@@ -54,6 +60,7 @@ export default async function AdminTestLabPage() {
         secondGradeId: fixtures.kinderGradeId,
         learnerId,
         aralLearnerId: fixtures.aralLearnerIds[0],
+        schoolId: fixtures.schoolId,
       });
     }
   }
@@ -75,7 +82,7 @@ export default async function AdminTestLabPage() {
   return (
     <AppShell
       title="Page Test Lab"
-      subtitle="Try School Head and Teacher pages as demo accounts, with temporary data only"
+      subtitle="Try School Head, Teacher and District Admin pages as demo accounts, with temporary data only"
       role={user.role}
       userName={user.fullName || user.email}
     >

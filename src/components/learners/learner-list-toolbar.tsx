@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ClipboardList, UserMinus, SlidersHorizontal, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
+import { AdvisorySelect } from "@/components/learners/advisory-select";
 import {
   Popover,
   PopoverContent,
@@ -332,6 +333,20 @@ function SortAndSize({
 export function LearnerListToolbar(props: ToolbarProps) {
   const { searchValue, onSearchChange, onSearchSubmit, resultCount, bulkActions } =
     props;
+  const { basePath, state, advisories, onNavigate } = props;
+
+  // Multi-advisory only: with one advisory (or none) there is nothing to pick.
+  // Beside the search box on every width, never inside the filter sheet,
+  // because it is the page's scope, not one filter among many.
+  const advisory =
+    advisories.length > 1 ? (
+      <AdvisorySelect
+        advisories={advisories}
+        value={state.advisory}
+        onChange={(next) => onNavigate(rosterHref(basePath, withAdvisory(state, next, advisories)))}
+        className="w-full shrink-0 sm:w-56"
+      />
+    ) : null;
 
   const search = (
     <SearchInput
@@ -350,6 +365,7 @@ export function LearnerListToolbar(props: ToolbarProps) {
     <div className="border-b border-border/60 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-end gap-2 xl:flex-nowrap">
         {search}
+        {advisory}
         {/* xl and up: every facet inline, as in the desktop mockup. */}
         <div className="hidden min-w-0 flex-[3] items-center gap-2 xl:flex">
           <Facets {...props} idPrefix="learner-facet" className="min-w-0 flex-1" />

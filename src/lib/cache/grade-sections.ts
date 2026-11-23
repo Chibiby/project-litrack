@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { cachedQuery } from "@/lib/cache/unstable";
 import { schoolDashboard } from "@/lib/cache/tags";
 
-export type GradeSectionOption = { id: string; name: string };
+export type GradeSectionOption = { id: string; name: string; gradeLevelId: string };
 
 /**
  * A school's live sections for one or more grade levels, by name.
@@ -48,11 +48,11 @@ export async function getGradeSections(opts: {
           deletedAt: null,
           gradeLevelId: { in: gradeLevelIds },
         },
-        select: { id: true, name: true },
+        select: { id: true, name: true, gradeLevelId: true },
         orderBy: { name: "asc" },
       }),
     {
-      keyParts: ["grade-sections-v1", opts.schoolId, gradeLevelIds.join(",")],
+      keyParts: ["grade-sections-v2", opts.schoolId, gradeLevelIds.join(",")],
       tags: [schoolDashboard(opts.schoolId)],
       profile: "volatile",
     }

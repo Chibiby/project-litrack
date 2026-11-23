@@ -58,6 +58,8 @@ export interface KinderChecklistClientProps {
   locked: KinderChecklistRowLock;
   schoolName: string;
   advisoryLabel: string;
+  /** The advisory picker, shown beside the learner search. Multi-advisory only. */
+  scopeControl?: React.ReactNode;
   schoolYearLabel: string;
 }
 
@@ -79,6 +81,7 @@ export function KinderChecklistClient({
   locked,
   schoolName,
   advisoryLabel,
+  scopeControl,
   schoolYearLabel,
 }: KinderChecklistClientProps) {
   const router = useRouter();
@@ -184,6 +187,7 @@ export function KinderChecklistClient({
           advisories={[]}
           advisoryId={null}
           onAdvisoryChange={() => {}}
+          scopeControl={scopeControl}
           onExport={(purpose) =>
             exportKinderChecklist({
               learnerId: learnerId ?? "",

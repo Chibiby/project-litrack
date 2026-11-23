@@ -22,7 +22,10 @@ import {
 /**
  * `teacher` is the multi-advisory teacher (two sections). The other teacher
  * personas cover the remaining kinds: one advisory section, floating (none),
- * and the Non-DepEd ARAL Volunteer. `district` is the demo district admin.
+ * and the Non-DepEd ARAL Volunteer. `teacher-unprofiled` and
+ * `volunteer-unprofiled` are approved but have not finished profiling, so the
+ * forced first-run wizard (and, for the volunteer, its locked designation) can
+ * be seen as a new account sees it. `district` is the demo district admin.
  */
 export const TEST_LAB_PERSONAS = [
   "head",
@@ -31,9 +34,19 @@ export const TEST_LAB_PERSONAS = [
   "teacher-floating",
   "teacher-volunteer",
   "pending-teacher",
+  "teacher-unprofiled",
+  "volunteer-unprofiled",
   "district",
 ] as const;
 export type TestLabPersona = (typeof TEST_LAB_PERSONAS)[number];
+
+/**
+ * The forced first-sign-in password page. It sits outside every role tree, and
+ * an impersonated session is never redirected to it (`requireUser` leaves the
+ * flag for the real person), so Test Lab opens it by this one exact path. The
+ * form there is a dry run under Test Lab.
+ */
+export const TEST_LAB_SET_PASSWORD_PATH = "/account/set-password";
 
 /** The demo school Test Lab works in. `DEMO_SCHOOLS` holds exactly this one. */
 export const TEST_LAB_SCHOOL = DEMO_SCHOOLS[0];
@@ -61,6 +74,10 @@ export function testLabPersonaEmail(persona: TestLabPersona): string {
       return teacherSyntheticEmail(`testlab.volunteer.${code}`);
     case "pending-teacher":
       return teacherSyntheticEmail(`testlab.pending.${code}`);
+    case "teacher-unprofiled":
+      return teacherSyntheticEmail(`testlab.newteacher.${code}`);
+    case "volunteer-unprofiled":
+      return teacherSyntheticEmail(`testlab.newvolunteer.${code}`);
     case "district":
       return adminSyntheticEmail(`testlab.district.${code}`);
   }
@@ -91,6 +108,7 @@ export function testLabRoleHome(persona: TestLabPersona): "/school-head" | "/tea
  * control characters.
  */
 export function isAllowedTestLabNext(persona: TestLabPersona, next: string): boolean {
+  if (next === TEST_LAB_SET_PASSWORD_PATH && persona !== "district") return true;
   const home = testLabRoleHome(persona);
   if (next !== home && !next.startsWith(`${home}/`) && !next.startsWith(`${home}?`)) {
     return false;

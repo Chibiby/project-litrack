@@ -142,6 +142,12 @@ export interface KinderChecklistToolbarProps {
     purpose: ExportPurpose
   ) => Promise<KinderChecklistActionResult<KinderChecklistExportResult>>;
   onPrint?: () => void | Promise<void>;
+  /**
+   * The page's own advisory picker (every advisory, Kindergarten and not),
+   * shown beside the learner search. Takes the place of the Kindergarten-only
+   * chooser when given.
+   */
+  scopeControl?: React.ReactNode;
 }
 
 /**
@@ -158,6 +164,7 @@ export function KinderChecklistToolbar({
   onAdvisoryChange,
   onExport,
   onPrint,
+  scopeControl,
 }: KinderChecklistToolbarProps) {
   const learnerOptions: SearchableOption[] = learners.map((l) => ({
     value: l.id,
@@ -182,7 +189,12 @@ export function KinderChecklistToolbar({
         />
       </div>
 
-      {showAdvisoryChooser ? (
+      {scopeControl ? (
+        <div className="flex flex-col gap-1 sm:w-56">
+          <span className="text-xs font-medium text-muted-foreground">Advisory</span>
+          {scopeControl}
+        </div>
+      ) : showAdvisoryChooser ? (
         <div className="flex flex-col gap-1 sm:w-56">
           <span className="text-xs font-medium text-muted-foreground">Kindergarten advisory</span>
           <AdvisorySelect

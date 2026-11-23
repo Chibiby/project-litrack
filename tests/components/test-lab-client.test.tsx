@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TestLabChecklistItem } from "@/lib/test-lab/checklist";
 import type { TestLabPageData } from "@/components/admin/test-lab";
+
+/** The Checklist block, below the persona list (which also names "School Head"). */
+const checklistSection = () => screen.getByRole("heading", { name: "Checklist" }).parentElement as HTMLElement;
 
 /**
  * `/admin/test-lab`'s client component: proves the "not prepared" state
@@ -87,11 +90,20 @@ describe("TestLabClient", () => {
     render(<TestLabClient data={data} />);
 
     expect(screen.queryByRole("button", { name: "Prepare test data" })).toBeNull();
-    expect(screen.getByText("School Head")).toBeTruthy();
-    expect(screen.getByText("Teacher")).toBeTruthy();
+    expect(within(checklistSection()).getByText("School Head")).toBeTruthy();
+    expect(within(checklistSection()).getByText("Teacher")).toBeTruthy();
     expect(screen.getAllByText("/school-head")).toHaveLength(1);
     expect(screen.getAllByText("/teacher")).toHaveLength(1);
     expect(screen.getByText("0 of 2 checked")).toBeTruthy();
+    for (const name of [
+      "Open as Pending Teacher",
+      "Open as Approved Teacher, profiling not done",
+      "Open as ARAL Volunteer, profiling not done",
+      "Open as Non-DepEd ARAL Volunteer",
+      "Open as Demo District Admin",
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
   });
 
   it("links to demo settings when no demo school exists yet", () => {
@@ -159,7 +171,7 @@ describe("TestLabClient", () => {
       districtAdmins: [],
     };
     expect(() => render(<TestLabClient data={data} />)).not.toThrow();
-    expect(screen.getByText("School Head")).toBeTruthy();
+    expect(within(checklistSection()).getByText("School Head")).toBeTruthy();
 
     window.localStorage.getItem = original;
   });

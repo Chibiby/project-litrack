@@ -50,14 +50,32 @@ export type TestLabPageData = {
   districtAdmins: { id: string; label: string; districts: string[] }[];
 };
 
-const START_BUTTONS: { persona: TestLabPersona; label: string }[] = [
-  { persona: "head", label: "Open as School Head" },
-  { persona: "teacher", label: "Open as Multi-advisory Teacher" },
-  { persona: "teacher-single", label: "Open as Single-advisory Teacher" },
-  { persona: "teacher-floating", label: "Open as Floating Teacher" },
-  { persona: "teacher-volunteer", label: "Open as Non-DepEd ARAL Volunteer" },
-  { persona: "pending-teacher", label: "Open as Pending Teacher" },
-  { persona: "district", label: "Open as Demo District Admin" },
+type StartButton = { persona: TestLabPersona; label: string; detail: string };
+
+/**
+ * Every demo account, grouped by where it is in its life: signed up and
+ * working, or still on a page a finished account never sees again.
+ */
+const START_GROUPS: { title: string; buttons: StartButton[] }[] = [
+  {
+    title: "Working accounts",
+    buttons: [
+      { persona: "head", label: "School Head", detail: "Runs the demo school." },
+      { persona: "teacher", label: "Multi-advisory Teacher", detail: "Advises Kinder-A and Grade 1-A, and tutors ARAL." },
+      { persona: "teacher-single", label: "Single-advisory Teacher", detail: "Advises Grade 2-A." },
+      { persona: "teacher-floating", label: "Floating Teacher", detail: "DepEd teacher with no advisory section, ARAL tutor only." },
+      { persona: "teacher-volunteer", label: "Non-DepEd ARAL Volunteer", detail: "ARAL tutor only, not a DepEd employee." },
+      { persona: "district", label: "Demo District Admin", detail: "Sees the demo district's schools." },
+    ],
+  },
+  {
+    title: "Accounts still signing up",
+    buttons: [
+      { persona: "pending-teacher", label: "Pending Teacher", detail: "Registered, waiting for the School Head to approve." },
+      { persona: "teacher-unprofiled", label: "Approved Teacher, profiling not done", detail: "Approved, opens the profiling wizard first." },
+      { persona: "volunteer-unprofiled", label: "ARAL Volunteer, profiling not done", detail: "Signed up as a Non-DepEd ARAL Volunteer, approved, opens profiling first." },
+    ],
+  },
 ];
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
@@ -181,7 +199,7 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            Page Test Lab signs you in as demo School Head and Teacher accounts in{" "}
+            Page Test Lab signs you in as demo School Head, Teacher and District Admin accounts in{" "}
             <span className="font-medium text-foreground">[demo school 1]</span> so you can open
             every page as they would see it, without creating a login or using a real person&rsquo;s
             account.
@@ -298,17 +316,33 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
               Prepare test data above before starting a session.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {START_BUTTONS.map((b) => (
-                <Button
-                  key={b.persona}
-                  type="button"
-                  variant="secondary"
-                  loading={startPending}
-                  onClick={() => start(b.persona)}
-                >
-                  {b.label}
-                </Button>
+            <div className="space-y-5">
+              {START_GROUPS.map((group) => (
+                <div key={group.title} className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {group.title}
+                  </p>
+                  <ul className="divide-y divide-border/60 rounded-lg border border-border">
+                    {group.buttons.map((b) => (
+                      <li key={b.persona} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+                        <div className="min-w-0 flex-1 basis-56">
+                          <p className="text-sm font-medium text-foreground">{b.label}</p>
+                          <p className="text-xs text-muted-foreground">{b.detail}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          loading={startPending}
+                          onClick={() => start(b.persona)}
+                          aria-label={`Open as ${b.label}`}
+                        >
+                          Open
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
             </div>
           )}
@@ -326,7 +360,7 @@ export function TestLabClient({ data }: { data: TestLabPageData }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            For demo data only, use &ldquo;Open as Demo District Admin&rdquo; above. This signs you in as a{" "}
+            For demo data only, open &ldquo;Demo District Admin&rdquo; above. This signs you in as a{" "}
             <span className="font-medium text-foreground">real district admin</span>. You see
             their real schools and figures, and anything you change is saved for real and recorded
             against their account. &ldquo;Return to admin&rdquo; in the banner brings you back here.

@@ -64,7 +64,14 @@ async function testLabBannerPages(
   const fixtures = await findTestLabFixtures();
   const aralLearnerId = fixtures.aralLearnerIds[0];
   const learnerId = fixtures.learnerIds.find((id) => !fixtures.aralLearnerIds.includes(id));
-  if (!fixtures.prepared || !fixtures.g1GradeId || !fixtures.kinderGradeId || !aralLearnerId || !learnerId) {
+  if (
+    !fixtures.prepared ||
+    !fixtures.schoolId ||
+    !fixtures.g1GradeId ||
+    !fixtures.kinderGradeId ||
+    !aralLearnerId ||
+    !learnerId
+  ) {
     return { pages: [] };
   }
   const checklist = buildTestLabChecklist({
@@ -72,6 +79,9 @@ async function testLabBannerPages(
     secondGradeId: fixtures.kinderGradeId,
     learnerId,
     aralLearnerId,
+    schoolId: fixtures.schoolId,
   });
-  return { pages: checklist.filter((item) => item.role === role).map((item) => ({ label: item.label, href: item.href })) };
+  // Rows tied to another demo account (the first-run wizard, the pending
+  // page) would open in the wrong account from here, so they stay off.
+  return { pages: checklist.filter((item) => item.role === role && !item.persona).map((item) => ({ label: item.label, href: item.href })) };
 }

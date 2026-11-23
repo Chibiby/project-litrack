@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/dashboard";
 import { TermsReportHero } from "@/components/terms/terms-report-hero";
 import { TermsReportBody } from "@/components/terms/terms-report-body";
+import { TermsAdvisoryHeroControl } from "@/components/terms/terms-advisory-hero-control";
 import { TermsReportBodySkeleton } from "@/components/terms/terms-report-skeleton";
 import { getTeacherShellContext } from "@/lib/dashboard/aggregates";
 import { getActiveSchoolYear } from "@/lib/cache/school-year";
@@ -195,9 +196,6 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
         state={state}
         page={list.page}
         terms={terms}
-        advisories={advisories}
-        kinderSectionIds={kinderPlacements.map((p) => p.sectionId)}
-        kinderBasePath={KINDER_TERMS_REPORTS_PATH}
       />
 
       <Suspense key={`${activeTerm}:${state.advisory}:${state.section}`} fallback={<TermsReportBodySkeleton />}>
@@ -213,6 +211,18 @@ export default async function TeacherTermsReportsPage({ searchParams }: PageProp
           readOnly={readOnly}
           canSave
           exportScope={{ sectionIds: inScope.map((p) => p.sectionId) }}
+          scopeControl={
+            advisories.length > 1 ? (
+              <TermsAdvisoryHeroControl
+                basePath={BASE_PATH}
+                state={state}
+                advisories={advisories}
+                kinderSectionIds={kinderPlacements.map((p) => p.sectionId)}
+                kinderBasePath={KINDER_TERMS_REPORTS_PATH}
+                className="w-full"
+              />
+            ) : undefined
+          }
         />
       </Suspense>
     </AppShell>

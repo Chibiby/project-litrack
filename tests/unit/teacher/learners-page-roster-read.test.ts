@@ -69,7 +69,6 @@ vi.mock("@/components/learners/learner-roster-skeleton", () => ({
 }));
 vi.mock("@/components/ui/skeleton", () => ({ Skeleton: stub }));
 vi.mock("@/components/shell/page-hero", () => ({ PageHero: stub }));
-vi.mock("@/components/learners/advisory-hero-control", () => ({ AdvisoryHeroControl: stub }));
 
 const { default: Page } = await import("@/app/teacher/(app)/learners/page");
 const { LEARNER_LIST_DEFAULT_PAGE_SIZE: PAGE_SIZE } = await import("@/lib/learners/pagination");

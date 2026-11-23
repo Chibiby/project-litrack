@@ -29,12 +29,14 @@ export function TermsAdvisoryHeroControl({
   advisories,
   kinderSectionIds,
   kinderBasePath,
+  className = "h-11 w-36 gap-1.5 px-2 text-xs max-sm:[&_svg:first-child]:hidden sm:w-44 sm:gap-2 sm:px-3 sm:text-sm lg:w-56",
 }: {
   basePath: string;
   state: SheetUrlState;
   advisories: readonly { id: string; label: string }[];
   kinderSectionIds?: readonly string[];
   kinderBasePath?: string;
+  className?: string;
 }) {
   const router = useRouter();
   const kinderSet = kinderSectionIds ? new Set(kinderSectionIds) : null;
@@ -56,7 +58,7 @@ export function TermsAdvisoryHeroControl({
         runGuarded(() => router.push(href, { scroll: false }));
       }}
       showAllOption={!isMixed}
-      className="h-11 w-36 gap-1.5 px-2 text-xs max-sm:[&_svg:first-child]:hidden sm:w-44 sm:gap-2 sm:px-3 sm:text-sm lg:w-56"
+      className={className}
     />
   );
 }

@@ -128,7 +128,6 @@ export default async function AralGradeTermsReportsPage({ params, searchParams }
         state={state}
         page={list.page}
         terms={terms}
-        advisories={[]}
       />
 
       <Suspense key={`${activeTerm}:${list.section}`} fallback={<TermsReportBodySkeleton />}>

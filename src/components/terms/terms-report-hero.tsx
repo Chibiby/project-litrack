@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { PageHero } from "@/components/shell/page-hero";
-import { TermsAdvisoryHeroControl } from "@/components/terms/terms-advisory-hero-control";
 import { cn } from "@/lib/utils";
 import { sheetHref, type SheetUrlState } from "@/lib/terms/sheet-view";
 import type { TermPeriodValue } from "@/lib/terms/windows";
@@ -37,9 +36,6 @@ export function TermsReportHero({
   state,
   page,
   terms,
-  advisories,
-  kinderSectionIds,
-  kinderBasePath,
 }: {
   title: string;
   subtitle: string;
@@ -47,27 +43,13 @@ export function TermsReportHero({
   state: SheetUrlState;
   page: number;
   terms: TermTab[];
-  /** The teacher's advisories. Empty for a Super Admin, who advises none. */
-  advisories: readonly { id: string; label: string }[];
-  /** Section ids among `advisories` that are Kindergarten (owner decision — see `TermsAdvisoryHeroControl`). */
-  kinderSectionIds?: readonly string[];
-  kinderBasePath?: string;
 }) {
   return (
     <PageHero
       bannerSrc="/brand/banner-learner.webp"
       className="h-auto"
-      topRight={
-        <TermsAdvisoryHeroControl
-          basePath={basePath}
-          state={state}
-          advisories={advisories}
-          kinderSectionIds={kinderSectionIds}
-          kinderBasePath={kinderBasePath}
-        />
-      }
-      // Phones: the advisory picker takes the top-right corner and the term
-      // tabs the bottom, so there is no room left for the art; it is hidden
+      // Phones: the term tabs take the bottom of the band, so there is no room
+      // left for the art; it is hidden
       // and the subtitle uses the full width. Tablets: the term tabs make the band
       // tall, so the art keeps a fixed height pinned to the top instead of
       // scaling up behind the title.
