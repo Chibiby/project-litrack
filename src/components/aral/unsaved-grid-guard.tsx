@@ -159,7 +159,7 @@ export function UnsavedGridGuard({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="sm:flex-wrap">
-          <AlertDialogCancel disabled={working} className="h-11 lg:h-10">
+          <AlertDialogCancel disabled={working} className="h-11 lg:h-9">
             Stay
           </AlertDialogCancel>
           <Button
@@ -167,7 +167,7 @@ export function UnsavedGridGuard({
             variant="outline"
             disabled={working}
             onClick={discard}
-            className="h-11 text-destructive hover:text-destructive lg:h-10"
+            className="h-11 text-destructive hover:text-destructive lg:h-9"
           >
             Discard changes
           </Button>
@@ -177,7 +177,7 @@ export function UnsavedGridGuard({
             disabled={working}
             loading={working}
             loadingText="Saving…"
-            className="h-11 lg:h-10"
+            className="h-11 lg:h-9"
           >
             Save and continue
           </Button>

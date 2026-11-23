@@ -244,7 +244,7 @@ export function TermSubjectsManager({
                 placeholder="e.g. Filipino"
                 maxLength={60}
                 disabled={pending || atCap}
-                className="max-sm:h-11 lg:h-10"
+                className="max-sm:h-11 lg:h-9"
               />
             </div>
             <Button
@@ -355,7 +355,7 @@ function TermSubjectRow({
           type="button"
           size="icon"
           variant="outline"
-          className="max-sm:size-11 lg:size-10"
+          className="max-sm:size-11 lg:size-9"
           disabled={pending || isFirst}
           onClick={onMoveUp}
           aria-label={`Move ${subject.name} up`}
@@ -366,7 +366,7 @@ function TermSubjectRow({
           type="button"
           size="icon"
           variant="outline"
-          className="max-sm:size-11 lg:size-10"
+          className="max-sm:size-11 lg:size-9"
           disabled={pending || isLast}
           onClick={onMoveDown}
           aria-label={`Move ${subject.name} down`}
@@ -389,7 +389,7 @@ function TermSubjectRow({
           maxLength={60}
           disabled={pending}
           aria-label="Subject name"
-          className="min-w-40 flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-10"
+          className="min-w-40 flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-9"
         />
         <Button type="submit" size="sm" variant="outline" disabled={pending} className="lg:h-9">
           Rename subject

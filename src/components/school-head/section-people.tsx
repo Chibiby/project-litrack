@@ -218,7 +218,6 @@ function AdviserControl({
         loading={pending}
         loadingText="Saving…"
         onClick={save}
-        className="lg:h-10"
       >
         Save adviser
       </Button>

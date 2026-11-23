@@ -220,7 +220,7 @@ export function AralGridSkeleton({
               </div>
               <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
                 <Skeleton className="h-11 w-[92px] rounded-lg lg:h-9" />
-                <Skeleton className="h-11 w-[130px] rounded-lg lg:h-10" />
+                <Skeleton className="h-11 w-[130px] rounded-lg lg:h-9" />
                 <Skeleton className="h-11 w-[76px] rounded-lg lg:h-9" />
               </div>
             </>

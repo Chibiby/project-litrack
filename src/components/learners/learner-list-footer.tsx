@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -115,7 +114,7 @@ export function LearnerListFooter({
             asChild={page > 1}
             size="icon"
             variant="outline"
-            className="h-11 w-11 xl:h-8 xl:w-8"
+            className="relative"
             disabled={page <= 1}
             aria-label="Previous page"
           >
@@ -125,7 +124,7 @@ export function LearnerListFooter({
                 intent={adjacent.includes(page - 1)}
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
-                <LinkStatusPulse />
+                <LinkStatusPulse overlay />
               </PrefetchLink>
             ) : (
               <ChevronLeft className="h-4 w-4" aria-hidden />
@@ -150,7 +149,7 @@ export function LearnerListFooter({
                 asChild
                 size="icon"
                 variant={entry === page ? "default" : "outline"}
-                className={cn("hidden h-11 w-11 tabular-nums sm:inline-flex xl:h-8 xl:w-8")}
+                className="relative hidden tabular-nums sm:inline-flex"
                 aria-current={entry === page ? "page" : undefined}
               >
                 <PrefetchLink
@@ -159,7 +158,7 @@ export function LearnerListFooter({
                   intent={adjacent.includes(entry)}
                 >
                   {entry}
-                  <LinkStatusPulse />
+                  <LinkStatusPulse overlay />
                 </PrefetchLink>
               </Button>
             )
@@ -169,7 +168,7 @@ export function LearnerListFooter({
             asChild={page < totalPages}
             size="icon"
             variant="outline"
-            className="h-11 w-11 xl:h-8 xl:w-8"
+            className="relative"
             disabled={page >= totalPages}
             aria-label="Next page"
           >
@@ -179,7 +178,7 @@ export function LearnerListFooter({
                 intent={adjacent.includes(page + 1)}
               >
                 <ChevronRight className="h-4 w-4" aria-hidden />
-                <LinkStatusPulse />
+                <LinkStatusPulse overlay />
               </PrefetchLink>
             ) : (
               <ChevronRight className="h-4 w-4" aria-hidden />
@@ -198,7 +197,7 @@ export function LearnerListFooter({
         <Select value={String(pageSize)} onValueChange={changePageSize}>
           <SelectTrigger
             id="learner-rows-per-page"
-            className="h-11 w-[4.5rem] gap-1 py-1 xl:h-8"
+            className="w-[4.5rem] gap-1 py-1"
           >
             <SelectValue />
           </SelectTrigger>

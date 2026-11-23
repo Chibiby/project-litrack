@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { FilterMenu } from "@/components/ui/filter-menu";
 import {
   Select,
   SelectContent,
@@ -55,10 +56,10 @@ export function ErrorLogFilters({
 
   return (
     <form
-      className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(event) => event.preventDefault()}
     >
-      <div className="space-y-2">
+      <div className={SEARCH_BAR_WIDTH}>
         <SearchInput
           id="error-ref"
           label="Reference"
@@ -67,11 +68,12 @@ export function ErrorLogFilters({
           onValueChange={setRefValue}
           onDebouncedChange={searchNow}
           placeholder="E-7K2P9QXM"
-          className="w-full sm:w-48"
           inputClassName="font-mono"
         />
       </div>
 
+      {/* Severity and Period sit behind one Filters button beside the search. */}
+      <FilterMenu activeCount={severity ? 1 : 0}>
       <div className="space-y-2">
         <Label htmlFor="error-severity">Severity</Label>
         <Select
@@ -79,7 +81,7 @@ export function ErrorLogFilters({
           onValueChange={(value) => apply({ severity: value })}
           disabled={pending}
         >
-          <SelectTrigger id="error-severity" className="w-full sm:w-40">
+          <SelectTrigger id="error-severity" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -97,7 +99,7 @@ export function ErrorLogFilters({
           onValueChange={(value) => apply({ window: value })}
           disabled={pending}
         >
-          <SelectTrigger id="error-window" className="w-full sm:w-36">
+          <SelectTrigger id="error-window" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -109,11 +111,13 @@ export function ErrorLogFilters({
           </SelectContent>
         </Select>
       </div>
+      </FilterMenu>
 
       {initialRef || code || severity ? (
         <Button
           type="button"
           variant="outline"
+          className="h-11 lg:h-9"
           disabled={pending}
           onClick={() => {
             setRefValue("");

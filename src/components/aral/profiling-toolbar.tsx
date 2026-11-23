@@ -88,7 +88,7 @@ export function ProfilingToolbar({
         label="Search learners by name"
         placeholder="Search learner name…"
         className={SEARCH_BAR_WIDTH}
-        inputClassName="rounded-md lg:h-11"
+        inputClassName="rounded-md lg:h-9"
       />
 
       {advisories.length > 1 ? (

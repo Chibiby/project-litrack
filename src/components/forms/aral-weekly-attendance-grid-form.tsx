@@ -820,7 +820,7 @@ export function BulkAttendanceActions({
           type="button"
           variant="outline"
           disabled={disabled}
-          className="h-11 lg:h-10"
+          className="h-11 lg:h-9"
         >
           Bulk Actions
         </Button>

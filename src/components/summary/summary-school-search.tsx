@@ -52,7 +52,7 @@ export function SummarySchoolSearch({
         {unit === "districts" ? "Search districts" : "Search schools"}
       </Label>
       <div className="flex min-w-0 gap-2">
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 sm:min-w-56 sm:max-w-sm">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -65,7 +65,7 @@ export function SummarySchoolSearch({
             onChange={(event) => setDraft(event.target.value)}
             placeholder={unit === "districts" ? "District name" : "School name or ID"}
             autoComplete="off"
-            className="h-11 bg-card pl-9 lg:h-10"
+            className="h-11 bg-card pl-9 lg:h-9"
           />
         </div>
         <Button type="submit" variant="secondary" className="shrink-0" aria-busy={pending || undefined}>

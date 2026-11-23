@@ -506,13 +506,13 @@ export function AssistantPanel({
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Ask about LITRACK"
               aria-label="Ask about LITRACK"
-              className="h-11 rounded-full text-sm lg:h-10"
+              className="h-11 rounded-full text-sm lg:h-9"
             />
             <Button
               type="submit"
               size="icon"
               disabled={draft.trim().length === 0}
-              className="size-11 shrink-0 rounded-full bg-aral text-aral-foreground hover:bg-aral/90 lg:size-10"
+              className="size-11 shrink-0 rounded-full bg-aral text-aral-foreground hover:bg-aral/90 lg:size-9"
             >
               <Send className="size-4" aria-hidden />
               <span className="sr-only">Send</span>

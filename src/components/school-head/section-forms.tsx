@@ -152,7 +152,7 @@ export function SectionRowActions({
         <Input
           name="name"
           defaultValue={name}
-          className="w-36 max-lg:w-full max-lg:flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-10"
+          className="w-36 max-lg:w-full max-lg:flex-1 max-lg:min-w-0 max-sm:h-11 lg:h-9"
           maxLength={100}
           autoCapitalize="words"
           disabled={isPending}
@@ -393,7 +393,7 @@ export function GradeSectionsPanel({
                 maxLength={100}
                 autoCapitalize="words"
                 disabled={pending}
-                className="max-sm:h-11 lg:h-10"
+                className="max-sm:h-11 lg:h-9"
               />
             </div>
             <Button

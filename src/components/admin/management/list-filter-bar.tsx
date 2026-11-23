@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { FilterMenu } from "@/components/ui/filter-menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Select,
@@ -54,7 +55,9 @@ export function describeActiveFilters(fields: ListFilterField[], q: string): str
 }
 
 /**
- * Search box, contextual filters and sort for one server-paginated list. Every
+ * Search box, contextual filters and sort for one server-paginated list. With
+ * more than one filter, the filters and the sort sit behind one Filters button
+ * beside the search box (owner rule, 2026-11-23); one filter stays in view. Every
  * value lives in the URL; any change drops `page` so the list starts over at
  * page 1. Must render inside a `ListNavigationProvider`.
  *
@@ -131,38 +134,22 @@ export function ListFilterBar<K extends string>({
   const active = describeActiveFilters(fields, q);
   const sortParams: Record<string, string | undefined> = { q: q || undefined };
   for (const field of fields) sortParams[field.key] = field.value || undefined;
+  const inMenu = fields.length > 1;
+  const activeFieldCount = fields.filter((f) => f.value).length;
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="min-w-0 flex-1">
-          <SearchInput
-            id={`${basePath.replaceAll("/", "-")}-q`}
-            value={query}
-            onValueChange={setQuery}
-            onDebouncedChange={searchNow}
-            resultCount={resultCount}
-            label={searchLabel}
-            labelVisible
-            placeholder={searchPlaceholder}
-          />
-        </div>
-        {sort ? (
-          <div className="w-full sm:w-56">
-            <SortSelect
-              mode="link"
-              id={`${basePath.replaceAll("/", "-")}-sort`}
-              basePath={basePath}
-              value={sort.value}
-              options={sort.options}
-              searchParams={sortParams}
-            />
-          </div>
-        ) : null}
-      </div>
+  const sortControl = sort ? (
+    <SortSelect
+      mode="link"
+      id={`${basePath.replaceAll("/", "-")}-sort`}
+      basePath={basePath}
+      value={sort.value}
+      options={sort.options}
+      searchParams={sortParams}
+    />
+  ) : null;
 
-      {fields.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+  const fieldControls = (
+    <>
           {fields.map((field) => {
             const id = `filter-${field.key}`;
             const hintId = `${id}-hint`;
@@ -193,7 +180,7 @@ export function ListFilterBar<K extends string>({
                   >
                     <SelectTrigger
                       id={id}
-                      className="h-11 w-full lg:h-10"
+                      className="h-11 w-full lg:h-9"
                       aria-describedby={hint ? hintId : undefined}
                     >
                       <SelectValue />
@@ -216,8 +203,37 @@ export function ListFilterBar<K extends string>({
               </div>
             );
           })}
-        </div>
-      ) : null}
+    </>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <SearchInput
+          id={`${basePath.replaceAll("/", "-")}-q`}
+          value={query}
+          onValueChange={setQuery}
+          onDebouncedChange={searchNow}
+          resultCount={resultCount}
+          label={searchLabel}
+          labelVisible
+          placeholder={searchPlaceholder}
+          className={SEARCH_BAR_WIDTH}
+        />
+        {inMenu ? (
+          <FilterMenu activeCount={activeFieldCount}>
+            {fieldControls}
+            {sortControl}
+          </FilterMenu>
+        ) : (
+          <>
+            {fields.length === 1 ? (
+              <div className="w-full sm:w-56">{fieldControls}</div>
+            ) : null}
+            {sortControl ? <div className="w-full sm:w-56">{sortControl}</div> : null}
+          </>
+        )}
+      </div>
 
       {active.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
 import {
   Select,
   SelectContent,
@@ -136,7 +136,7 @@ export function DeletedRecordsView({
             label="Search name"
             labelVisible
             placeholder={showTabs ? "Learner or teacher name" : "Learner name"}
-            className="w-full sm:w-64"
+            className={SEARCH_BAR_WIDTH}
           />
 
           {filtered ? (

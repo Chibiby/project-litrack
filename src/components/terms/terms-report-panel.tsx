@@ -6,10 +6,10 @@ import { useAutosave } from "@/lib/ui/use-autosave";
 import { AutosaveStatusLine } from "@/components/aral/autosave-status";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Filter, Save } from "lucide-react";
+import { Download, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { FilterMenu } from "@/components/ui/filter-menu";
 import { SelectItem } from "@/components/ui/select";
 import { Surface } from "@/components/ui/surface";
 import { FacetSelect } from "@/components/ui/facet-select";
@@ -315,7 +315,7 @@ export function TermsReportPanel({
   const termCaption = `${termLabel} - ${completionPct}%`;
 
   const searchBox = (
-    <div className="min-w-0 flex-1 xl:w-72 xl:flex-none">
+    <div className={SEARCH_BAR_WIDTH}>
       <SearchInput
         value={searchValue}
         onValueChange={setSearchValue}
@@ -324,7 +324,7 @@ export function TermsReportPanel({
         resultCount={totalCount}
         label="Search learners by name"
         placeholder="Search learner by name..."
-        inputClassName="h-11 rounded-md text-sm lg:h-10 xl:h-11"
+        inputClassName="h-11 rounded-md text-sm lg:h-9"
       />
       {dirty && searchValue !== pushedQ ? (
         <p role="status" className="mt-1 text-xs text-muted-foreground">
@@ -334,16 +334,15 @@ export function TermsReportPanel({
     </div>
   );
 
-  // Rendered twice (the phone panel and the desktop toolbar, one hidden by
-  // CSS), so each copy gets its own ids.
-  const facets = (where: "phone" | "desktop" | "popover") => (
+  // Inside the Filters menu, which is rendered twice (the phone panel and the
+  // desktop toolbar, one hidden by CSS), so each copy gets its own ids.
+  const facets = (where: "phone" | "desktop") => (
     <>
       <FacetSelect
         id={`terms-section-${where}`}
         label="Section"
         value={state.section}
         onValueChange={(v) => go({ ...state, section: v })}
-        className="xl:w-40"
       >
         <SelectItem value="all">All Sections</SelectItem>
         {sections.map((s) => (
@@ -360,7 +359,6 @@ export function TermsReportPanel({
           setSubjectName(v);
           setSubjectStep(0);
         }}
-        className="xl:w-40"
       >
         <SelectItem value="all">All Subjects</SelectItem>
         {subjectNames.map((name) => (
@@ -379,7 +377,7 @@ export function TermsReportPanel({
       onClick={handleExport}
       loading={exportPending}
       loadingText="Preparing Excel…"
-      className="h-11 shrink-0 rounded-md px-3 lg:h-10 xl:h-11 xl:px-5"
+      className="h-11 shrink-0 rounded-md px-3 lg:h-9 xl:px-5"
       aria-label="Export to Excel"
     >
       <Download className="size-5" aria-hidden />
@@ -393,7 +391,7 @@ export function TermsReportPanel({
       onClick={handleSave}
       loading={savePending}
       loadingText="Saving…"
-      className="h-11 shrink-0 rounded-md bg-aral-600 px-4 text-white hover:bg-aral-700 lg:h-10 xl:h-11 xl:px-5 dark:bg-aral-500 dark:hover:bg-aral-400"
+      className="h-11 shrink-0 rounded-md bg-aral-600 px-4 text-white hover:bg-aral-700 lg:h-9 xl:px-5 dark:bg-aral-500 dark:hover:bg-aral-400"
     >
       <Save className="size-5" aria-hidden />
       Save grades
@@ -402,6 +400,16 @@ export function TermsReportPanel({
 
   const activeFilterCount =
     (state.section !== "all" ? 1 : 0) + (subjectName !== "all" ? 1 : 0);
+
+  // Section and Subject: two filters, so one Filters button beside the search.
+  const filtersMenu = (where: "phone" | "desktop") => (
+    <FilterMenu
+      activeCount={activeFilterCount}
+      className="h-11 rounded-md lg:h-9"
+    >
+      {facets(where)}
+    </FilterMenu>
+  );
 
   return (
     <div className="flex flex-col gap-3 xl:gap-4">
@@ -423,35 +431,10 @@ export function TermsReportPanel({
           {searchBox}
           {scopeControl ? <div className="sm:w-56 sm:shrink-0">{scopeControl}</div> : null}
           <div className="flex items-center gap-2 sm:contents">
+            {filtersMenu("phone")}
             {exportButton}
             {saveButton}
           </div>
-        </div>
-        <div className="hidden grid-cols-2 gap-2 md:grid">{facets("phone")}</div>
-        {/* Phones: the two facets do not fit beside each other, so they sit
-            behind one button, as on the ARAL pages. */}
-        <div className="md:hidden">
-          <Popover modal>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="relative h-11 w-full justify-center gap-2 rounded-md"
-              >
-                <Filter className="size-4" aria-hidden />
-                Filters
-                {activeFilterCount > 0 && (
-                  <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
-                    {activeFilterCount}
-                    <span className="sr-only"> active</span>
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 space-y-2 p-3">
-              {facets("popover")}
-            </PopoverContent>
-          </Popover>
         </div>
         <UnsavedChangesBadge dirty={dirty} />
       </Surface>
@@ -461,7 +444,7 @@ export function TermsReportPanel({
         <div className="hidden flex-wrap items-center gap-3 border-b border-border/60 p-3 xl:flex">
           {searchBox}
           {scopeControl ? <div className="w-56 shrink-0">{scopeControl}</div> : null}
-          {facets("desktop")}
+          {filtersMenu("desktop")}
           <div className="ml-auto flex items-center gap-3">
             <UnsavedChangesBadge dirty={dirty} />
             {exportButton}

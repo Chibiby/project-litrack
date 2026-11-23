@@ -1,24 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ClipboardList, UserMinus, SlidersHorizontal, Users } from "lucide-react";
+import { ClipboardList, UserMinus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { FilterMenu } from "@/components/ui/filter-menu";
 import { AdvisorySelect } from "@/components/learners/advisory-select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { SelectItem } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { FacetSelect } from "@/components/ui/facet-select";
 import { SortSelect } from "@/components/ui/sort-select";
@@ -36,9 +24,8 @@ import {
  * `LearnerRosterNav` sits above the table panel: the three tabs and the add
  * control. The highlighted advisory dropdown lives in the page hero's
  * top-right corner instead (see `TeacherLearnersPage`), not in this row.
- * `LearnerListToolbar` is the panel's own top row: search, every facet, More
- * Filters and bulk actions. Below xl the facets move into a sheet behind one
- * filter button, as in the phone mockup.
+ * `LearnerListToolbar` is the panel's own top row: search, the advisory
+ * filter, one Filters menu (every facet, sort and page size) and bulk actions.
  *
  * Every control writes the URL; the page re-reads it. Advisory, Grade and
  * Section all narrow the same rows, so each change settles the other two
@@ -356,62 +343,39 @@ export function LearnerListToolbar(props: ToolbarProps) {
       resultCount={resultCount}
       label="Search learners by name"
       placeholder="Search by name or keyword…"
-      className="min-w-48 flex-1 xl:min-w-0 xl:max-w-xs 2xl:max-w-sm"
-      inputClassName="h-11 rounded-md lg:h-11"
+      className={SEARCH_BAR_WIDTH}
+      inputClassName="h-11 rounded-md lg:h-9"
     />
   );
 
+  const activeCount = [state.grade, state.section, state.gender, state.aralStatus].filter(
+    (v) => v !== "all"
+  ).length;
+
   return (
     <div className="border-b border-border/60 p-3 sm:p-4">
-      <div className="flex flex-wrap items-center justify-end gap-2 xl:flex-nowrap">
+      <div className="flex flex-wrap items-center gap-2">
         {search}
         {advisory}
-        {/* xl and up: every facet inline, as in the desktop mockup. */}
-        <div className="hidden min-w-0 flex-[3] items-center gap-2 xl:flex">
-          <Facets {...props} idPrefix="learner-facet" className="min-w-0 flex-1" />
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 shrink-0 gap-2 rounded-md"
-              >
-                <SlidersHorizontal className="size-4" aria-hidden />
-                More Filters
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-64">
-              <SortAndSize {...props} idPrefix="learner-more" />
-            </PopoverContent>
-          </Popover>
-        </div>
-        {/* Below xl: one filter button, as in the phone mockup. The sheet's
-            content mounts only while open, so the facets never render twice. */}
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-11 shrink-0 rounded-md xl:hidden"
-              aria-label="Filters"
-            >
-              <SlidersHorizontal className="size-4" aria-hidden />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-xl">
-            <SheetHeader>
-              <SheetTitle>Filters</SheetTitle>
-              <SheetDescription>Narrow the learner list.</SheetDescription>
-            </SheetHeader>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Facets {...props} idPrefix="learner-sheet" />
-            </div>
-            <div className="mt-3">
-              <SortAndSize {...props} idPrefix="learner-sheet-more" />
-            </div>
-          </SheetContent>
-        </Sheet>
+        {/* Every other filter, and sort, sits behind one button on every width. */}
+        <FilterMenu
+          activeCount={activeCount}
+          onClear={() =>
+            onNavigate(
+              rosterHref(basePath, {
+                ...state,
+                grade: "all",
+                section: "all",
+                gender: "all",
+                aralStatus: "all",
+              })
+            )
+          }
+          className="h-11 lg:h-9"
+        >
+          <Facets {...props} idPrefix="learner-facet" />
+          <SortAndSize {...props} idPrefix="learner-more" />
+        </FilterMenu>
         {bulkActions ? <div className="shrink-0">{bulkActions}</div> : null}
       </div>
     </div>

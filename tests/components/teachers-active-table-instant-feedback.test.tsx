@@ -140,6 +140,7 @@ describe("TeachersActiveTable — instant feedback while a list navigation is pe
     render(<TeachersActiveTable rows={[ROW]} list={LIST} />);
     const region = document.querySelector('[data-slot="list-busy-region"]');
 
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ })); // filters live in the Filters menu
     fireEvent.click(screen.getByRole("combobox", { name: "Advisory" }));
     fireEvent.click(await screen.findByRole("option", { name: "Floating" }));
 

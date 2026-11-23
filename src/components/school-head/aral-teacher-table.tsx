@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
 import {
   Table,
   TableBody,
@@ -235,7 +235,7 @@ function AralTeacherTablePanel({
             onValueChange={setSearchValue}
             onDebouncedChange={searchNow}
             placeholder="Learner name…"
-            className="min-w-48 max-w-sm flex-1"
+            className={SEARCH_BAR_WIDTH}
           />
           {list.q ? (
             <Button
@@ -304,7 +304,7 @@ function AralTeacherTablePanel({
                 </Label>
                 <select
                   id={selectId}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm max-lg:h-11"
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm max-lg:h-11"
                   value={value ?? ""}
                   disabled={savingId === row.id || teachers.length === 0}
                   onChange={(e) =>

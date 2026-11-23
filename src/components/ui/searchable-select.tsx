@@ -166,7 +166,7 @@ export function SearchableSelect({
           aria-controls={listId}
           disabled={disabled}
           className={cn(
-            "flex h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background lg:h-10",
+            "flex h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background lg:h-9",
             "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             "disabled:cursor-not-allowed disabled:opacity-50",
             !selected && "text-muted-foreground",

@@ -5,7 +5,7 @@ import { useListNavigate } from "@/components/nav/list-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
 
 export type AuditFiltersState = {
   q: string;
@@ -88,7 +88,8 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="min-w-48 max-lg:basis-full flex-1 space-y-1">
+      {/* From and To are one date-range filter, so it stays in view. */}
+      <div className={SEARCH_BAR_WIDTH}>
         <SearchInput
           id="audit-search"
           label="Search actor or action"
@@ -97,7 +98,6 @@ function AuditFiltersForm({ basePath, state, otherParams }: AuditFiltersProps) {
           onValueChange={setQ}
           onDebouncedChange={searchNow}
           placeholder="Name or action…"
-          className="max-w-sm max-lg:max-w-none"
         />
       </div>
       <div className="max-lg:flex-1 space-y-1">

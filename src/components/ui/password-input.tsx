@@ -34,7 +34,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
         aria-pressed={visible}
         disabled={disabled}
         onClick={() => setVisible((v) => !v)}
-        // lg:h-full / lg:w-10 beat the icon size's lg:size-10, so the toggle
+        // lg:h-full / lg:w-10 beat the icon size's lg:size-9, so the toggle
         // spans the field's full height (and stays centred) on tall inputs too.
         className={cn(
           "absolute inset-y-0 right-0 h-full text-muted-foreground hover:bg-transparent hover:text-foreground disabled:cursor-not-allowed",

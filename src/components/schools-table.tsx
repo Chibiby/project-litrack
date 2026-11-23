@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { FilterMenu, FilterMenuField } from "@/components/ui/filter-menu";
 import {
   Select,
   SelectContent,
@@ -584,117 +585,134 @@ function SchoolsTableInner({
         </Card>
       ) : null}
 
-      {/* The admin set has five controls beside the search; they only fit on
-          one line from xl, so below that the search takes its own row. */}
-      <div
-        className={cn(
-          "flex flex-col items-start justify-between gap-3",
-          isAdminColumns ? "xl:flex-row xl:items-center" : "sm:flex-row sm:items-center"
-        )}
-      >
-        <SearchInput
-          value={searchValue}
-          onValueChange={setSearchValue}
-          onDebouncedChange={searchNow}
-          resultCount={list.totalCount}
-          label="Search schools"
-          placeholder="Search schools…"
-          className={cn("w-full", isAdminColumns ? "xl:w-72" : "sm:w-72")}
-        />
+      {(() => {
+        // More than one filter: they and the sort go behind one Filters
+        // button beside the search box. One filter stays in view.
+        const filterCount = (isAdminColumns ? 1 : 0) + (districtOptions ? 1 : 0) + 1;
+        const inMenu = filterCount > 1;
+        const trigger = (width: string) => (inMenu ? "w-full" : cn("w-full", width));
+        const wrap = (label: string, control: React.ReactNode) =>
+          inMenu ? <FilterMenuField label={label}>{control}</FilterMenuField> : control;
+        const activeCount = [list.region, list.district, list.status].filter(Boolean).length;
 
-        <div
-          className={cn(
-            "grid w-full gap-2 sm:flex sm:items-center",
-            isAdminColumns ? "sm:flex-wrap xl:w-auto" : "sm:w-auto"
-          )}
-        >
-          {isAdminColumns ? (
-            <Select
-              value={list.region || "all"}
-              onValueChange={(value) =>
-                pushList({ page: 1, region: value === "all" ? "" : value })
-              }
-            >
-              <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by region">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All regions</SelectItem>
-                {REGIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-          {districtOptions ? (
-            <Select
-              value={list.district || "all"}
-              onValueChange={(value) =>
-                pushList({ page: 1, district: value === "all" ? "" : value })
-              }
-            >
-              <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by district">
-                <SelectValue placeholder="District" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All districts</SelectItem>
-                {districtOptions.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-          <Select
-            value={list.status || "all"}
-            onValueChange={(value) =>
-              pushList({ page: 1, status: value === "all" ? "" : (value as "active" | "inactive") })
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[140px]" aria-label="Filter by status">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-          {list.sort && list.sortOptions ? (
-            <SortSelect
-              mode="link"
-              id="schools-sort"
-              basePath={basePath}
-              value={list.sort}
-              options={list.sortOptions}
-              searchParams={{
-                q: list.q || undefined,
-                region: list.region || undefined,
-                status: list.status || undefined,
-                district: list.district || undefined,
-              }}
+        const controls = (
+          <>
+            {isAdminColumns
+              ? wrap(
+                  "Region",
+                  <Select
+                    value={list.region || "all"}
+                    onValueChange={(value) =>
+                      pushList({ page: 1, region: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger className={trigger("sm:w-[160px]")} aria-label="Filter by region">
+                      <SelectValue placeholder="Filter by..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All regions</SelectItem>
+                      {REGIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
+              : null}
+            {districtOptions
+              ? wrap(
+                  "District",
+                  <Select
+                    value={list.district || "all"}
+                    onValueChange={(value) =>
+                      pushList({ page: 1, district: value === "all" ? "" : value })
+                    }
+                  >
+                    <SelectTrigger className={trigger("sm:w-[180px]")} aria-label="Filter by district">
+                      <SelectValue placeholder="District" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All districts</SelectItem>
+                      {districtOptions.map((d) => (
+                        <SelectItem key={d} value={d}>
+                          {d}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
+              : null}
+            {wrap(
+              "Status",
+              <Select
+                value={list.status || "all"}
+                onValueChange={(value) =>
+                  pushList({ page: 1, status: value === "all" ? "" : (value as "active" | "inactive") })
+                }
+              >
+                <SelectTrigger className={trigger("sm:w-[140px]")} aria-label="Filter by status">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {list.sort && list.sortOptions ? (
+              <SortSelect
+                mode="link"
+                id="schools-sort"
+                basePath={basePath}
+                value={list.sort}
+                options={list.sortOptions}
+                searchParams={{
+                  q: list.q || undefined,
+                  region: list.region || undefined,
+                  status: list.status || undefined,
+                  district: list.district || undefined,
+                }}
+              />
+            ) : null}
+          </>
+        );
+
+        return (
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchInput
+              value={searchValue}
+              onValueChange={setSearchValue}
+              onDebouncedChange={searchNow}
+              resultCount={list.totalCount}
+              label="Search schools"
+              placeholder="Search schools…"
+              className={SEARCH_BAR_WIDTH}
             />
-          ) : null}
-          {hasActiveFilters ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={cn("w-full sm:w-auto", isAdminColumns && "lg:h-9")}
-              onClick={() => {
-                setSearchValue("");
-                setPushedQ("");
-                pushList({ page: 1, q: "", region: "", status: "", district: "" });
-              }}
-            >
-              Clear
-            </Button>
-          ) : null}
-        </div>
-      </div>
+            {inMenu ? (
+              <FilterMenu activeCount={activeCount}>{controls}</FilterMenu>
+            ) : (
+              <div className="grid w-full gap-2 sm:flex sm:w-auto sm:items-center">{controls}</div>
+            )}
+            {hasActiveFilters ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-11 lg:h-9"
+                onClick={() => {
+                  setSearchValue("");
+                  setPushedQ("");
+                  pushList({ page: 1, q: "", region: "", status: "", district: "" });
+                }}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        );
+      })()}
 
       <div className="text-sm text-muted-foreground">
         {pastEnd

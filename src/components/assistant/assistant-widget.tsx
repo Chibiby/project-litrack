@@ -127,7 +127,7 @@ export function AssistantWidget({ role, userName, aiEnabled, userId }: Props) {
         )}
 
         {/*
-          No `size="icon"`: its `lg:size-10` survived `size-14` (a different
+          No `size="icon"`: its `lg:size-9` survived `size-14` (a different
           breakpoint, so the merge keeps both) and shrank the circle to 40px on
           desktop, and the base `[&_svg]:size-4` beat the icons' own sizes.
           The circle is 56px at every width; the robot is 28px through the

@@ -221,7 +221,7 @@ export default async function TeacherKinderChecklistPage({ searchParams }: PageP
               value={advisory.sectionId}
               numericSectionIds={numericPlacements.map((p) => p.sectionId)}
               numericBasePath="/teacher/terms-reports"
-              className="h-11 w-full lg:h-10"
+              className="h-11 w-full lg:h-9"
             />
           ) : undefined
         }

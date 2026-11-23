@@ -469,7 +469,9 @@ describe("term grades sheet", () => {
     ) as HTMLInputElement;
 
   async function pickSection(name: string) {
-    fireEvent.click(screen.getAllByLabelText("Section")[0]);
+    // Section and Subject live behind the Filters button.
+    fireEvent.click(screen.getAllByRole("button", { name: /^Filters/ })[0]);
+    fireEvent.click(await screen.findByLabelText("Section"));
     fireEvent.click(await screen.findByRole("option", { name }));
   }
 
@@ -574,7 +576,7 @@ describe("term grades sheet", () => {
   });
 });
 
-describe("terms report filters on a phone", () => {
+describe("terms report filters", () => {
   const GROUPS: SheetGroup[] = [
     {
       key: "atis",
@@ -610,24 +612,25 @@ describe("terms report filters on a phone", () => {
 
   it("offers a Filters button that opens the Section and Subject filters", async () => {
     renderTerms();
-    expect(document.getElementById("terms-section-popover")).toBeNull();
+    expect(document.getElementById("terms-section-phone")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Filters/ })[0]);
 
     await waitFor(() =>
-      expect(document.getElementById("terms-section-popover")).not.toBeNull()
+      expect(document.getElementById("terms-section-phone")).not.toBeNull()
     );
-    expect(document.getElementById("terms-subject-popover")).not.toBeNull();
+    expect(document.getElementById("terms-subject-phone")).not.toBeNull();
   });
 
   it("says how many filters are active", () => {
     renderTerms("atis");
-    expect(screen.getByRole("button", { name: "Filters 1 active" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Filters, 1 on" }).length).toBeGreaterThan(0);
   });
 
-  it("keeps the inline filters for tablets and desktops", () => {
+  it("shows no inline filters at any width: both toolbars use the Filters button", () => {
     renderTerms();
-    expect(document.getElementById("terms-section-phone")).not.toBeNull();
-    expect(document.getElementById("terms-section-desktop")).not.toBeNull();
+    expect(document.getElementById("terms-section-phone")).toBeNull();
+    expect(document.getElementById("terms-section-desktop")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /^Filters/ })).toHaveLength(2);
   });
 });

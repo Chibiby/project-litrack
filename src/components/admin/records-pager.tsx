@@ -114,7 +114,7 @@ export function RecordsPager({
             asChild={page > 1}
             size="icon"
             variant="outline"
-            className="relative h-11 w-11 xl:h-8 xl:w-8"
+            className="relative"
             disabled={page <= 1}
             aria-label="Previous page"
           >
@@ -149,7 +149,7 @@ export function RecordsPager({
                 asChild
                 size="icon"
                 variant={entry === page ? "default" : "outline"}
-                className="relative hidden h-11 w-11 tabular-nums sm:inline-flex xl:h-8 xl:w-8"
+                className="relative hidden tabular-nums sm:inline-flex"
                 aria-current={entry === page ? "page" : undefined}
               >
                 <PrefetchLink
@@ -168,7 +168,7 @@ export function RecordsPager({
             asChild={page < totalPages}
             size="icon"
             variant="outline"
-            className="relative h-11 w-11 xl:h-8 xl:w-8"
+            className="relative"
             disabled={page >= totalPages}
             aria-label="Next page"
           >
@@ -203,7 +203,7 @@ export function RecordsPager({
         >
           <SelectTrigger
             id={`${idPrefix}-per-page`}
-            className="h-11 w-[4.75rem] gap-1 py-1 xl:h-8"
+            className="w-[4.75rem] gap-1 py-1"
           >
             <SelectValue />
           </SelectTrigger>

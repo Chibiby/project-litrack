@@ -168,6 +168,7 @@ describe("Teachers list — sort survives URL round trips", () => {
     const list = await listPropFor({ sort: "date-added" });
     render(<TeachersActiveTable rows={[ROW]} list={list} />);
 
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ })); // filters live in the Filters menu
     fireEvent.click(screen.getByRole("combobox", { name: "Advisory" }));
     fireEvent.click(await screen.findByRole("option", { name: "Floating" }));
 
@@ -186,6 +187,7 @@ describe("Teachers list — sort survives URL round trips", () => {
     };
     render(<TeachersActiveTable rows={[ROW]} list={list} />);
 
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ })); // filters live in the Filters menu
     expect(
       screen.getByRole("combobox", { name: "Section" }).hasAttribute("disabled")
     ).toBe(true);
@@ -219,6 +221,7 @@ describe("Teachers list — sort survives URL round trips", () => {
     const list = await listPropFor({ sort: "date-added", page: "3" });
     render(<TeachersActiveTable rows={[ROW]} list={list} />);
 
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ })); // filters live in the Filters menu
     fireEvent.click(screen.getByRole("combobox", { name: "Sort by" }));
     fireEvent.click(await screen.findByText("Advisory mode"));
 

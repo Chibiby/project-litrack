@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, Users, X } from "lucide-react";
 import { ARAL_SCOPE_TRIGGER } from "@/components/learners/advisory-select";
+import { SEARCH_BAR_WIDTH } from "@/components/ui/search-input";
 import { cn } from "@/lib/utils";
 import { useListNavigate } from "@/components/nav/list-navigation";
 import { Button } from "@/components/ui/button";
@@ -136,7 +137,7 @@ export function MosyToolbar({
 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-      <div className="relative min-w-48 flex-1 sm:max-w-xs">
+      <div className={cn("relative", SEARCH_BAR_WIDTH)}>
         <Search
           className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden

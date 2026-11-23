@@ -6,7 +6,7 @@ import { UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
 import {
   Select,
   SelectContent,
@@ -108,7 +108,7 @@ export function DeletedLearnersView({
             label="Search name"
             labelVisible
             placeholder="Learner name"
-            className="w-full sm:w-64"
+            className={SEARCH_BAR_WIDTH}
           />
 
           {filtered ? (

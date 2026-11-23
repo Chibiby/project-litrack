@@ -104,7 +104,7 @@ export function AralDateNav({
       className={
         rangeLabel != null
           ? "h-6 w-auto border-0 bg-transparent p-0 text-xs text-muted-foreground shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          : "h-11 w-auto xl:h-8"
+          : "w-auto"
       }
       onChange={(e) => handleChange(e.target.value)}
     />
@@ -116,7 +116,7 @@ export function AralDateNav({
       className={
         rangeLabel != null
           ? "h-6 w-auto border-0 bg-transparent p-0 text-xs text-muted-foreground shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          : "h-11 w-auto xl:h-8"
+          : "w-auto"
       }
       onChange={(e) => handleChange(e.target.value)}
     />

@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FacetSelect } from "@/components/ui/facet-select";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { FilterMenu } from "@/components/ui/filter-menu";
 import { Switch } from "@/components/ui/switch";
 import { SelectItem } from "@/components/ui/select";
 import {
@@ -187,17 +188,21 @@ export function TeacherTasksBoard({
 
       <Card>
         <CardContent className="p-0">
-          <div className="flex flex-col gap-3 border-b px-4 py-3 lg:flex-row lg:flex-wrap lg:items-end">
+          <div className="flex flex-wrap items-end gap-3 border-b px-4 py-3">
             <SearchInput
               id={`${uid}-search`}
-              className="w-full lg:w-72 lg:flex-none"
+              className={SEARCH_BAR_WIDTH}
               label="Search teachers by name"
               placeholder="Search by teacher name"
               value={q}
               onValueChange={setQ}
               onClear={() => setQ("")}
             />
-            <div className="lg:w-52">
+            {/* Task and Pending only sit behind one Filters button. */}
+            <FilterMenu
+              activeCount={(kind !== "ALL" ? 1 : 0) + (effectivePendingOnly && kind === "ALL" ? 1 : 0)}
+            >
+            <div className="w-full">
               <FacetSelect
                 id={`${uid}-kind`}
                 label="Task"
@@ -223,6 +228,7 @@ export function TeacherTasksBoard({
                 Pending only
               </label>
             </div>
+            </FilterMenu>
             {filtersActive ? (
               <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
                 Clear filters

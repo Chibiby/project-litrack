@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/ui/search-input";
+import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
+import { FilterMenu } from "@/components/ui/filter-menu";
 import {
   Select,
   SelectContent,
@@ -338,7 +339,7 @@ function AdvisoryPicker({
       </Label>
       <select
         id={selectId}
-        className="mt-1.5 h-8 w-full min-w-48 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 max-lg:h-11"
+        className="mt-1.5 h-9 w-full min-w-48 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50 max-lg:h-11"
         value=""
         disabled={disabled || atCap}
         onChange={(e) => {
@@ -902,11 +903,10 @@ function TeachersManagedTable({
           </Button>
         </div>
         {list ? (
-          <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex flex-wrap items-end gap-3 border-b px-4 py-3">
             <SearchInput
               id="teachers-search"
-              className="w-full sm:w-72 sm:flex-none"
-              inputClassName="h-12 lg:h-12"
+              className={SEARCH_BAR_WIDTH}
               label="Search active teachers"
               placeholder="Search by name or email"
               value={searchValue}
@@ -918,7 +918,19 @@ function TeachersManagedTable({
                 pushListQuery({ page: 1, q: next });
               }}
             />
-            <div className="sm:w-52">
+            {/* Type, advisory kind, grade and section, with the sort, sit
+                behind one Filters button beside the search box. */}
+            <FilterMenu
+              activeCount={
+                [
+                  list.filter !== "all",
+                  listAdvisory !== "all",
+                  Boolean(list.grade),
+                  Boolean(list.section),
+                ].filter(Boolean).length
+              }
+            >
+            <div className="w-full">
               <ToolbarFacet
                 id="teachers-filter"
                 label="Teacher type"
@@ -937,7 +949,7 @@ function TeachersManagedTable({
                 ))}
               </ToolbarFacet>
             </div>
-            <div className="sm:w-52">
+            <div className="w-full">
               <ToolbarFacet
                 id="teachers-advisory"
                 label="Advisory"
@@ -958,7 +970,7 @@ function TeachersManagedTable({
             </div>
             {list.gradeOptions ? (
               <>
-                <div className="sm:w-40">
+                <div className="w-full">
                   <ToolbarFacet
                     id="teachers-grade"
                     label="Grade"
@@ -978,7 +990,7 @@ function TeachersManagedTable({
                     ))}
                   </ToolbarFacet>
                 </div>
-                <div className="sm:w-40">
+                <div className="w-full">
                   <ToolbarFacet
                     id="teachers-section"
                     label="Section"
@@ -1004,7 +1016,7 @@ function TeachersManagedTable({
               </>
             ) : null}
             {list.sort && list.sortOptions ? (
-              <div className="sm:w-48">
+              <div className="w-full">
                 <SortSelect
                   mode="link"
                   id="teachers-sort"
@@ -1020,6 +1032,7 @@ function TeachersManagedTable({
                 />
               </div>
             ) : null}
+            </FilterMenu>
             {list.q ||
             list.filter !== "all" ||
             listAdvisory !== "all" ||

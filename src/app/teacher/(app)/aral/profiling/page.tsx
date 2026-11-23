@@ -269,7 +269,7 @@ export default async function AralProfilingPage({ searchParams }: PageProps) {
                 href={statusHref(s, { schoolId: sp.schoolId, q, section: sectionFilter })}
                 aria-current={s === status ? "page" : undefined}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors max-lg:min-h-10",
+                  "inline-flex h-11 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors lg:h-9",
                   s === status
                     ? "border-aral bg-aral-soft text-aral"
                     : "border-border text-muted-foreground hover:bg-muted"

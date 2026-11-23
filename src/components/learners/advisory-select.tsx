@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
  * Theme tokens, so dark mode gets the lighter purple with dark text.
  */
 export const ARAL_SCOPE_TRIGGER =
-  "h-11 gap-2 rounded-md border-aral bg-aral font-semibold text-aral-foreground shadow-sm hover:bg-aral/90 focus:ring-aral data-[placeholder]:text-aral-foreground [&>svg]:text-aral-foreground [&>svg]:opacity-100";
+  "h-11 gap-2 rounded-md border-aral bg-aral lg:h-9 font-semibold text-aral-foreground shadow-sm hover:bg-aral/90 focus:ring-aral data-[placeholder]:text-aral-foreground [&>svg]:text-aral-foreground [&>svg]:opacity-100";
 
 /**
  * Advisories grouped under their grade, in the order they arrive. The grade is

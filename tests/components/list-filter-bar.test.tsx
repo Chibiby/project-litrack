@@ -85,8 +85,19 @@ function lastNavigation(): { path: string; params: URLSearchParams } {
   return { path, params: new URLSearchParams(qs) };
 }
 
+/** With more than one filter, the fields live behind the Filters button. */
+function openFilters() {
+  fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+}
+
+/** A field's trigger, opening the Filters menu first when it is closed. */
+function field(fieldId: string): HTMLElement {
+  if (!document.getElementById(fieldId)) openFilters();
+  return document.getElementById(fieldId) as HTMLElement;
+}
+
 function pick(fieldId: string, optionText: string) {
-  fireEvent.click(document.getElementById(fieldId) as HTMLElement);
+  fireEvent.click(field(fieldId));
   const listbox = screen.getByRole("listbox");
   fireEvent.click(within(listbox).getByText(optionText));
 }
@@ -202,10 +213,44 @@ describe("ListFilterBar — Clear filters", () => {
   });
 });
 
+describe("ListFilterBar — the Filters menu", () => {
+  it("keeps the search box in view and puts several filters and the sort behind one button", () => {
+    renderBar();
+    expect(screen.getByRole("searchbox", { name: "Search teachers" })).not.toBeNull();
+    expect(document.getElementById("filter-district")).toBeNull();
+    openFilters();
+    expect(document.getElementById("filter-district")).not.toBeNull();
+    expect(document.getElementById("filter-schoolId")).not.toBeNull();
+    expect(screen.getByRole("combobox", { name: "Sort by" })).not.toBeNull();
+  });
+
+  it("counts the filters that are on", () => {
+    renderBar({ district: "Alamada", schoolId: "s1" });
+    expect(screen.getByRole("button", { name: "Filters, 2 on" })).not.toBeNull();
+  });
+
+  it("shows a single filter in view, with no menu", () => {
+    render(
+      <ListNavigationProvider>
+        <ListFilterBar
+          basePath={BASE}
+          q=""
+          resultCount={5}
+          searchLabel="Search teachers"
+          searchPlaceholder="Name…"
+          fields={[districtField(DISTRICTS, undefined, [])]}
+        />
+      </ListNavigationProvider>
+    );
+    expect(screen.queryByRole("button", { name: /^Filters/ })).toBeNull();
+    expect(document.getElementById("filter-district")).not.toBeNull();
+  });
+});
+
 describe("ListFilterBar — the section control", () => {
   it("is disabled, with its reason shown, until a school is chosen", () => {
     renderBar({ district: "Alamada" });
-    const section = document.getElementById("filter-section") as HTMLButtonElement;
+    const section = field("filter-section") as HTMLButtonElement;
 
     expect(section.disabled).toBe(true);
     expect(screen.getByText("Choose a school first.")).not.toBeNull();
@@ -213,7 +258,7 @@ describe("ListFilterBar — the section control", () => {
 
   it("does not navigate when a disabled section control is clicked", () => {
     renderBar();
-    fireEvent.click(document.getElementById("filter-section") as HTMLElement);
+    fireEvent.click(field("filter-section"));
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(push).not.toHaveBeenCalled();
   });
@@ -221,7 +266,7 @@ describe("ListFilterBar — the section control", () => {
   it("is enabled once a school is chosen, and picking a section sets it", () => {
     currentQuery = "schoolId=s1&page=2";
     renderBar({ schoolId: "s1" });
-    const section = document.getElementById("filter-section") as HTMLButtonElement;
+    const section = field("filter-section") as HTMLButtonElement;
 
     expect(section.disabled).toBe(false);
     expect(screen.queryByText("Choose a school first.")).toBeNull();
@@ -235,6 +280,6 @@ describe("ListFilterBar — the section control", () => {
 
   it("shows a stale section as unselected when no school is chosen", () => {
     renderBar({ section: "sec1" });
-    expect((document.getElementById("filter-section") as HTMLElement).textContent).toContain("All sections");
+    expect(field("filter-section").textContent).toContain("All sections");
   });
 });

@@ -289,7 +289,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
           <Input
             {...inputProps}
             ref={setRefs}
-            className={cn("h-11 pl-9 pr-10 lg:h-10", inputClassName)}
+            className={cn("h-11 pl-9 pr-10 lg:h-9", inputClassName)}
           />
           {current && <SearchClearButton label="search" onClick={handleClear} />}
         </div>

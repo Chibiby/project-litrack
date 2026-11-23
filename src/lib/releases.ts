@@ -135,6 +135,30 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.80.0",
+    date: "2026-11-23",
+    title: "One Filters button on every list, and buttons that line up",
+    announce: true,
+    fixes: [
+      {
+        text: "Pages with more than one filter now keep them behind one Filters button beside the search box. The button shows how many filters are on, and Clear filters turns them all off.",
+        roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+      {
+        text: "Search boxes keep a sensible width: full width on a phone, never too narrow or too wide on a computer.",
+        roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+      {
+        text: "Buttons, search boxes and dropdowns in a row are now all the same height, so toolbars line up.",
+        roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+      {
+        text: "Page number buttons are now even squares with the number centred.",
+        roles: ["TEACHER", "SCHOOL_HEAD", "SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.79.1",
     date: "2026-11-23",
     title: "ARAL Profiling uses the advisory filter",

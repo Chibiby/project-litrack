@@ -9,11 +9,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        default: "border border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "border border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
           "border border-input bg-card hover:bg-muted hover:text-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/85",
+        secondary: "border border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/85",
         ghost: "hover:bg-muted hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
@@ -32,10 +32,10 @@ const buttonVariants = cva(
       // that need a shorter control on tablet must repeat the floor
       // themselves, e.g. `h-11 lg:h-8` — see the attendance cell trigger.
       size: {
-        default: "h-11 px-4 py-2 lg:h-10",
+        default: "h-11 px-4 py-2 lg:h-9",
         sm: "h-11 rounded-md px-3 lg:h-9",
         lg: "h-11 rounded-md px-8",
-        icon: "size-11 lg:size-10",
+        icon: "size-11 lg:size-9",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { TEACHER_LIST_SORTS } from "@/lib/teachers/pagination";
 
@@ -98,6 +98,7 @@ describe("TeachersActiveTable — Sort by", () => {
 
   it("renders the Sort by control when list carries sort + sortOptions", () => {
     render(<TeachersActiveTable rows={[ROW]} list={list} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ })); // filters live in the Filters menu
     expect(screen.getByLabelText("Sort by")).not.toBeNull();
   });
 

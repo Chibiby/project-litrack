@@ -158,7 +158,16 @@ const LINK_STATUS_RAMP_MS = 100;
  * already-prefetched click resolves fast enough that an instant hint would
  * flash for a single frame, which reads as a glitch rather than feedback.
  */
-export function LinkStatusPulse() {
+export function LinkStatusPulse({
+  overlay = false,
+}: {
+  /**
+   * For a square icon or page-number button: the hint sits in the corner
+   * instead of taking 18px of inline space, which pushed the digit or chevron
+   * off centre. The button must be `relative`.
+   */
+  overlay?: boolean;
+} = {}) {
   const { pending } = useLinkStatus();
   const { reportLinkPending } = useListNavigationContext();
 
@@ -177,13 +186,23 @@ export function LinkStatusPulse() {
     <span
       aria-hidden="true"
       data-slot="link-status-pulse"
-      className="ml-1.5 inline-block size-3 shrink-0 align-middle"
+      className={
+        overlay
+          ? "pointer-events-none absolute right-0.5 top-0.5 size-2.5"
+          : "ml-1.5 inline-block size-3 shrink-0 align-middle"
+      }
       style={{
         opacity: pending ? 1 : 0,
         transition: `opacity ${LINK_STATUS_RAMP_MS}ms ease-out`,
       }}
     >
-      <span className="block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      <span
+        className={
+          overlay
+            ? "block size-2.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+            : "block size-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+        }
+      />
     </span>
   );
 }
