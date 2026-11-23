@@ -34,6 +34,7 @@ async function Body({ view }: { view: SchoolHeadView }) {
         schoolHeadHref(view, `${SCHOOL_HEAD_ROUTES.learners}?q=${encodeURIComponent(name.split(",")[0] ?? name)}`)
       }
       setupHref={schoolHeadHref(view, SCHOOL_HEAD_ROUTES.schoolGradeLevels)}
+      aralHref={schoolHeadHref(view, SCHOOL_HEAD_ROUTES.monitoringAral)}
     />
   );
 }

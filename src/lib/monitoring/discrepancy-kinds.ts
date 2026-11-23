@@ -15,6 +15,7 @@ export const DISCREPANCY_KINDS = [
   "NO_ENROLLMENT",
   "ENROLLMENT_MISMATCH",
   "SECTION_NO_ADVISER",
+  "ARAL_WEEK_ONE_DAY",
 ] as const;
 
 export type DiscrepancyKind = (typeof DISCREPANCY_KINDS)[number];
@@ -25,8 +26,11 @@ export type DiscrepancyMeta = {
   description: string;
   /** What the School Head does about it. */
   fix: string;
-  /** Learner rows, or section rows for `SECTION_NO_ADVISER`. */
-  subject: "learner" | "section";
+  /**
+   * Learner rows, section rows for `SECTION_NO_ADVISER`, or one row per tutor,
+   * grade and week for `ARAL_WEEK_ONE_DAY`.
+   */
+  subject: "learner" | "section" | "tutor-week";
 };
 
 export const DISCREPANCY_META: Record<DiscrepancyKind, DiscrepancyMeta> = {
@@ -83,6 +87,13 @@ export const DISCREPANCY_META: Record<DiscrepancyKind, DiscrepancyMeta> = {
     description: "These sections have no adviser, or their adviser is inactive or removed.",
     fix: "Assign an adviser to the section in Grade and Section.",
     subject: "section",
+  },
+  ARAL_WEEK_ONE_DAY: {
+    title: "ARAL weeks with only 1 attendance day",
+    description:
+      "In these finished weeks the ARAL tutor recorded Weekly Attendance on only one day for the grade. Each week needs at least 2 days.",
+    fix: "Ask the tutor to fill in the missing days of that week in Weekly Attendance.",
+    subject: "tutor-week",
   },
 };
 

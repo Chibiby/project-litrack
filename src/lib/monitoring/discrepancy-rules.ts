@@ -5,6 +5,7 @@ import {
   type DiscrepancyKind,
   type DiscrepancySummary,
 } from "@/lib/monitoring/discrepancy-kinds";
+import { addDays, formatLocalDateKey, parseLocalDateKey } from "@/lib/date-keys";
 
 /**
  * Monitoring > Discrepancies — the pure rules. Facts in, groups out; no I/O,
@@ -39,12 +40,59 @@ export type SectionFact = {
 
 export type EnrollmentFact = { learnerId: string; gradeLevelId: string; sectionId: string | null };
 
+/**
+ * One tutor's Weekly Attendance for one grade in one finished week: how many
+ * distinct days they recorded for that grade's ARAL learners, and how many
+ * days of that week were open for recording (`openAralDays`).
+ */
+export type AralWeekFact = {
+  tutorId: string;
+  tutorName: string;
+  gradeLevelId: string;
+  gradeLabel: string;
+  /** Monday, local `YYYY-MM-DD`. */
+  weekStartKey: string;
+  recordedDays: number;
+  openDays: number;
+};
+
 export type DiscrepancyFacts = {
   hasActiveYear: boolean;
   learners: LearnerFact[];
   sections: SectionFact[];
   enrollments: EnrollmentFact[];
+  /** Finished weeks of the active school year; absent means none. */
+  aralWeeks?: AralWeekFact[];
 };
+
+/** Weekly Attendance needs at least this many recorded days a week. */
+export const ARAL_MIN_DAYS_PER_WEEK = 2;
+
+/**
+ * Days of the week starting `weekStartKey` (a Monday) on which a tutor could
+ * record Weekly Attendance: Monday to Thursday (Friday is locked in the grid),
+ * minus the grade's holidays and any day before the school year started.
+ */
+export function openAralDays(
+  weekStartKey: string,
+  ctx: { yearStartKey: string; holidayKeys: ReadonlySet<string> }
+): number {
+  const monday = parseLocalDateKey(weekStartKey);
+  let open = 0;
+  for (let i = 0; i < 4; i++) {
+    const key = formatLocalDateKey(addDays(monday, i));
+    if (key >= ctx.yearStartKey && !ctx.holidayKeys.has(key)) open++;
+  }
+  return open;
+}
+
+function weekLabel(weekStartKey: string): string {
+  return `Week of ${parseLocalDateKey(weekStartKey).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })}`;
+}
 
 function placement(l: LearnerFact): string {
   return l.sectionName ? `${l.gradeLabel} · ${l.sectionName}` : l.gradeLabel;
@@ -108,6 +156,25 @@ export function classifyDiscrepancies(facts: DiscrepancyFacts): DiscrepancySumma
         teacher: s.adviser?.name ?? null,
       });
     }
+  }
+
+  // Exactly 1 day: a week with none is a missing week, which Teacher Tasks
+  // already shows. Newest week first, then grade, then tutor.
+  const thinWeeks = (facts.aralWeeks ?? [])
+    .filter((w) => w.recordedDays === 1 && w.openDays >= ARAL_MIN_DAYS_PER_WEEK)
+    .sort(
+      (a, b) =>
+        b.weekStartKey.localeCompare(a.weekStartKey) ||
+        a.gradeLabel.localeCompare(b.gradeLabel) ||
+        a.tutorName.localeCompare(b.tutorName)
+    );
+  for (const w of thinWeeks) {
+    buckets.get("ARAL_WEEK_ONE_DAY")!.push({
+      id: `${w.tutorId}|${w.gradeLevelId}|${w.weekStartKey}`,
+      name: weekLabel(w.weekStartKey),
+      placement: w.gradeLabel,
+      teacher: w.tutorName,
+    });
   }
 
   const groups = DISCREPANCY_KINDS.map((kind) => {
