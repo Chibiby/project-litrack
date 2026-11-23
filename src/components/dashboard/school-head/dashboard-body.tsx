@@ -7,10 +7,12 @@ import { cn } from "@/lib/utils";
 import {
   getSchoolHeadOverview,
   buildSchoolHeadAttention,
+  type AttentionItem,
   type SchoolHeadAttentionHrefs,
 } from "@/lib/dashboard/school-head-overview";
 import { getSchoolHeadAttendanceMix } from "@/lib/dashboard/aggregates";
 import { getAuthSession } from "@/lib/auth/auth-session";
+import { countIncomingTransfers } from "@/lib/transfers/notify";
 import { AdviserlessSectionsNotice } from "@/components/school-head/adviserless-sections-notice";
 import type { SchoolHeadView } from "@/components/school-head/school-head-page";
 import { DASHBOARD_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
@@ -28,7 +30,7 @@ import { SchoolHeadGreetingHero } from "./greeting-hero";
 import { SchoolHeadStatRow } from "./stat-row";
 import { AralCoveragePanel, IpCoveragePanel, SchoolAttendancePanel } from "./overview-panels";
 import { SchoolAttentionPanel, SchoolQuickActionsPanel } from "./attention-panel";
-import {
+import { transferHref,
   ipLearnersHref,
   teachersHref,
   teachersPendingHref,
@@ -162,9 +164,33 @@ export async function loadSchoolHeadDashboard({
       })
     : [];
   const setupItems = buildSchoolHeadAttention(data, attentionHrefs);
+  // Transfers other schools sent here. Extra like monitoring: a failed count
+  // leaves the row out rather than failing the dashboard.
+  let incomingTransfers = 0;
+  try {
+    incomingTransfers = await countIncomingTransfers(view.schoolId);
+  } catch (err) {
+    console.error("[loadSchoolHeadDashboard] incoming transfers count failed:", err);
+  }
+  const transferItems: AttentionItem[] =
+    incomingTransfers > 0
+      ? [
+          {
+            id: "incoming-transfers",
+            label: "Incoming transfers to review",
+            detail: "Other schools sent people to your school",
+            href: transferHref(view),
+            badge: String(incomingTransfers),
+            tone: "amber",
+          },
+        ]
+      : [];
   const attentionItems = [
+    ...transferItems,
     ...monitoringItems,
-    ...(monitoringItems.length > 0 ? setupItems.filter((i) => i.id !== "allclear") : setupItems),
+    ...(monitoringItems.length + transferItems.length > 0
+      ? setupItems.filter((i) => i.id !== "allclear")
+      : setupItems),
   ];
 
   // The daily pop-up: the same rows, plus three headline figures. Only for the

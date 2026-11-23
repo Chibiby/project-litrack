@@ -7,6 +7,7 @@ import { loadHeaderSchoolYearGate } from "@/lib/school-year/header-gate";
 import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { getProfilePhotoBellNotifications } from "@/lib/notifications";
+import { getSchoolTransferBellNotifications } from "@/lib/transfers/notify";
 import { readImpersonation } from "@/lib/auth/impersonation-session";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { geminiConfigured } from "@/lib/assistant/gemini";
@@ -99,11 +100,21 @@ export default async function SchoolHeadAppLayout({
         // school.
         notifications={
           user.role === "SCHOOL_HEAD" && user.schoolId
-            ? getProfilePhotoBellNotifications({
-                id: user.id,
-                schoolId: user.schoolId,
-                role: user.role,
-              })
+            ? Promise.all([
+                getProfilePhotoBellNotifications({
+                  id: user.id,
+                  schoolId: user.schoolId,
+                  role: user.role,
+                }),
+                getSchoolTransferBellNotifications({
+                  id: user.id,
+                  schoolId: user.schoolId,
+                  role: user.role,
+                }).catch((err) => {
+                  console.error("[layout] transfer notices failed:", err);
+                  return [];
+                }),
+              ]).then((lists) => lists.flat())
             : []
         }
       >

@@ -11,6 +11,7 @@ import { PostLoginSplash } from "@/components/post-login-splash";
 import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment-alerts";
 import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alerts";
 import { getProfilePhotoBellNotifications } from "@/lib/notifications";
+import { getSchoolTransferBellNotifications } from "@/lib/transfers/notify";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { readImpersonation } from "@/lib/auth/impersonation-session";
@@ -137,11 +138,21 @@ export default async function TeacherAppLayout({
         // Admin gets the menu's empty state instead of a query with no school.
         notifications={
           user.role === "TEACHER" && user.schoolId
-            ? getProfilePhotoBellNotifications({
-                id: user.id,
-                schoolId: user.schoolId,
-                role: user.role,
-              })
+            ? Promise.all([
+                getProfilePhotoBellNotifications({
+                  id: user.id,
+                  schoolId: user.schoolId,
+                  role: user.role,
+                }),
+                getSchoolTransferBellNotifications({
+                  id: user.id,
+                  schoolId: user.schoolId,
+                  role: user.role,
+                }).catch((err) => {
+                  console.error("[layout] transfer notices failed:", err);
+                  return [];
+                }),
+              ]).then((lists) => lists.flat())
             : []
         }
       >

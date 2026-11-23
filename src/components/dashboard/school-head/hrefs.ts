@@ -82,3 +82,8 @@ export function monitoringAralHref(view: SchoolHeadView): string {
 export function monitoringDiscrepanciesHref(view: SchoolHeadView): string {
   return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.monitoringDiscrepancies);
 }
+
+/** "Incoming transfers to review" attention item. */
+export function transferHref(view: SchoolHeadView): string {
+  return schoolHeadHref(view, SCHOOL_HEAD_ROUTES.transfer);
+}
