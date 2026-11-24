@@ -2,18 +2,22 @@
  * Pure half of the stat-card count-up (`src/components/ui/count-up.tsx`).
  *
  * Practice this follows:
- * - Count on the first visit to a page after the app loads: a refresh counts
- *   again, moving between pages and back does not.
- * - Start only once the page has finished loading, so the count plays while
- *   someone is looking, not behind a loading screen.
- * - A steady ease-out over about two seconds, slow enough to follow.
+ * - Count once per page load: a refresh counts again, moving between pages
+ *   and back does not.
+ * - Start as soon as the card is on screen (at least half visible),
+ *   so the count plays while someone is looking.
+ * - Ease-out cubic over 1.2 s, with cards on one page starting 100 ms apart.
+ * - Thousands separators always ("103,110", never "103110").
  * - Reduced motion shows the final value at once; the final value is always
  *   what assistive tech reads, never a mid-count number.
  * - Tabular numerals (already on the card) so digits do not jitter.
  */
 
 /** How long one count runs. */
-export const COUNT_UP_MS = 2200;
+export const COUNT_UP_MS = 1200;
+
+/** Gap between the starts of cards that become ready together. */
+export const COUNT_UP_STAGGER_MS = 100;
 
 /** easeOutCubic: a steady climb that slows into the figure. */
 export function easeOutCubic(t: number): number {
@@ -22,28 +26,37 @@ export function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
+function withCommas(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+/** How a stat card shows `value` when it is not counting. */
+export function formatStatValue(value: number | string): string {
+  const c = parseCountable(value);
+  return c ? c.format(c.target) : String(value);
+}
+
 export type CountableValue = { target: number; format: (n: number) => string };
 
 /**
- * A stat value that can count: a finite non-negative number, or a string of
- * digits with optional thousands commas and an optional "%" (as cards render
- * "103,110" or "55%"). Anything else ("Not chosen", "3/4", "2.5") is shown
- * as it is.
+ * A stat value that can count: a finite non-negative whole number, or a
+ * string of digits with optional thousands commas and an optional "%" (as
+ * cards render "103,110" or "55%"). It always formats with thousands commas.
+ * Anything else ("Not chosen", "3/4", "2.5", "2026-2027") is shown as it is.
  */
 export function parseCountable(value: number | string): CountableValue | null {
   if (typeof value === "number") {
     if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) return null;
-    return { target: value, format: (n) => String(n) };
+    return { target: value, format: withCommas };
   }
   const m = /^(\d{1,3}(?:,\d{3})+|\d+)(%?)$/.exec(value.trim());
   if (!m) return null;
-  const commas = m[1].includes(",");
   const suffix = m[2];
   const target = Number(m[1].replaceAll(",", ""));
   if (!Number.isSafeInteger(target)) return null;
   return {
     target,
-    format: (n) => (commas ? n.toLocaleString("en-US") : String(n)) + suffix,
+    format: (n) => withCommas(n) + suffix,
   };
 }
 
@@ -75,5 +88,19 @@ export function createCountUpGate(now: () => number, windowMs = 1500) {
     reset(): void {
       seen.clear();
     },
+  };
+}
+
+/**
+ * Hands out start delays so cards that become ready in the same moment start
+ * `gapMs` apart, in the order they ask (page order). A card that asks after
+ * the queue has drained starts at once.
+ */
+export function createStagger(gapMs = COUNT_UP_STAGGER_MS) {
+  let nextAt = -Infinity;
+  return function delayFor(now: number): number {
+    const at = Math.max(now, nextAt);
+    nextAt = at + gapMs;
+    return at - now;
   };
 }

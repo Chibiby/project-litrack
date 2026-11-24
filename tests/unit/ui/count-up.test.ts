@@ -3,13 +3,17 @@ import {
   COUNT_UP_MS,
   countUpFrame,
   createCountUpGate,
+  createStagger,
   easeOutCubic,
+  formatStatValue,
   parseCountable,
 } from "@/lib/ui/count-up";
 
 describe("parseCountable", () => {
-  it("counts whole numbers and digit strings, keeping commas and a % suffix", () => {
-    expect(parseCountable(5695)?.format(5695)).toBe("5695");
+  it("counts whole numbers and digit strings, always with thousands commas", () => {
+    expect(parseCountable(5695)?.format(5695)).toBe("5,695");
+    expect(parseCountable("5695")?.format(5695)).toBe("5,695");
+    expect(parseCountable(999)?.format(999)).toBe("999");
     const commas = parseCountable("103,110");
     expect(commas?.target).toBe(103110);
     expect(commas?.format(1234)).toBe("1,234");
@@ -48,8 +52,8 @@ describe("countUpFrame", () => {
     expect(easeOutCubic(1)).toBe(1);
   });
 
-  it("runs long enough to follow", () => {
-    expect(COUNT_UP_MS).toBeGreaterThanOrEqual(2000);
+  it("runs 1.2 seconds", () => {
+    expect(COUNT_UP_MS).toBe(1200);
   });
 });
 
@@ -77,5 +81,27 @@ describe("createCountUpGate", () => {
     expect(gate.shouldCount("/teacher")).toBe(true);
     // A refresh loads the module again, which makes a fresh gate.
     expect(createCountUpGate(() => clock).shouldCount("/teacher")).toBe(true);
+  });
+});
+
+describe("formatStatValue", () => {
+  it("adds thousands commas to counts and leaves other values alone", () => {
+    expect(formatStatValue(103110)).toBe("103,110");
+    expect(formatStatValue("12000%")).toBe("12,000%");
+    expect(formatStatValue("2026-2027")).toBe("2026-2027");
+    expect(formatStatValue("Not chosen")).toBe("Not chosen");
+  });
+});
+
+describe("createStagger", () => {
+  it("starts cards that are ready together 100 ms apart, in order", () => {
+    const delayFor = createStagger(100);
+    expect([0, 0, 0, 0].map((t) => delayFor(t))).toEqual([0, 100, 200, 300]);
+  });
+
+  it("starts a card at once when the queue has drained", () => {
+    const delayFor = createStagger(100);
+    delayFor(0);
+    expect(delayFor(5000)).toBe(0);
   });
 });

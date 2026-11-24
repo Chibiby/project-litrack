@@ -1,53 +1,80 @@
 "use client";
 
 import { useLayoutEffect, useRef } from "react";
-import { COUNT_UP_MS, countUpFrame, createCountUpGate, parseCountable } from "@/lib/ui/count-up";
+import {
+  COUNT_UP_MS,
+  countUpFrame,
+  createCountUpGate,
+  createStagger,
+  parseCountable,
+} from "@/lib/ui/count-up";
 
 const gate = createCountUpGate(() => performance.now());
+const stagger = createStagger();
+
+/** Cards that come on screen within this window are ordered as one batch. */
+const BATCH_MS = 50;
+type Pending = { el: Element; run: () => void; timer: number };
+let batch: Pending[] = [];
+let batchTimer = 0;
+
+/**
+ * Starts the batch in reading order (top to bottom, then left to right),
+ * COUNT_UP_STAGGER_MS apart. Cards mount and come on screen in no reliable
+ * order, so the order is read from where they sit.
+ */
+function flushBatch() {
+  batchTimer = 0;
+  const now = performance.now();
+  const ready = batch
+    .map((p) => ({ p, r: p.el.getBoundingClientRect() }))
+    .sort((a, b) => Math.round(a.r.top / 8) - Math.round(b.r.top / 8) || a.r.left - b.r.left);
+  batch = [];
+  for (const { p } of ready) p.timer = window.setTimeout(p.run, stagger(now));
+}
+
+/** Queues `run` for `el` in the next staggered batch. Returns a cancel. */
+function startInOrder(el: Element, run: () => void): () => void {
+  const pending: Pending = { el, run, timer: 0 };
+  batch.push(pending);
+  if (!batchTimer) batchTimer = window.setTimeout(flushBatch, BATCH_MS);
+  return () => {
+    batch = batch.filter((p) => p !== pending);
+    window.clearTimeout(pending.timer);
+  };
+}
 
 /** Call on a fresh sign-in, so every page counts once again. */
 export function resetCountUpForSignIn(): void {
   gate.reset();
 }
 
-/** Anything still loading: the sign-in splash, skeletons, busy regions. */
-const LOADING = "[data-post-login-splash], main .animate-pulse, main [aria-busy=\"true\"]";
-/** A pop-up over the page (such as the update notice) hides the cards. */
-const COVERED = "[role=\"dialog\"], [role=\"alertdialog\"]";
-/** How long the page must stay loaded and visible before the count starts. */
-const SETTLE_MS = 450;
-/** Skeletons that never go away do not hold the count back past this. */
-const MAX_LOADING_WAIT_MS = 8000;
-
 /**
- * Runs `start` once the whole page has loaded, nothing on it is still
- * loading, no pop-up covers it, and the tab is visible, after that has held for SETTLE_MS.
- * Returns a cancel function.
+ * Runs `start` once `el` is on screen (at least half visible). Returns a
+ * cancel function.
  */
-function whenPageSettled(start: () => void): () => void {
-  const begun = performance.now();
-  let settledSince: number | null = null;
-  let timer = 0;
-  const check = () => {
-    const now = performance.now();
-    const loading = now - begun < MAX_LOADING_WAIT_MS && document.querySelector(LOADING) !== null;
-    const ready =
-      document.readyState === "complete" &&
-      document.visibilityState === "visible" &&
-      !loading &&
-      document.querySelector(COVERED) === null;
-    settledSince = ready ? (settledSince ?? now) : null;
-    if (settledSince !== null && now - settledSince >= SETTLE_MS) return start();
-    timer = window.setTimeout(check, 100);
-  };
-  check();
-  return () => window.clearTimeout(timer);
+function whenOnScreen(el: Element, start: () => void): () => void {
+  if (typeof IntersectionObserver === "undefined") {
+    start();
+    return () => undefined;
+  }
+  const io = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        io.disconnect();
+        start();
+      }
+    },
+    { threshold: 0.5 }
+  );
+  io.observe(el);
+  return () => io.disconnect();
 }
 
 /**
  * A stat figure that counts up from 0 the first time its page is opened after
- * the app loads (so a refresh counts again), once the page has finished
- * loading. React always renders the final value (server and client); when the
+ * the app loads (so a refresh counts again), as soon as the card is on screen. Cards that become ready together start
+ * COUNT_UP_STAGGER_MS apart. React always renders the final value (server and client); when the
  * page should count, a layout effect rewrites the digits before the first
  * paint and steps them on each animation frame. That is a direct DOM write,
  * not state: sixty renders a second per card would be wasted work, and the
@@ -71,8 +98,10 @@ export function CountUp({ value }: { value: number | string }) {
     const { target, format } = c;
     const end = format(target);
     let frame = 0;
+    let cancelSeen = () => undefined as void;
+    let cancelStart = () => undefined as void;
     el.textContent = format(0);
-    const cancelWait = whenPageSettled(() => {
+    const run = () => {
       const start = performance.now();
       const tick = (now: number) => {
         const n = countUpFrame(target, now - start, COUNT_UP_MS);
@@ -80,9 +109,13 @@ export function CountUp({ value }: { value: number | string }) {
         if (n !== target) frame = requestAnimationFrame(tick);
       };
       frame = requestAnimationFrame(tick);
+    };
+    cancelSeen = whenOnScreen(el, () => {
+      cancelStart = startInOrder(el, run);
     });
     return () => {
-      cancelWait();
+      cancelSeen();
+      cancelStart();
       cancelAnimationFrame(frame);
       el.textContent = end;
     };

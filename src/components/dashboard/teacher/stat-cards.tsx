@@ -3,6 +3,7 @@ import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
 import { ArrowUpRight, type LucideIcon } from "lucide-react";
 import { CountUp } from "@/components/ui/count-up";
+import { formatStatValue } from "@/lib/ui/count-up";
 
 /**
  * The shared stat card: a glass icon tile in a left column; the figure, then
@@ -222,7 +223,7 @@ export function StatCard({
               // A long value (a word such as "Not chosen", or a six-digit count)
               // would break mid-word in the slot beside the icon; it takes its
               // own full-width row.
-              String(value).length > 5 && "col-span-full",
+              formatStatValue(value).length > 5 && "col-span-full",
               denseOnPhone ? "text-xl" : "text-2xl",
               valueClassName
             )}
