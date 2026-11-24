@@ -21,6 +21,7 @@ import { loginAdmin } from "@/lib/actions/auth";
 import { resetSidebarExpandedPreference } from "@/hooks/use-sidebar-expanded";
 import { toFormData } from "@/lib/forms/to-form-data";
 import { POST_LOGIN_FLAG } from "@/lib/post-login-flag";
+import { resetCountUpForSignIn } from "@/components/ui/count-up";
 import {
   AUTH_LINK,
   AUTH_PRIMARY_BUTTON,
@@ -42,6 +43,8 @@ function markPostLoginSplash() {
   } catch {
     // sessionStorage unavailable — splash simply won't show
   }
+  // A new sign-in: every page's stat figures count up once again.
+  resetCountUpForSignIn();
 }
 
 export function AdminLoginForm({

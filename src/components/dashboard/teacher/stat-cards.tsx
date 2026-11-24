@@ -2,6 +2,7 @@ import { PrefetchLink } from "@/components/nav/prefetch-link";
 import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
 import { ArrowUpRight, type LucideIcon } from "lucide-react";
+import { CountUp } from "@/components/ui/count-up";
 
 /**
  * The shared stat card: a glass icon tile in a left column; the figure, then
@@ -226,7 +227,7 @@ export function StatCard({
               valueClassName
             )}
           >
-            {value}
+            <CountUp value={value} />
           </p>
           {/* Up to two lines, then "…" (the full text stays in the tooltip):
               one line cut most titles and hints short on a phone. A grid row
