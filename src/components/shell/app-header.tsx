@@ -219,16 +219,20 @@ export function AppHeader({
 
         {/* v2: no page title in the bar on any page. Every page names itself
             in its own banner or heading, so the bar stays the same everywhere:
-            menu toggle, search, then notifications, theme and date. */}
+            menu toggle on the left; search, notifications, theme and date on
+            the right, the search sitting just left of the bell. */}
+        <div className="hidden flex-1 md:block" />
+        {/* Every role, every width: read-only warning when no school year is open. */}
+        <SchoolYearBadge gate={schoolYearGate} isDivisionAdmin={role === "SUPER_ADMIN"} />
         {/* The teacher target is the advisory roster, so a volunteer — or a
             floating teacher, who has declared they will not advise one — has
             nothing to search. Hidden rather than pointed at the ARAL roster,
             which does not read `?q=` — a box that silently drops the query is
-            worse than no box. The flex-1 spacer after it absorbs the width.
+            worse than no box.
             Deliberately not symmetric with the nav, which keeps `Learners` as an
             inert row: a labelled row can carry the reason it is shut, an empty
             input cannot, and typing into one only to be turned away is a worse
-            answer than its absence. */}
+            answer than its absence. The spacer before it absorbs the width. */}
         {!isAralVolunteer && !isFloating && (
           <HeaderSearch
             searchHref={SEARCH_HREF[role]}
@@ -240,9 +244,6 @@ export function AppHeader({
           />
         )}
 
-        <div className="hidden flex-1 lg:block" />
-        {/* Every role, every width: read-only warning when no school year is open. */}
-        <SchoolYearBadge gate={schoolYearGate} isDivisionAdmin={role === "SUPER_ADMIN"} />
         <div className="hidden lg:contents">
           {Array.isArray(notifications) || notifications === undefined ? (
             <NotificationsMenu notifications={notifications ?? []} />

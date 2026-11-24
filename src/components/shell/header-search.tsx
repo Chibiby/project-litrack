@@ -91,7 +91,7 @@ function matchPages(pages: HeaderSearchPage[], trimmed: string): Row[] {
 const SHORTCUT_HINT_DELAY_MS = 600;
 const SHORTCUT_HINT_MS = 3500;
 const KEYCAP =
-  "inline-flex h-5 min-w-5 items-center justify-center rounded border border-slate-300 border-b-2 bg-white/80 px-1 font-sans text-[11px] font-medium leading-none text-slate-600 dark:border-white/20 dark:bg-white/10 dark:text-slate-300";
+  "inline-flex h-5 min-w-5 items-center justify-center rounded border border-b-2 border-border bg-card/90 px-1 font-sans text-[11px] font-medium leading-none text-muted-foreground dark:bg-glass/10";
 const noSubscribe = () => () => undefined;
 const clientShortcut = () => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl");
 
