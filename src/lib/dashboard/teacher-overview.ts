@@ -407,7 +407,13 @@ function dueWording(days: number): string {
  */
 export function buildDashboardTasks(
   data: TeacherOverview,
-  hrefs: { reading: string; attendance: string; reports: string }
+  hrefs: {
+    reading: string;
+    attendance: string;
+    reports: string;
+    /** Set for a Non-DepEd ARAL Volunteer: the ARAL-only list, profiling in place of End of Terms. */
+    profiling?: string;
+  }
 ): DashboardTask[] {
   const tasks: DashboardTask[] = [];
 
@@ -443,6 +449,28 @@ export function buildDashboardTasks(
           : null,
     tone: data.attendance.noClass > 0 ? "primary" : "muted",
   });
+
+  // A Non-DepEd ARAL Volunteer has no advisory, so no End of Terms Reports:
+  // their third task is the ARAL profiles still to fill in.
+  if (hrefs.profiling !== undefined) {
+    tasks.push({
+      id: "profiling",
+      label: "Complete ARAL Profiles",
+      detail:
+        data.aralLearners > 0
+          ? "One profile per ARAL learner"
+          : "Available once you have ARAL learners",
+      href: hrefs.profiling,
+      badge:
+        data.pendingAralProfiles > 0
+          ? `${data.pendingAralProfiles} pending`
+          : data.aralLearners > 0
+            ? "Complete"
+            : null,
+      tone: data.pendingAralProfiles > 0 ? "amber" : "muted",
+    });
+    return tasks;
+  }
 
   tasks.push({
     id: "reports",

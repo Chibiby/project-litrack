@@ -100,11 +100,11 @@ export interface NavGrade {
 /** Capabilities that change how items render rather than whether they exist. */
 export interface NavOptions {
   /**
-   * A Non-DepEd ARAL Volunteer holds the TEACHER role but advises no section, so
-   * the advisory roster has nothing to show them. Renders `Learners` inert with a
-   * "DepEd only" pill — present, so the menu does not quietly lose a row, but
-   * carrying its own reason. The page refuses on the same condition; the two must
-   * agree, or the sidebar either advertises a dead end or hides a live one.
+   * A Non-DepEd ARAL Volunteer holds the TEACHER role but advises no section and
+   * only tutors ARAL learners. Their menu is Dashboard and ARAL Program only: the
+   * Advisory group (Learners, End of Terms Reports, BOSY, MOSY) and Analytics are
+   * dropped. Those advisory pages refuse them on the same condition
+   * (`advisoryRosterDenial`); the two must agree.
    */
   isAralVolunteer?: boolean;
   /**
@@ -333,18 +333,13 @@ export function getNavGroups(
         },
       ];
     case "TEACHER": {
-      // Volunteers keep the ARAL group below — that *is* their roster. Learners
-      // stays in the list too, inert: they should be able to see that the
-      // advisory roster exists and that being non-DepEd is what closes it, rather
-      // than find one fewer row than the teacher beside them. A floating DepEd
-      // teacher gets the same inert treatment, worded for their own reason — the
-      // volunteer pill wins if both are set, since a volunteer is not a DepEd
-      // teacher at all.
-      const classLock = options.isAralVolunteer
-        ? { pill: "DepEd only", reason: "for DepEd teachers who advise a section" }
-        : options.isFloating
-          ? { pill: "Floating teacher", reason: "for teachers who advise a section" }
-          : null;
+      // A floating DepEd teacher keeps the Advisory rows, inert, worded for
+      // their reason: they are a DepEd teacher who could advise a section. A
+      // Non-DepEd ARAL Volunteer never will, so their menu is ARAL only (the
+      // Advisory and Analytics groups are dropped below).
+      const classLock = options.isFloating
+        ? { pill: "Floating teacher", reason: "for teachers who advise a section" }
+        : null;
       const learners: NavItem = {
         id: "teacher-learners",
         label: "Learners",
@@ -352,7 +347,7 @@ export function getNavGroups(
         icon: BookOpen,
         ...(classLock ? { unavailable: classLock } : {}),
       };
-      return [
+      const groups: NavGroup[] = [
         {
           items: [{ id: "teacher-dashboard", label: "Dashboard", href: "/teacher", icon: LayoutDashboard }],
         },
@@ -427,6 +422,13 @@ export function getNavGroups(
           items: [{ id: "teacher-reports", label: "Reports", href: "/teacher/reports", icon: FileBarChart }],
         },
       ];
+      // A Non-DepEd ARAL Volunteer tutors ARAL learners and nothing else: no
+      // advisory, no BOSY/MOSY, no advisory reports. Their menu is Dashboard and
+      // ARAL Program. The advisory pages refuse them on the same condition
+      // (`advisoryRosterDenial`); Reports, reachable by URL, keeps its own locks.
+      return options.isAralVolunteer
+        ? groups.filter((g) => g.label !== "Advisory" && g.label !== "Analytics")
+        : groups;
     }
     case "DISTRICT_ADMIN":
       return [

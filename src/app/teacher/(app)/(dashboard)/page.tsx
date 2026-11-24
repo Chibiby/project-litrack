@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { teacherBannerSrc } from "@/lib/dashboard/banner";
+import { isAralVolunteerDesignation } from "@/lib/teachers/scope";
 import { getSchoolName } from "@/lib/cache/school";
 import { AppShell } from "@/components/app-shell";
 import { TeacherDashboardBody } from "@/components/dashboard/teacher/dashboard-body";
@@ -40,15 +41,21 @@ export default async function TeacherDashboard({
   // Started here, never awaited here: the body awaits it beside its own
   // overview read under Suspense, so the shell flushes first and neither read
   // waits for the other.
-  const bannerSrc: Promise<string> = (
+  // One profile read serves both the banner and the volunteer check.
+  const profile = (
     isSuperAdmin
       ? Promise.resolve(null)
-      : prisma.teacherProfile
-          .findUnique({ where: { userId: user.id }, select: { gender: true } })
-          .then((p) => p?.gender ?? null)
-  )
-    .catch(() => null)
-    .then(teacherBannerSrc);
+      : prisma.teacherProfile.findUnique({
+          where: { userId: user.id },
+          select: { gender: true, designation: true },
+        })
+  ).catch(() => null);
+  const bannerSrc: Promise<string> = profile.then((p) => teacherBannerSrc(p?.gender ?? null));
+  // A Non-DepEd ARAL Volunteer gets the ARAL-only dashboard. A failed read
+  // falls back to the ordinary one, like the banner does.
+  const isAralVolunteer: Promise<boolean> = profile.then((p) =>
+    isAralVolunteerDesignation(p?.designation)
+  );
 
   return (
     <AppShell
@@ -67,6 +74,7 @@ export default async function TeacherDashboard({
         <Suspense fallback={<TeacherDashboardSkeleton />}>
           <TeacherDashboardBody
             bannerSrc={bannerSrc}
+            isAralVolunteer={isAralVolunteer}
             schoolId={targetSchoolId}
             teacherId={user.id}
             isSuperAdmin={isSuperAdmin}

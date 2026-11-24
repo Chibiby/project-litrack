@@ -157,3 +157,33 @@ describe("schoolToday", () => {
     );
   });
 });
+
+describe("buildDashboardTasks — Non-DepEd ARAL Volunteer", () => {
+  const PROFILING = "/teacher/aral/profiling?status=pending";
+
+  it("lists ARAL work only: reading, attendance, then profiles — no End of Terms Reports", () => {
+    const tasks = buildDashboardTasks(overview(), { ...HREFS, profiling: PROFILING });
+    expect(tasks.map((t) => t.id)).toEqual(["reading", "attendance", "profiling"]);
+    expect(tasks.some((t) => t.href === "/teacher/reports")).toBe(false);
+    const profiling = tasks[2];
+    expect(profiling.href).toBe(PROFILING);
+    expect(profiling.badge).toBe("1 pending");
+    expect(profiling.tone).toBe("amber");
+  });
+
+  it("reports profiles complete when none are pending, and no badge with no ARAL learners", () => {
+    const done = buildDashboardTasks(overview({ pendingAralProfiles: 0 }), { ...HREFS, profiling: PROFILING });
+    expect(done[2].badge).toBe("Complete");
+    expect(done[2].tone).toBe("muted");
+    const none = buildDashboardTasks(overview({ pendingAralProfiles: 0, aralLearners: 0 }), {
+      ...HREFS,
+      profiling: PROFILING,
+    });
+    expect(none[2].badge).toBeNull();
+    expect(none[2].detail).toBe("Available once you have ARAL learners");
+  });
+
+  it("keeps the ordinary teacher list unchanged without a profiling href", () => {
+    expect(buildDashboardTasks(overview(), HREFS).map((t) => t.id)).toEqual(["reading", "attendance", "reports"]);
+  });
+});

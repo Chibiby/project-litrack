@@ -161,177 +161,36 @@ describe("getNavGroups — teacher", () => {
 describe("getNavGroups — ARAL volunteer", () => {
   const volunteer = () => getNavGroups("TEACHER", oneAral, { isAralVolunteer: true });
 
-  it("keeps Learners in the Menu group, in the same slot as for a DepEd teacher", () => {
-    // A Non-DepEd ARAL Volunteer advises no section, so /teacher/learners turns
-    // them away — but the row stays, inert, so the menu does not quietly lose a
-    // line and leave them wondering where Learners went. Order matters as much as
-    // presence: the row must sit where it always sat, otherwise a volunteer and a
-    // DepEd teacher looking at the same screen see two different menus.
-    const [, menu] = volunteer();
-    expect(menu.label).toBe("Advisory");
-    expect(menu.items.map((i) => i.label)).toEqual([
-      "Learners",
-      "End of Terms Reports",
-      "BOSY Report",
-      "MOSY Report",
-    ]);
-    const [, ordinaryMenu] = getNavGroups("TEACHER", oneAral);
-    expect(menu.items.map((i) => i.id)).toEqual(ordinaryMenu.items.map((i) => i.id));
-  });
-
-  it("marks the volunteer's gated rows unavailable, not soon", () => {
-    // The two inert flags mean different things and must not be conflated:
-    // `soon` promises a later date, `unavailable` names a reason. Swapping them
-    // would put a "Soon" pill on a page that already exists and will never open
-    // to this account. Both filters feed navigable(), so a test that only checked
-    // "is it inert" would pass with the wrong flag set.
-    //
-    // Two rows to check now rather than one: the term sheet is advisory-gated on
-    // exactly the same condition as the roster, so it shut for a volunteer on the
-    // same terms when it shipped. The `soon` list is empty because the page is
-    // built — a volunteer must not be told to wait for something that exists.
-    const items = flattenNavGroups(volunteer());
-    expect(items.filter((i) => i.soon).map((i) => i.id)).toEqual([]);
-    expect(items.filter((i) => i.unavailable).map((i) => i.id)).toEqual([
-      "teacher-learners",
-      "teacher-terms-reports",
-      "teacher-aral-bosy",
-      "teacher-aral-mosy",
-    ]);
-  });
-
-  it("shuts the term report with the same pill and reason as the roster", () => {
-    // One wording for one gate. The two rows are closed by the same predicate
-    // (`deniesAdvisoryRoster`), so two different explanations of the same refusal
-    // would read as two different problems — and the deep page and the resolver
-    // page both quote this exact sentence back.
-    const items = flattenNavGroups(volunteer());
-    const learners = items.find((i) => i.id === "teacher-learners");
-    const terms = items.find((i) => i.id === "teacher-terms-reports");
-
-    expect(terms?.unavailable).toEqual({
-      pill: "DepEd only",
-      reason: "for DepEd teachers who advise a section",
-    });
-    expect(terms?.unavailable).toEqual(learners?.unavailable);
-    // The href stays: it is what the reason refers to, and the sidebar's inert
-    // row still needs the item's identity to render its label and icon.
-    expect(terms?.href).toBe("/teacher/terms-reports");
-  });
-
-  it("gives Learners a DepEd-only pill and a reason, keeping its href", () => {
-    const learners = flattenNavGroups(volunteer()).find(
-      (i) => i.id === "teacher-learners"
-    );
-    // The href stays because the reason refers to it — the row still names a real
-    // route, it is just shut. Dropping the href would make the row meaningless
-    // and break the sidebar's icon/label lookup.
-    expect(learners?.href).toBe("/teacher/learners");
-    expect(learners?.unavailable?.pill).toBe("DepEd only");
-    // Renderers compose "{label} — {reason}" for the tooltip and the sr-only
-    // text, so an empty reason would ship a dangling em dash to a screen reader.
-    expect(learners?.unavailable?.reason).toBe(
-      "for DepEd teachers who advise a section"
-    );
-    expect((learners?.unavailable?.reason ?? "").trim().length).toBeGreaterThan(0);
-  });
-
-  it("keeps the ARAL group — that is the volunteer's actual roster", () => {
+  it("is Dashboard and ARAL Program only — no Advisory, no Analytics", () => {
+    // A Non-DepEd ARAL Volunteer tutors ARAL learners and nothing else, so the
+    // advisory rows (roster, End of Terms, BOSY, MOSY) and advisory Reports are
+    // not in their menu at all.
     const groups = volunteer();
-    expect(groups.map((g) => g.label)).toEqual([undefined, "Advisory", "ARAL Program", "Analytics"]);
-    expect(groups[2].items.map((i) => i.label)).toEqual([
+    expect(groups.map((g) => g.label)).toEqual([undefined, "ARAL Program"]);
+    expect(groups[1].items.map((i) => i.label)).toEqual([
       "Weekly Attendance",
       "Monthly Reading Level",
       "ARAL Profiling",
     ]);
-    expect(groups[2].items[0].href).toBe("/teacher/aral/g1/attendance");
-    expect(groups[3].items.map((i) => i.label)).toEqual(["Reports"]);
+    expect(groups[1].items[0].href).toBe("/teacher/aral/g1/attendance");
   });
 
-  it("leaves no navigable item pointing at the gated roster", () => {
-    // The row exists now, so the old "nothing points at /teacher/learners" rule
-    // is gone. What replaced it is narrower and is the property that actually
-    // protects the UI: the only item aimed at the gated roster is marked
-    // unavailable, so navigable() drops it and no resolver can hand it a
-    // highlight, a header title or an active href.
+  it("has no row aimed at an advisory page and no inert rows", () => {
     const items = flattenNavGroups(volunteer());
-    const aimedAtRoster = items.filter((i) => i.href.startsWith("/teacher/learners"));
-    expect(aimedAtRoster.map((i) => i.id)).toEqual(["teacher-learners"]);
-    expect(aimedAtRoster.every((i) => i.unavailable)).toBe(true);
-  });
-
-  it("keeps item ids unique with the inert row in the list", () => {
-    // The volunteer branch spreads a conditional key onto the shared item rather
-    // than appending a second one; a duplicate id would collide React keys in the
-    // sidebar and make resolveActiveItemId non-deterministic.
-    const ids = flattenNavGroups(volunteer()).map((i) => i.id);
+    const ids = items.map((i) => i.id);
+    for (const gone of ["teacher-learners", "teacher-terms-reports", "teacher-aral-bosy", "teacher-aral-mosy", "teacher-reports"]) {
+      expect(ids).not.toContain(gone);
+    }
+    expect(items.filter((i) => i.unavailable || i.soon)).toEqual([]);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("does not let either inert row take the highlight", () => {
-    // Dashboard wins by role-root prefix instead. If an inert row could win,
-    // the sidebar would light up a div that cannot be clicked or focused.
+  it("lights the ARAL rows on their own pages", () => {
     const items = flattenNavGroups(volunteer());
-    expect(resolveActiveItemId("/teacher/learners", items)).not.toBe("teacher-learners");
-    expect(resolveActiveItemId("/teacher/learners", items)).toBe("teacher-dashboard");
-    // Nested roster routes must behave the same, not just the index.
-    expect(resolveActiveItemId("/teacher/learners/abc", items)).not.toBe(
-      "teacher-learners"
-    );
-    // Same for the term sheet: a volunteer can still reach the resolver route by
-    // URL (it refuses in place with the same sentence), and while they are there
-    // the sidebar must not highlight the row that named it.
-    expect(resolveActiveItemId("/teacher/terms-reports", items)).not.toBe(
-      "teacher-terms-reports"
-    );
-    expect(resolveActiveItemId("/teacher/terms-reports", items)).toBe(
-      "teacher-dashboard"
-    );
-    // And it must not supply the header title either — the humanised segment does,
-    // exactly as it does for the gated roster.
-    expect(resolvePageTitle("/teacher/terms-reports", volunteer())).toBe(
-      "Terms reports"
-    );
-  });
-
-  it("still titles the roster page sanely for a volunteer", () => {
-    // No navigable item owns /teacher/learners for a volunteer, so the title
-    // falls through to the humanised last segment — which lands on "Learners"
-    // anyway. That is the acceptable outcome: the header names the page they are
-    // on (the page itself explains the refusal in its EmptyState) instead of
-    // going blank or misreporting "Dashboard" from the role-root match.
-    //
-    // The nested case is the load-bearing one. On the index both a filtered and
-    // an unfiltered resolver return "Learners" — one from the segment, one from
-    // the item label — so only /teacher/learners/abc tells them apart: skipping
-    // the inert row gives "Abc", counting it would give "Learners".
-    const groups = volunteer();
-    expect(resolvePageTitle("/teacher/learners", groups)).toBe("Learners");
-    expect(resolvePageTitle("/teacher/learners/abc", groups)).toBe("Abc");
-    // The volunteer's own surfaces are unaffected by the skip.
-    expect(resolvePageTitle("/teacher", groups)).toBe("Dashboard");
-  });
-
-  it("still highlights Dashboard if a volunteer reaches the roster by URL", () => {
-    // They can still be linked there (the dashboard cards do it), so the gate
-    // page must not leave the sidebar with nothing lit — the teacher role root
-    // prefix-matches and Dashboard stays active.
-    const items = flattenNavGroups(volunteer());
-    expect(resolveActiveHref("/teacher/learners", items)).toBe("/teacher");
+    expect(resolveActiveItemId("/teacher", items)).toBe("teacher-dashboard");
+    expect(resolveActiveItemId("/teacher/aral/profiling", items)).toBe("teacher-aral-profiling");
   });
 });
-
-/**
- * Regression cases for the term report's href.
- *
- * It shipped briefly as `aralHref(grades, "terms-reports")`, which is wrong on
- * two counts. `aralHref` falls back to the LIVE `/teacher/aral` picker whenever
- * the teacher does not hold exactly one ARAL grade, and this row precedes both
- * ARAL rows in the flattened list — href ties break by list order, so it stole
- * both the highlight and the header title from the ARAL picker. And `hasAral` is
- * the wrong axis entirely: the sheet is advisory-gated, so a DepEd adviser with
- * zero ARAL learners is entitled to it and would have been sent somewhere else.
- */
 describe("getNavGroups — the term report's href", () => {
   /** Every grade payload the sidebar can hand in, including the fallback ones. */
   const payloads: [string, NavGrade[] | undefined][] = [
@@ -472,18 +331,6 @@ describe("getNavGroups — the term report's v2 URL", () => {
     expect(resolveActiveItemId("/teacher/reports", items)).toBe("teacher-reports");
   });
 
-  it("keeps a volunteer's row inert on the same URL", () => {
-    const items = flattenNavGroups(
-      getNavGroups("TEACHER", oneAral, { isAralVolunteer: true, advisoryPlacements: one })
-    );
-    const terms = items.find((i) => i.id === "teacher-terms-reports");
-    expect(terms?.href).toBe(V2);
-    expect(terms?.unavailable).toEqual({
-      pill: "DepEd only",
-      reason: "for DepEd teachers who advise a section",
-    });
-    expect(resolveActiveItemId(V2, items)).not.toBe("teacher-terms-reports");
-  });
 });
 
 describe("getNavGroups — floating teacher", () => {
@@ -501,9 +348,9 @@ describe("getNavGroups — floating teacher", () => {
     const items = flattenNavGroups(floating());
     expect(items.filter((i) => i.id.startsWith("teacher-aral-") && i.id !== "teacher-aral-mosy" && i.id !== "teacher-aral-bosy").every((i) => !i.unavailable)).toBe(true);
   });
-  it("lets the volunteer pill win when both are set", () => {
+  it("drops the advisory rows outright when the teacher is also a volunteer", () => {
     const items = flattenNavGroups(getNavGroups("TEACHER", oneAral, { isFloating: true, isAralVolunteer: true }));
-    expect(items.find((i) => i.id === "teacher-learners")?.unavailable?.pill).toBe("DepEd only");
+    expect(items.find((i) => i.id === "teacher-learners")).toBeUndefined();
   });
 });
 

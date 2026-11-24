@@ -11,6 +11,7 @@ import { DASHBOARD_QUOTES, pickQuote } from "@/lib/dashboard/quotes";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
+  BookOpen,
   GraduationCap,
   Star,
   UserRound,
@@ -19,7 +20,7 @@ import {
 import { GreetingHero } from "./greeting-hero";
 import { StatCard, StatCardRow } from "./stat-cards";
 import { AttendanceOverviewPanel, ReadingOverviewPanel } from "./overview-panels";
-import { UpcomingTasksPanel, QuickActionsPanel } from "./tasks-panel";
+import { UpcomingTasksPanel, QuickActionsPanel, aralQuickActions } from "./tasks-panel";
 import { CalendarCard } from "./calendar-card";
 import {
   aralAttendanceHref,
@@ -42,6 +43,15 @@ import {
  * SPEC          docs/superpowers/specs/2026-09-15-litrack-v2-teacher-dashboard-design.md
  */
 
+/** A Non-DepEd ARAL Volunteer with no ARAL learners assigned yet. */
+const VOLUNTEER_EMPTY_CARD = {
+  title: "No ARAL learners assigned to you yet",
+  description:
+    "Your School Head assigns the ARAL learners you tutor. Once they do, your weekly attendance, reading levels and profiles show here.",
+  actionHref: "/teacher/aral",
+  actionLabel: "Open ARAL Program",
+} as const;
+
 /** Adding a learner happens from the roster's add menu; there is no deep link to the dialog. */
 const ADD_LEARNER_HREF = "/teacher/learners";
 
@@ -56,12 +66,19 @@ export async function TeacherDashboardBody({
   firstName,
   subtitle,
   bannerSrc,
+  isAralVolunteer: isAralVolunteerInput = false,
 }: {
   schoolId: string;
   teacherId: string;
   isSuperAdmin: boolean;
   firstName: string;
   subtitle?: string;
+  /**
+   * A Non-DepEd ARAL Volunteer: no advisory, no BOSY/MOSY, no advisory
+   * reports. The cards, tasks and quick actions are ARAL work only. A promise,
+   * like `bannerSrc`, read from the same profile lookup; it must not reject.
+   */
+  isAralVolunteer?: boolean | Promise<boolean>;
   /**
    * Hero art, chosen from the teacher's profile gender by the page. A promise
    * lets the page start that lookup without holding back the overview below.
@@ -79,6 +96,8 @@ export async function TeacherDashboardBody({
     console.error("[TeacherDashboardBody] failed to load:", err);
   }
   const resolvedBannerSrc = await bannerPromise;
+  // A Super Admin's look is the whole school, never a volunteer's ARAL slice.
+  const isAralVolunteer = !isSuperAdmin && (await isAralVolunteerInput);
 
   if (!data) {
     return (
@@ -97,11 +116,15 @@ export async function TeacherDashboardBody({
   const attendanceHref = aralAttendanceHref(data.primaryAralGradeId);
   const readingHref = aralReadingHref(data.primaryAralGradeId);
   const reportsHref = "/teacher/reports";
+  const rosterHref = aralRosterHref(data.primaryAralGradeId);
+  const heroSubtitle =
+    subtitle ?? (isAralVolunteer ? "Here's what's happening with your ARAL learners today." : undefined);
 
   const tasks = buildDashboardTasks(data, {
     reading: readingHref,
     attendance: attendanceHref,
     reports: reportsHref,
+    ...(isAralVolunteer ? { profiling: aralProfilingHref() } : {}),
   });
 
   const chartData = data.gradeDistribution.map((g) => ({
@@ -119,27 +142,30 @@ export async function TeacherDashboardBody({
   // dropping it would make a teacher who has just signed in wonder whether they
   // signed in as themselves.
   if (!isSuperAdmin && data.gradeCount === 0) {
+    // A volunteer with no ARAL learners yet is waiting on their School Head,
+    // not choosing to float; the floating-teacher wording would be wrong.
+    const empty = isAralVolunteer ? VOLUNTEER_EMPTY_CARD : FLOATING_TEACHER_CARD;
     return (
       <>
         <GreetingHero
           firstName={firstName}
           todayKey={data.todayKey}
-          subtitle={subtitle}
+          subtitle={heroSubtitle}
           bannerSrc={resolvedBannerSrc}
           quote={pickQuote()}
         />
         <Surface as="section" className="mt-4 rounded-lg px-5 py-10 text-center">
           <h1 className="text-base font-semibold text-foreground">
-            {FLOATING_TEACHER_CARD.title}
+            {empty.title}
           </h1>
           <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
-            {FLOATING_TEACHER_CARD.description}
+            {empty.description}
           </p>
           <Link
-            href={FLOATING_TEACHER_CARD.actionHref}
+            href={empty.actionHref}
             className="mt-4 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
           >
-            {FLOATING_TEACHER_CARD.actionLabel}
+            {empty.actionLabel}
           </Link>
         </Surface>
       </>
@@ -156,7 +182,7 @@ export async function TeacherDashboardBody({
       <GreetingHero
         firstName={firstName}
         todayKey={data.todayKey}
-        subtitle={subtitle}
+        subtitle={heroSubtitle}
         bannerSrc={resolvedBannerSrc}
         quote={quote}
       />
@@ -165,6 +191,42 @@ export async function TeacherDashboardBody({
           into its lower edge instead of leaving an empty band under it. */}
       <div className="relative z-10 grid gap-4 lg:-mt-16 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-4">
+          {isAralVolunteer ? (
+            <StatCardRow>
+              <StatCard
+                title="Grades You Tutor"
+                value={data.gradeCount}
+                hint={data.gradeCount === 1 ? "ARAL grade" : "ARAL grades"}
+                icon={GraduationCap}
+                tone="violet"
+                action={{ label: "View ARAL learners", href: rosterHref }}
+              />
+              <StatCard
+                title="ARAL Learners"
+                value={data.aralLearners}
+                hint="Learners you tutor"
+                icon={Star}
+                tone="emerald"
+                action={{ label: "View ARAL learners", href: rosterHref }}
+              />
+              <StatCard
+                title="Pending Profiles"
+                value={data.pendingAralProfiles}
+                hint="Without ARAL profile"
+                icon={UserRound}
+                tone="primary"
+                action={{ label: "Complete profiles", href: aralProfilingHref() }}
+              />
+              <StatCard
+                title="Reading Levels Due"
+                value={data.reading.pending}
+                hint="Not yet recorded this month"
+                icon={BookOpen}
+                tone="amber"
+                action={{ label: "Record reading levels", href: readingHref }}
+              />
+            </StatCardRow>
+          ) : (
           <StatCardRow>
             <StatCard
               title="Your Grades"
@@ -202,6 +264,7 @@ export async function TeacherDashboardBody({
               action={{ label: "Complete profiles", href: aralProfilingHref() }}
             />
           </StatCardRow>
+          )}
 
           {/* flex-1: the panels absorb any height the rail has over this column,
               so the chart row starts right under both. */}
@@ -217,7 +280,7 @@ export async function TeacherDashboardBody({
           <div className="hidden xl:block">
             <CalendarCard todayKey={data.todayKey} quote={calendarQuote} />
           </div>
-          <UpcomingTasksPanel tasks={tasks} viewAllHref={reportsHref} />
+          <UpcomingTasksPanel tasks={tasks} viewAllHref={isAralVolunteer ? rosterHref : reportsHref} />
         </aside>
       </div>
 
@@ -235,6 +298,16 @@ export async function TeacherDashboardBody({
             attendanceHref={attendanceHref}
             addLearnerHref={ADD_LEARNER_HREF}
             reportsHref={reportsHref}
+            {...(isAralVolunteer
+              ? {
+                  actions: aralQuickActions({
+                    attendance: attendanceHref,
+                    reading: readingHref,
+                    profiling: aralProfilingHref(),
+                    roster: rosterHref,
+                  }),
+                }
+              : {})}
           />
         </div>
       </div>

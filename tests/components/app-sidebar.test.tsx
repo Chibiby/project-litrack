@@ -189,123 +189,37 @@ describe("AppSidebar — teacher", () => {
     expect(screen.getAllByText("ARAL Program").length).toBeGreaterThan(0);
   });
 
-  it("renders Learners inert with a DepEd-only pill for an ARAL volunteer", () => {
-    // The volunteer advises no section, so /teacher/learners turns them away — but
-    // the row STAYS, inert, instead of disappearing: a menu that quietly loses a
-    // line invites "where did Learners go", an inert row answers it in place.
-    // Asserted here as well as on getNavGroups, because the failure this catches
-    // is the prop silently stopping at the shell instead of reaching the config.
+  it("shows an ARAL volunteer only Dashboard and the ARAL Program", () => {
+    // A Non-DepEd ARAL Volunteer tutors ARAL learners and nothing else, so the
+    // advisory rows and Reports are not in their menu at all. Asserted at the
+    // component as well as on getNavGroups, because the failure this catches is
+    // the prop stopping at the shell instead of reaching the config.
     renderTeacherSidebar({ roleLabel: "ARAL Volunteer", isAralVolunteer: true });
 
-    // Both halves of this pair matter. On its own the "no link" assertion below
-    // also passes when the row vanishes entirely, which is the behaviour we were
-    // asked to stop — so the presence of the text is what pins the new treatment.
-    expect(screen.getAllByText("Learners").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("DepEd only").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("link", { name: "Learners" })).toBeNull();
-    // Belt and braces on the accessible-name query: no anchor in the sidebar may
-    // point at the gated roster, whatever its computed name turns out to be.
-    expect(
-      screen.getAllByRole("link").map((el) => el.getAttribute("href"))
-    ).not.toContain("/teacher/learners");
+    for (const gone of ["Learners", "End of Terms Reports", "BOSY Report", "MOSY Report", "Reports", "DepEd only"]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
+    const hrefs = screen.getAllByRole("link").map((el) => el.getAttribute("href"));
+    for (const gone of ["/teacher/learners", "/teacher/terms-reports", "/teacher/aral/bosy", "/teacher/aral/mosy", "/teacher/reports"]) {
+      expect(hrefs).not.toContain(gone);
+    }
+    expect(screen.queryAllByText("Advisory")).toHaveLength(0);
+    expect(screen.queryAllByText("Analytics")).toHaveLength(0);
 
-    // aria-disabled is what tells assistive tech the row is inert; a plain div
-    // with no href is what keeps a keyboard from landing on a dead end.
-    // The group heading also reads "Learners" (v2), so find the row, not the heading.
-    const row = screen
-      .getAllByText("Learners")
-      .map((el) => el.closest("[aria-disabled]"))
-      .find(Boolean);
-    expect(row).not.toBeNull();
-    expect(row?.getAttribute("aria-disabled")).toBe("true");
-    expect(row?.tagName).toBe("DIV");
-    expect(row?.hasAttribute("href")).toBe(false);
-    expect(row?.hasAttribute("tabindex")).toBe(false);
-
-    // The pill fits two words, so the reason rides sr-only text — and since an
-    // inert row has no tab stop, no tooltip a keyboard can reach, this line is the
-    // only place a screen-reader user learns WHY the row is shut.
-    const reason = screen.getAllByText(
-      "Learners — for DepEd teachers who advise a section"
-    );
-    expect(reason.length).toBeGreaterThan(0);
-    // Same reasoning as the casing assertion below: jsdom does not apply Tailwind,
-    // so the class is the only observable proof the reason is for assistive tech
-    // only. Drop `sr-only` and every inert row grows a visible second line of copy
-    // duplicating its own label.
-    expect(reason[0].className).toContain("sr-only");
-
-    // The row has to stay WHERE IT WAS — second in Menu, between Dashboard and the
-    // term report. Presence alone would still pass if it were appended to the
-    // bottom of the nav, and the point of keeping it is that a volunteer sees the
-    // same shaped menu as the DepEd teacher beside them.
-    const navText =
-      screen.getAllByRole("navigation", { name: "Primary" })[0].textContent ?? "";
-    // The group heading now also reads "Learners" (v2), so find the row after Dashboard.
-    const rowAt = navText.indexOf("Learners", navText.indexOf("Dashboard"));
-    expect(navText.indexOf("Dashboard")).toBeLessThan(rowAt);
-    expect(rowAt).toBeLessThan(navText.indexOf("End of Terms Reports"));
-
-    // jsdom does not compute text-transform, so the class is the only observable
-    // proof that an unavailability pill is NOT upper-cased. It names a thing, and
-    // "DEPED ONLY" would mangle the proper noun; the uppercase treatment belongs
-    // to the `soon` status word, which no teacher row carries any more.
-    expect(screen.getAllByText("DepEd only")[0].className).not.toContain("uppercase");
-
-    // Everything that is not advisory-scoped stays a real, clickable link.
-    expect(
-      screen.getAllByRole("link", { name: "Weekly Attendance" })[0].getAttribute("href")
-    ).toBe("/teacher/aral/g1/attendance");
-    expect(
-      screen
-        .getAllByRole("link", { name: "Monthly Reading Level" })[0]
-        .getAttribute("href")
-    ).toBe("/teacher/aral/g1/reading-level");
     expect(
       screen.getAllByRole("link", { name: "Dashboard" })[0].getAttribute("href")
     ).toBe("/teacher");
     expect(
-      screen.getAllByRole("link", { name: "Reports" })[0].getAttribute("href")
-    ).toBe("/teacher/reports");
+      screen.getAllByRole("link", { name: "Weekly Attendance" })[0].getAttribute("href")
+    ).toBe("/teacher/aral/g1/attendance");
+    expect(
+      screen.getAllByRole("link", { name: "Monthly Reading Level" })[0].getAttribute("href")
+    ).toBe("/teacher/aral/g1/reading-level");
+    expect(
+      screen.getAllByRole("link", { name: "ARAL Profiling" })[0].getAttribute("href")
+    ).toBe("/teacher/aral/profiling");
   });
 
-  it("keeps the volunteer's reason reachable on the collapsed rail", () => {
-    // Collapsed there is no room for the pill, so the state rides a muted dot —
-    // and that dot is aria-hidden. If the sr-only reason did not survive collapse,
-    // a volunteer on a narrow desktop would get an unexplained greyed-out icon.
-    renderTeacherSidebar({
-      roleLabel: "ARAL Volunteer",
-      isAralVolunteer: true,
-      expanded: false,
-    });
-    expect(
-      screen.getAllByText("Learners — for DepEd teachers who advise a section").length
-    ).toBeGreaterThan(0);
-    const row = screen
-      .getAllByText("Learners — for DepEd teachers who advise a section")[0]
-      .closest("[aria-disabled]");
-    expect(row).not.toBeNull();
-    // The expanded row is returned bare, but the collapsed one is wrapped in a
-    // Tooltip with `asChild`, so the trigger's props land on this div. That path
-    // must not acquire a tab stop: Radix stamps only data-state on it today, and
-    // a focusable row with nothing to activate is the dead end the no-href
-    // treatment exists to avoid. Asserted here because the expanded test cannot
-    // catch it — that branch never goes through TooltipTrigger.
-    expect(row?.tagName).toBe("DIV");
-    expect(row?.hasAttribute("tabindex")).toBe(false);
-    expect(row?.hasAttribute("href")).toBe(false);
-    // The dot is decoration only. If it ever stopped being aria-hidden it would
-    // announce as a stray bullet next to the reason, so pin it rather than
-    // leaving it to the comment.
-    expect(row?.querySelector("span[aria-hidden='true']")).not.toBeNull();
-    // The pill is expanded-only. (The mobile Sheet, which always renders expanded,
-    // is closed here, so nothing else can supply the text.)
-    expect(screen.queryByText("DepEd only")).toBeNull();
-    expect(screen.queryByRole("link", { name: "Learners" })).toBeNull();
-    expect(
-      screen.getAllByRole("link").map((el) => el.getAttribute("href"))
-    ).not.toContain("/teacher/learners");
-  });
 
   it("renders End of Terms Reports as a live link for an ordinary teacher", () => {
     // It shipped. This case used to assert the opposite — an inert "Soon" row —
@@ -399,64 +313,7 @@ describe("AppSidebar — teacher", () => {
     ).toBeNull();
   });
 
-  it("keeps End of Terms Reports inert for a volunteer even with an advised grade", () => {
-    // A volunteer should never be handed an advisory grade, but if the shell ever
-    // did, `unavailable` has to keep winning over the deep href — an inert div
-    // with no tab stop, not a link the page would only refuse.
-    pathname.value = "/teacher/aral/g1/terms-reports";
-    renderTeacherSidebar({
-      roleLabel: "ARAL Volunteer",
-      isAralVolunteer: true,
-      advisoryPlacements: [{ sectionId: "s1", gradeLevelId: "g1" }],
-    });
-    expect(screen.queryByRole("link", { name: "End of Terms Reports" })).toBeNull();
-    expect(
-      screen.getAllByRole("link").map((el) => el.getAttribute("href"))
-    ).not.toContain("/teacher/aral/g1/terms-reports");
-    const row = screen
-      .getAllByText("End of Terms Reports")[0]
-      .closest("[aria-disabled]");
-    expect(row?.getAttribute("aria-disabled")).toBe("true");
-    expect(row?.hasAttribute("href")).toBe(false);
-    // And it takes no highlight on the very URL it names.
-    expect(
-      screen.getAllByRole("link", { current: "page" }).every(
-        (el) => !el.textContent?.includes("End of Terms Reports")
-      )
-    ).toBe(true);
-  });
 
-  it("renders End of Terms Reports inert for an ARAL volunteer", () => {
-    // Same advisory gate as Learners, so the same inert treatment: present with a
-    // reason rather than missing. Asserted at the component as well as on
-    // getNavGroups because the failure this catches is the `isAralVolunteer` prop
-    // reaching only one of the two rows.
-    renderTeacherSidebar({ roleLabel: "ARAL Volunteer", isAralVolunteer: true });
-
-    expect(screen.queryByRole("link", { name: "End of Terms Reports" })).toBeNull();
-    expect(
-      screen.getAllByRole("link").map((el) => el.getAttribute("href"))
-    ).not.toContain("/teacher/terms-reports");
-
-    const row = screen.getAllByText("End of Terms Reports")[0].closest("[aria-disabled]");
-    expect(row).not.toBeNull();
-    expect(row?.getAttribute("aria-disabled")).toBe("true");
-    expect(row?.tagName).toBe("DIV");
-    expect(row?.hasAttribute("href")).toBe(false);
-    expect(row?.hasAttribute("tabindex")).toBe(false);
-
-    // The reason, not a promise of a later date — and the pill keeps its casing
-    // for the same reason the Learners one does: "DEPED" mangles the proper noun.
-    const reason = screen.getAllByText(
-      "End of Terms Reports — for DepEd teachers who advise a section"
-    );
-    expect(reason.length).toBeGreaterThan(0);
-    expect(reason[0].className).toContain("sr-only");
-    expect(screen.queryByText("Soon")).toBeNull();
-    // Both gated rows carry the pill, so it renders twice in one sidebar.
-    expect(screen.getAllByText("DepEd only").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText("DepEd only")[0].className).not.toContain("uppercase");
-  });
 
   it("keeps Learners for an ordinary teacher", () => {
     // The fail-open guarantee: with the options argument omitted entirely, the

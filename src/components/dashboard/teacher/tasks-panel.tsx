@@ -4,11 +4,14 @@ import { cn } from "@/lib/utils";
 import {
   ArrowRight,
   BarChart3,
+  BookOpen,
   CalendarCheck,
   ChevronRight,
   ClipboardCheck,
+  ClipboardList,
   FileText,
   UserPlus,
+  Users,
   Zap,
 } from "lucide-react";
 import type { DashboardTask } from "@/lib/dashboard/teacher-overview";
@@ -91,18 +94,71 @@ export function UpcomingTasksPanel({
   );
 }
 
+type QuickAction = {
+  id: string;
+  label: string;
+  icon: typeof CalendarCheck;
+  href: string;
+  tone: string;
+};
+
+/**
+ * Quick actions for a Non-DepEd ARAL Volunteer: ARAL work only. No Add Learner
+ * (they hold no advisory roster) and no Reports (advisory exports).
+ */
+export function aralQuickActions(hrefs: {
+  attendance: string;
+  reading: string;
+  profiling: string;
+  roster: string;
+}): QuickAction[] {
+  return [
+    {
+      id: "attendance",
+      label: "Take Attendance",
+      icon: CalendarCheck,
+      href: hrefs.attendance,
+      tone: "bg-aral-50 text-aral-strong hover:bg-aral-100 dark:bg-aral-950/40",
+    },
+    {
+      id: "reading",
+      label: "Record Reading Level",
+      icon: BookOpen,
+      href: hrefs.reading,
+      tone: "bg-success-50 text-success-strong hover:bg-success-100 dark:bg-success-950/40",
+    },
+    {
+      id: "profiling",
+      label: "ARAL Profiling",
+      icon: ClipboardList,
+      href: hrefs.profiling,
+      tone: "bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-200",
+    },
+    {
+      id: "roster",
+      label: "My ARAL Learners",
+      icon: Users,
+      href: hrefs.roster,
+      tone: "bg-warning-50 text-warning-strong hover:bg-warning-100 dark:bg-warning-950/40",
+    },
+  ];
+}
+
 export function QuickActionsPanel({
   attendanceHref,
   addLearnerHref,
   reportsHref,
+  actions: actionsOverride,
 }: {
   attendanceHref: string;
   addLearnerHref: string;
   reportsHref: string;
+  /** Replaces the default four, e.g. `aralQuickActions` for a volunteer. */
+  actions?: QuickAction[];
 }) {
   // "Generate Report" and "View Reports" share a target: exports live on the
   // Reports page, and LITRACK has no separate generation flow.
-  const actions = [
+  const actions: QuickAction[] = actionsOverride ?? [
     {
       id: "attendance",
       label: "Take Attendance",
