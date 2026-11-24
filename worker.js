@@ -23,6 +23,8 @@ const CRON_ROUTES = {
   "30 16 * * 6": "/api/cron/backup?kind=weekly",
   // Every 5 minutes, but it only re-warms the Division Summary cache after a deploy or a summary reset
   "*/5 * * * *": "/api/cron/summary-warm",
+  // 00:05 Asia/Manila: the daily compliance check (Full Compliance page)
+  "5 16 * * *": "/api/cron/compliance-record",
 };
 
 export default {
