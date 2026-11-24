@@ -562,6 +562,17 @@
   mix-blend-mode: normal;
 }
 
+/* While the reveal runs, the page holds still: the new theme appears at once
+   instead of fading, and the background rays pause, so the page paints once
+   and the edge sweeps over a still picture. The toggle's own sun/moon morph
+   keeps playing. */
+.theme-switching :where(*:not([data-theme-icon], [data-theme-icon] *)),
+.theme-switching :where(*:not([data-theme-icon], [data-theme-icon] *))::before,
+.theme-switching :where(*:not([data-theme-icon], [data-theme-icon] *))::after {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+
 /*
  * Phones and tablets (a touch screen with no hover).
  *

@@ -36,6 +36,7 @@ export function ThemeIcon({
     <svg
       viewBox="0 0 24 24"
       aria-hidden
+      data-theme-icon
       className={cn(
         "h-5 w-5",
         // The outer <svg> is a CSS box, not an SVG child: `transform-box:
