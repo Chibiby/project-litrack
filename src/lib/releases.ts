@@ -135,6 +135,20 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.87.0",
+    date: "2026-11-25",
+    title: "Page numbers on every list, and a quicker search box",
+    announce: true,
+    fixes: [
+      "Every list now shows page numbers, such as Previous 1 2 3 … 9 Next, so you can jump straight to a page instead of clicking Next again and again.",
+      "The error log, Transfers and pending teacher requests now have pages too, so nothing is cut off at the bottom.",
+      "On Transfers, Select all ticks only the people on the page you are looking at.",
+      "The search box now sits next to the bell. Press Ctrl+K (⌘K on a Mac) to jump to it from anywhere.",
+      "Press Ctrl+S (⌘S on a Mac) to save the form you are working on.",
+      "Headings wrap more evenly, and a few slanted labels are now plain text.",
+    ],
+  },
+  {
     version: "2.86.3",
     date: "2026-11-25",
     title: "Stat card numbers are easier to read",
