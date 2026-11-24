@@ -195,7 +195,7 @@ function DistrictRanking({
       iconClassName="text-blue-700 dark:text-blue-200"
       description="Share of each district's active schools that are compliant today."
     >
-      <ol className="space-y-3 px-4 py-4 sm:px-5">
+      <ol className="grid grid-cols-1 gap-x-8 gap-y-3 px-4 py-4 sm:px-5 lg:grid-cols-2">
         {ranking.map((r, i) => (
           <li key={r.district} className="min-w-0">
             <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -489,7 +489,8 @@ function Directory({ view }: { view: FullComplianceView }) {
                         <span>{s.district}</span>
                         {s.flags.length > 0 ? (
                           <span className="tabular-nums">
-                            {s.flags.length} flags
+                            {s.flags.length}{" "}
+                            {s.flags.length === 1 ? "flag" : "flags"}
                           </span>
                         ) : null}
                       </div>
@@ -558,11 +559,11 @@ export function FullCompliancePanel({ view }: { view: FullComplianceView }) {
         <StatCard
           title="Overall compliance rate"
           value={`${cards.ratePct}%`}
-          hint={`${cards.compliant} of ${cards.total} schools`}
+          hint={`${cards.compliant} of ${cards.total} ${cards.total === 1 ? "school" : "schools"}`}
           icon={Percent}
           tone="emerald"
           progress={cards.ratePct}
-          progressLabel={`${cards.compliant} of ${cards.total} schools compliant`}
+          progressLabel={`${cards.compliant} of ${cards.total} ${cards.total === 1 ? "school" : "schools"} compliant`}
           denseOnPhone
         />
       </div>
