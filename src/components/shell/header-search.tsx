@@ -88,8 +88,10 @@ function matchPages(pages: HeaderSearchPage[], trimmed: string): Row[] {
     }));
 }
 
+const KEYCAP =
+  "inline-flex h-5 min-w-5 items-center justify-center rounded border border-slate-300 border-b-2 bg-white/80 px-1 font-sans text-[11px] font-medium leading-none text-slate-600 dark:border-white/20 dark:bg-white/10 dark:text-slate-300";
 const noSubscribe = () => () => undefined;
-const clientShortcut = () => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘K" : "Ctrl K");
+const clientShortcut = () => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl");
 
 export function HeaderSearch({
   searchHref,
@@ -113,8 +115,9 @@ export function HeaderSearch({
   const [searchFailed, setSearchFailed] = useState(false);
   const [, startTransition] = useTransition();
   // The resting box shows its shortcut, not a description: Ctrl on Windows
-  // and Linux, ⌘ on a Mac. The server cannot know, so it renders "Ctrl K".
-  const shortcut = useSyncExternalStore(noSubscribe, clientShortcut, () => "Ctrl K");
+  // and Linux, ⌘ on a Mac, drawn as keycaps. The server cannot know, so it
+  // renders "Ctrl".
+  const modifier = useSyncExternalStore(noSubscribe, clientShortcut, () => "Ctrl");
 
   const trimmed = query.trim();
   const [prevTrimmed, setPrevTrimmed] = useState(trimmed);
@@ -199,8 +202,18 @@ export function HeaderSearch({
         if (showList && row) go(row);
         else submitFallback();
       }}
-      className={cn("relative", className)}
+      className={cn("group/search relative", className)}
     >
+      {/* Stands in for the placeholder, which cannot draw keycaps. Hidden
+          once the box holds text, like a placeholder. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-9 z-10 flex h-11 items-center gap-1 text-sm text-slate-500 group-data-[filled]/search:hidden dark:text-slate-400 lg:h-9"
+      >
+        <kbd className={KEYCAP}>{modifier}</kbd>
+        <kbd className={KEYCAP}>K</kbd>
+        <span className="ml-0.5">to search</span>
+      </span>
       <SearchInput
             escapeClears={false}
         ref={inputRef}
@@ -210,7 +223,6 @@ export function HeaderSearch({
           setOpen(true);
         }}
         label={placeholder}
-        placeholder={`${shortcut} to search`}
         role="combobox"
         aria-expanded={showList}
         aria-controls={listId}
