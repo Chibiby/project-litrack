@@ -165,7 +165,7 @@ export function TransferWorkspace({
             aria-controls="transfer-panel"
             onClick={() => setView(v)}
             className={cn(
-              "-mb-px flex h-11 shrink-0 items-center gap-2 rounded-none border-b-2 px-3 text-sm font-medium transition-colors lg:h-9",
+              "-mb-px flex h-11 shrink-0 items-center gap-2 rounded-none border-b-2 px-2 text-sm sm:px-3 font-medium transition-colors lg:h-9",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               view === v
                 ? "border-primary text-foreground"

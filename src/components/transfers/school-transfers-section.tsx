@@ -33,7 +33,7 @@ export function SchoolTransfersSection({
 
   return (
     <Surface as="section" aria-labelledby="school-transfers-title" className="min-w-0 rounded-lg">
-      <SurfaceHeader className="px-4 sm:px-5">
+      <SurfaceHeader className="flex-col gap-1 px-4 sm:px-5 lg:flex-row lg:gap-3">
         <h2 id="school-transfers-title" className="text-base font-semibold">
           Transfers between schools
         </h2>
@@ -43,7 +43,7 @@ export function SchoolTransfersSection({
       </SurfaceHeader>
       <SurfaceBody className="space-y-4 p-4 sm:p-5">
         <form method="get" action={basePath} className="flex flex-wrap items-end gap-2">
-          <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-sm">
+          <div className="min-w-0 flex-1 basis-full space-y-1.5 sm:max-w-sm sm:basis-auto">
             <Label htmlFor="transfer-school">School they are moving from</Label>
             <select
               id="transfer-school"
