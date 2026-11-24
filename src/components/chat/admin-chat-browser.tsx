@@ -183,7 +183,7 @@ export function AdminChatBrowser({
               placeholder="Search conversations..."
               inputClassName="bg-background text-sm lg:h-9"
             />
-            <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
+            <div className="mt-3 flex flex-wrap gap-1">
               {([
                 ["all", "All"],
                 ["school", "School chat"],

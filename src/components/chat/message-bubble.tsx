@@ -97,7 +97,7 @@ export function MessageBubble({
       tabIndex={0}
       aria-label={`${message.author.displayName}, ${clockLabel(createdAt)}`}
       className={cn(
-        "group/msg relative flex flex-col rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group/msg relative flex w-full flex-col rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
         mine ? "items-end" : "items-start"
       )}
       onPointerEnter={(e) => {
