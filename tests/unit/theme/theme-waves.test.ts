@@ -5,14 +5,17 @@ import { playThemeWaves, RESUME_MOTION_MS, THEME_SWITCHING_CLASS } from "@/compo
 /** A View Transition whose `finished` the test resolves by hand. */
 function installViewTransitions() {
   const finishers: (() => void)[] = [];
+  const skips: ReturnType<typeof vi.fn>[] = [];
   (document as unknown as { startViewTransition: unknown }).startViewTransition = (update: () => void) => {
     update();
     let finish!: () => void;
     const finished = new Promise<void>((resolve) => (finish = resolve));
     finishers.push(finish);
-    return { ready: new Promise<void>(() => {}), finished };
+    const skipTransition = vi.fn(() => finish());
+    skips.push(skipTransition);
+    return { ready: new Promise<void>(() => {}), finished, skipTransition };
   };
-  return finishers;
+  return Object.assign(finishers, { skips });
 }
 
 const held = () => document.documentElement.classList.contains(THEME_SWITCHING_CLASS);
@@ -63,13 +66,28 @@ describe("playThemeWaves page motion hold", () => {
     expect(held()).toBe(false);
   });
 
-  it("an older reveal ending never releases a newer one", async () => {
+  it("a click mid-reveal ends that reveal and swaps with no second reveal", async () => {
+    const finishers = installViewTransitions();
+    const swap = vi.fn();
+    playThemeWaves({ x: 10, y: 10 }, swap);
+    playThemeWaves({ x: 10, y: 10 }, swap);
+    expect(swap).toHaveBeenCalledTimes(2);
+    expect(finishers).toHaveLength(1);
+    expect(finishers.skips[0]).toHaveBeenCalledTimes(1);
+    await flush();
+    // The skipped reveal finishing does not release early; the skip's own 3 s does.
+    vi.advanceTimersByTime(RESUME_MOTION_MS - 1);
+    expect(held()).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(held()).toBe(false);
+  });
+
+  it("after a skip, the next click animates again", async () => {
     const finishers = installViewTransitions();
     playThemeWaves({ x: 10, y: 10 }, () => {});
     playThemeWaves({ x: 10, y: 10 }, () => {});
-    finishers[0]();
     await flush();
-    vi.advanceTimersByTime(RESUME_MOTION_MS * 2);
-    expect(held()).toBe(true);
+    playThemeWaves({ x: 10, y: 10 }, () => {});
+    expect(finishers).toHaveLength(2);
   });
 });

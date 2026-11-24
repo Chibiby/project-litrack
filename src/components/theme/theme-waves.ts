@@ -17,8 +17,17 @@ import { blobRevealFrames, makeBlobSeed } from "./theme-blob";
 export type WaveOrigin = { x: number; y: number };
 
 type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => { ready: Promise<void>; finished: Promise<void> };
+  startViewTransition?: (update: () => void) => RunningTransition;
 };
+
+type RunningTransition = { ready: Promise<void>; finished: Promise<void>; skipTransition?: () => void };
+
+/**
+ * The reveal on screen, if any. A click while it runs ends it at once and
+ * swaps back with no animation: two reveals never stack, which is what made
+ * rapid switching stutter.
+ */
+let running: RunningTransition | null = null;
 
 /**
  * Set on <html> while a reveal runs (see globals.css). The revealed page is a
@@ -88,20 +97,34 @@ export function playThemeWaves(origin: WaveOrigin | undefined, swap: () => void)
     return;
   }
 
+  const root = document.documentElement;
+  if (running) {
+    running.skipTransition?.();
+    running = null;
+    const skippedId = ++latestSwitch;
+    holdMotion(root);
+    swap();
+    resumeMotionLater(root, skippedId);
+    return;
+  }
+
   const { x, y } = origin;
   const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
 
   // Build the frames before the switch, so nothing is computed between the
   // snapshot and the first frame.
   const frames = supportsPathClip() ? blobRevealFrames(x, y, radius, makeBlobSeed()) : null;
-  const root = document.documentElement;
   const id = ++latestSwitch;
   holdMotion(root);
 
   const transition = doc.startViewTransition(() => flushSync(swap));
+  running = transition;
   transition.finished
     .catch(() => undefined)
-    .then(() => resumeMotionLater(root, id));
+    .then(() => {
+      if (running === transition) running = null;
+      resumeMotionLater(root, id);
+    });
   transition.ready
     .then(() => {
       const target = { fill: "forwards" as const, pseudoElement: "::view-transition-new(root)" };
