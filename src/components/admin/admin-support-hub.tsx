@@ -10,7 +10,8 @@ import { useUnreadTitle } from "@/components/chat/use-unread-title";
 import { SupportInbox } from "@/components/support/support-inbox";
 import { Button } from "@/components/ui/button";
 import type { AdminChatSchool } from "@/lib/chat/queries";
-import type { ChatChannelView } from "@/lib/actions/chat";
+import { listAdminConversations, type ChatChannelView } from "@/lib/actions/chat";
+import { callAction } from "@/lib/ui/call-action";
 import type { TicketRow } from "@/lib/support/queries";
 import { cn } from "@/lib/utils";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
@@ -35,28 +36,41 @@ export function AdminSupportHub({
   const router = useRouter();
   const [tab, setTab] = useState<"chat" | "tickets" | "email">(initialTab);
   const [channelId, setChannelId] = useState(initialChannelId);
+  // The list from the last poll; a new server render (navigation) replaces it.
+  const [polled, setPolled] = useState<AdminChatSchool[] | null>(null);
+  const [renderedSchools, setRenderedSchools] = useState(schools);
+  if (renderedSchools !== schools) {
+    setRenderedSchools(schools);
+    setPolled(null);
+  }
+  const currentSchools = polled ?? schools;
   useUnreadTitle(
-    schools.reduce(
+    currentSchools.reduce(
       (n, school) => n + (school.staffRoom?.unread ? 1 : 0) + school.directThreads.filter((t) => t.unread).length,
       0
     )
   );
 
-  // Presence and the conversation list are live, not page-load facts. Refresh
-  // the server query every 10 s while this workspace is visible, so a new
+  // Presence and the conversation list are live, not page-load facts. Re-read
+  // just the list every 10 s while this workspace is visible, so a new
   // concern, its preview and who is active show without a manual reload.
   useEffect(() => {
     if (tab !== "chat") return;
+    let cancelled = false;
     const tick = () => {
-      if (document.visibilityState === "visible") router.refresh();
+      if (document.visibilityState !== "visible") return;
+      void callAction(() => listAdminConversations()).then((result) => {
+        if (!cancelled && result.ok && result.data) setPolled(result.data);
+      });
     };
     const timer = window.setInterval(tick, 10_000);
     document.addEventListener("visibilitychange", tick);
     return () => {
+      cancelled = true;
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [router, tab]);
+  }, [tab]);
 
   function selectTab(next: "chat" | "tickets" | "email") {
     setTab(next);
@@ -112,7 +126,7 @@ export function AdminSupportHub({
       {tab === "chat" ? (
         <div id="admin-support-chat" role="tabpanel">
           <AdminChatBrowser
-            schools={schools}
+            schools={currentSchools}
             initialChannelId={channelId}
             initialChannel={initialChannel}
             onSelectChannel={(channelId) => {

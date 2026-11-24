@@ -6,6 +6,12 @@ const refresh = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, refresh }),
+  unstable_isUnrecognizedActionError: () => false,
+}));
+
+const listAdminConversations = vi.fn(async () => ({ ok: true, data: [] }));
+vi.mock("@/lib/actions/chat", () => ({
+  listAdminConversations: () => listAdminConversations(),
 }));
 
 vi.mock("@/components/chat/admin-chat-browser", () => ({
@@ -25,6 +31,7 @@ afterEach(() => {
   cleanup();
   replace.mockReset();
   refresh.mockReset();
+  listAdminConversations.mockClear();
   vi.useRealTimers();
 });
 
@@ -54,10 +61,13 @@ describe("AdminSupportHub", () => {
     });
     render(<AdminSupportHub schools={[]} tickets={[]} />);
 
+    // Only the conversation list is re-read; the page (tickets, email
+    // recipients, open transcript) is not re-rendered every 10 s.
     vi.advanceTimersByTime(10_000);
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(listAdminConversations).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(20_000);
-    expect(refresh).toHaveBeenCalledTimes(3);
+    expect(listAdminConversations).toHaveBeenCalledTimes(3);
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("opens the email workspace from a routed third tab", () => {

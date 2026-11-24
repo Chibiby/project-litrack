@@ -11,6 +11,7 @@ import { markChatNotificationsRead } from "@/lib/chat/notifications";
 import { canEditMessage, EDIT_WINDOW_MS, type ReactionEmoji } from "@/lib/chat/view";
 import { chatSocketSecret, hasChatRoomBinding, publishRoomEvent } from "@/lib/chat/live/publish";
 import { signTicket } from "@/lib/chat/live/ticket";
+import { listAdminChatSchools, type AdminChatSchool } from "@/lib/chat/queries";
 import {
   deleteChatMessageSchema,
   editChatMessageSchema,
@@ -729,6 +730,20 @@ export const markChannelRead = action("markChannelRead", async (input: unknown):
  * longer blank-shell flash on every navigation in exchange for a bell badge.
  * This runs after paint, from the widget, and costs nothing until it does.
  */
+/**
+ * The Support hub's conversation list, for its 10 s poll. Reads only the list
+ * (one row per channel plus its newest message) so the poll does not re-render
+ * the whole Support page — tickets, every email recipient and the open
+ * transcript — and does not hold up the admin's own chat actions behind a
+ * page render.
+ */
+export const listAdminConversations = action("listAdminConversations", async (): Promise<
+  ActionResult<AdminChatSchool[]>
+> => {
+  const user = await requireUser(["SUPER_ADMIN"]);
+  return { ok: true, data: await listAdminChatSchools(user.id) };
+}, { verb: "load your conversations" });
+
 export const getMyChatUnread = action("getMyChatUnread", async (): Promise<
   ActionResult<{ school: boolean; admin: boolean }>
 > => {
