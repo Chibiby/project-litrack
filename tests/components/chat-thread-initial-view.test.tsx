@@ -18,7 +18,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("ChatThread initial view", () => {
   it("renders hydrated messages immediately without opening an existing channel", () => {
     readChannel.mockResolvedValue({ ok: true, data: { id: "channel-1", kind: "ADMIN_DIRECT", schoolName: "North", messages: [] } });
-    render(<ChatThread kind="ADMIN_DIRECT" channelId="channel-1" initialChannel={{ id: "channel-1", kind: "ADMIN_DIRECT", schoolName: "North", messages: [{ id: "m1", body: "Already loaded", createdAt: new Date(), author: { id: "u1", displayName: "Ana", roleLabel: "Teacher", initials: "AT", isSelf: false }, mentions: [] }] }} emptyHint="Empty" />);
+    render(<ChatThread kind="ADMIN_DIRECT" channelId="channel-1" initialChannel={{ id: "channel-1", kind: "ADMIN_DIRECT", schoolName: "North", viewerId: "me", viewerIsAdmin: false, readers: [], members: [], messages: [{ id: "m1", authorId: "u1", body: "Already loaded", createdAt: new Date(), editedAt: null, deleted: false, author: { id: "u1", displayName: "Ana", roleLabel: "Teacher", initials: "AT", isSelf: false }, mentions: [], reactions: [], replyTo: null }] }} emptyHint="Empty" />);
     expect(screen.getByText("Already loaded")).not.toBeNull();
     expect(screen.queryByText("Opening the conversation…")).toBeNull();
     expect(openChannel).not.toHaveBeenCalled();

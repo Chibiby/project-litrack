@@ -2,17 +2,24 @@
 
 import { prisma } from "@/lib/prisma";
 import { action } from "@/lib/errors/action";
-import { resourceNotFound } from "@/lib/errors/app-error";
+import { AppError, resourceNotFound } from "@/lib/errors/app-error";
 import { requireUser } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { parseMentionHandles } from "@/lib/chat/mentions";
 import { markChatNotificationsRead } from "@/lib/chat/notifications";
+import { canEditMessage, type ReactionEmoji } from "@/lib/chat/view";
+import { chatSocketSecret, hasChatRoomBinding, publishRoomEvent } from "@/lib/chat/live/publish";
+import { signTicket } from "@/lib/chat/live/ticket";
 import {
+  deleteChatMessageSchema,
+  editChatMessageSchema,
   markChannelReadSchema,
   openChannelSchema,
+  openChatSocketSchema,
   readChannelSchema,
   sendChatMessageSchema,
+  toggleChatReactionSchema,
 } from "@/lib/validators/chat.schema";
 import type { ChatChannelKind, Prisma } from "@prisma/client";
 import { RATE_LIMITS } from "@/lib/rate-limits/catalog";
@@ -50,21 +57,59 @@ export type ChatAuthor = {
   isSelf: boolean;
 };
 
+export type ChatReactionView = {
+  emoji: ReactionEmoji;
+  userIds: string[];
+  names: string[];
+};
+
+export type ChatReplyView = {
+  id: string;
+  authorName: string;
+  /** First 120 characters; empty when the quoted message was removed. */
+  excerpt: string;
+  deleted: boolean;
+};
+
 export type ChatMessageView = {
   id: string;
+  authorId: string;
+  /** Empty when `deleted`: a delete blanks the text in the database too. */
   body: string;
   createdAt: Date;
+  editedAt: Date | null;
+  deleted: boolean;
   author: ChatAuthor;
   /** Resolved mentions, for rendering the handles as names. */
   mentions: { id: string; username: string | null; displayName: string }[];
+  reactions: ChatReactionView[];
+  replyTo: ChatReplyView | null;
 };
+
+export type ChatReaderView = { userId: string; name: string; readAt: Date };
+export type ChatMemberView = { userId: string; name: string; initials: string; lastOnlineAt: Date | null };
 
 export type ChatChannelView = {
   id: string;
   kind: ChatChannelKind;
   schoolName: string;
   messages: ChatMessageView[];
+  viewerId: string;
+  viewerIsAdmin: boolean;
+  /**
+   * Other people's read markers. Super Admins are left out for a non-admin
+   * viewer (owner decision 2026-11-24: an admin's presence is never shown to
+   * staff, and "Seen by" would reveal it).
+   */
+  readers: ChatReaderView[];
+  /** People in this room, for presence. Super Admins left out the same way. */
+  members: ChatMemberView[];
 };
+
+export type ChatSocketTicket = { live: false } | { live: true; ticket: string; url: "/chat-ws" };
+
+/** Characters of a quoted message shown in a reply. */
+const REPLY_EXCERPT_MAX = 120;
 
 function displayNameOf(user: {
   fullName: string | null;
@@ -136,6 +181,55 @@ async function assertChannelAccess(
 }
 
 /**
+ * A message and the channel it lives in, through the same gate. A message in a
+ * channel the caller may not see reads as "Message not found", like a missing
+ * one.
+ */
+async function loadMessageWithAccess(
+  messageId: string,
+  user: { id: string; role: string; schoolId: string | null }
+) {
+  const message = await prisma.chatMessage.findUnique({
+    where: { id: messageId },
+    select: { id: true, channelId: true, authorId: true, body: true, createdAt: true, deletedAt: true },
+  });
+  if (!message) throw resourceNotFound("Message");
+  try {
+    const channel = await assertChannelAccess(message.channelId, user);
+    return { message, channel };
+  } catch (err) {
+    if (err instanceof AppError && err.code === "NOT_FOUND") {
+      throw resourceNotFound("Message", { crossTenant: true });
+    }
+    throw err;
+  }
+}
+
+/** Users a body's @handles may notify: the channel's school, plus every admin. */
+async function resolveMentionedUsers(body: string, schoolId: string) {
+  const handles = parseMentionHandles(body);
+  if (handles.length === 0) return [];
+  return prisma.user.findMany({
+    where: {
+      username: { in: handles, mode: "insensitive" },
+      deletedAt: null,
+      isActive: true,
+      OR: [{ schoolId }, { role: "SUPER_ADMIN" }],
+    },
+    select: { id: true, role: true },
+  });
+}
+
+async function assertChatRate(userId: string) {
+  const limit = await checkRateLimit(`chat:${userId}`, SEND_LIMIT);
+  if (!limit.ok) {
+    throw new AppError("VALIDATION_FAILED", { params: { message: "You are sending messages too quickly" } });
+  }
+}
+
+const nowIso = () => new Date().toISOString();
+
+/**
  * Find or create the channel this person is asking for.
  *
  * `upsert` on the partial unique index rather than find-then-create: two tabs
@@ -203,19 +297,54 @@ export const readChannel = action("readChannel", async (input: unknown): Promise
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const channel = await assertChannelAccess(parsed.data.channelId, user);
+  const viewerIsAdmin = user.role === "SUPER_ADMIN";
+  const NAME_SELECT = { firstName: true, lastName: true, fullName: true, role: true } as const;
 
-  const rows = await prisma.chatMessage.findMany({
-    where: { channelId: channel.id, deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    take: PAGE_SIZE,
-    select: {
-      id: true,
-      body: true,
-      createdAt: true,
-      author: { select: AUTHOR_SELECT },
-      mentions: { select: { user: { select: AUTHOR_SELECT } } },
-    },
-  });
+  const [rows, reads, people] = await Promise.all([
+    // Removed messages stay in the transcript as "Message removed"; their text
+    // is already blank in the row, so nothing of them can leak here.
+    prisma.chatMessage.findMany({
+      where: { channelId: channel.id },
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        deletedAt: true,
+        editedAt: true,
+        authorId: true,
+        author: { select: AUTHOR_SELECT },
+        mentions: { select: { user: { select: AUTHOR_SELECT } } },
+        reactions: {
+          orderBy: { createdAt: "asc" },
+          select: { emoji: true, userId: true, user: { select: NAME_SELECT } },
+        },
+        replyTo: {
+          select: { id: true, body: true, deletedAt: true, author: { select: NAME_SELECT } },
+        },
+      },
+    }),
+    prisma.chatRead.findMany({
+      where: { channelId: channel.id, userId: { not: user.id } },
+      select: { userId: true, lastReadAt: true, user: { select: NAME_SELECT } },
+    }),
+    prisma.user.findMany({
+      where: {
+        id: { not: user.id },
+        deletedAt: null,
+        isActive: true,
+        ...(channel.kind === "SCHOOL"
+          ? { schoolId: channel.schoolId }
+          : { OR: [{ id: channel.memberId ?? "" }, ...(viewerIsAdmin ? [{ role: "SUPER_ADMIN" as const }] : [])] }),
+      },
+      take: 100,
+      select: { id: true, ...NAME_SELECT, lastOnlineAt: true },
+    }),
+  ]);
+
+  // Owner decision 2026-11-24: staff never see a Super Admin's presence or reads.
+  const visible = (role: string) => viewerIsAdmin || role !== "SUPER_ADMIN";
 
   return {
     ok: true,
@@ -223,23 +352,63 @@ export const readChannel = action("readChannel", async (input: unknown): Promise
       id: channel.id,
       kind: channel.kind,
       schoolName: channel.school.name,
-      messages: rows.reverse().map((row) => ({
-        id: row.id,
-        body: row.body,
-        createdAt: row.createdAt,
-        author: {
-          id: row.author.id,
-          displayName: displayNameOf(row.author),
-          roleLabel: roleLabelOf(row.author.role),
-          initials: initialsOf(row.author),
-          isSelf: row.author.id === user.id,
-        },
-        mentions: row.mentions.map((m) => ({
-          id: m.user.id,
-          username: m.user.username,
-          displayName: displayNameOf(m.user),
+      viewerId: user.id,
+      viewerIsAdmin,
+      readers: reads
+        .filter((r) => visible(r.user.role))
+        .map((r) => ({ userId: r.userId, name: displayNameOf(r.user), readAt: r.lastReadAt })),
+      members: people
+        .filter((p) => visible(p.role))
+        .map((p) => ({
+          userId: p.id,
+          name: displayNameOf(p),
+          initials: initialsOf(p),
+          lastOnlineAt: p.lastOnlineAt,
         })),
-      })),
+      messages: rows.reverse().map((row) => {
+        const deleted = row.deletedAt !== null;
+        const reactions = new Map<string, ChatReactionView>();
+        if (!deleted) {
+          for (const r of row.reactions) {
+            const entry = reactions.get(r.emoji) ?? { emoji: r.emoji as ReactionEmoji, userIds: [], names: [] };
+            entry.userIds.push(r.userId);
+            entry.names.push(r.userId === user.id ? "You" : displayNameOf(r.user));
+            reactions.set(r.emoji, entry);
+          }
+        }
+        return {
+          id: row.id,
+          authorId: row.authorId,
+          body: deleted ? "" : row.body,
+          createdAt: row.createdAt,
+          editedAt: deleted ? null : row.editedAt,
+          deleted,
+          author: {
+            id: row.author.id,
+            displayName: displayNameOf(row.author),
+            roleLabel: roleLabelOf(row.author.role),
+            initials: initialsOf(row.author),
+            isSelf: row.author.id === user.id,
+          },
+          mentions: deleted
+            ? []
+            : row.mentions.map((m) => ({
+                id: m.user.id,
+                username: m.user.username,
+                displayName: displayNameOf(m.user),
+              })),
+          reactions: [...reactions.values()],
+          replyTo:
+            deleted || !row.replyTo
+              ? null
+              : {
+                  id: row.replyTo.id,
+                  authorName: displayNameOf(row.replyTo.author),
+                  excerpt: row.replyTo.deletedAt ? "" : row.replyTo.body.slice(0, REPLY_EXCERPT_MAX),
+                  deleted: row.replyTo.deletedAt !== null,
+                },
+        };
+      }),
     },
   };
 }, { verb: "load the conversation" });
@@ -257,28 +426,29 @@ export const sendChatMessage = action("sendChatMessage", async (input: unknown):
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
   }
-  const { channelId, body } = parsed.data;
+  const { channelId, body, replyToId } = parsed.data;
 
   const limit = await checkRateLimit(`chat:${user.id}`, SEND_LIMIT);
   if (!limit.ok) return { ok: false, error: "You are sending messages too quickly" };
 
   const channel = await assertChannelAccess(channelId, user);
 
+  // A quote must come from this same channel: a reply naming another school's
+  // message must not be able to pull its text into this thread.
+  if (replyToId) {
+    const quoted = await prisma.chatMessage.findUnique({
+      where: { id: replyToId },
+      select: { channelId: true, deletedAt: true },
+    });
+    if (!quoted || quoted.channelId !== channel.id || quoted.deletedAt) {
+      throw resourceNotFound("Message", { crossTenant: Boolean(quoted && quoted.channelId !== channel.id) });
+    }
+  }
+
   // Who this message may notify: the school's own members, plus every admin.
   // Resolving against this set is what stops an @mention reaching across
   // schools, and it is why the handles are looked up rather than trusted.
-  const handles = parseMentionHandles(body);
-  const mentioned = handles.length
-    ? await prisma.user.findMany({
-        where: {
-          username: { in: handles, mode: "insensitive" },
-          deletedAt: null,
-          isActive: true,
-          OR: [{ schoolId: channel.schoolId }, { role: "SUPER_ADMIN" }],
-        },
-        select: { id: true, role: true },
-      })
-    : [];
+  const mentioned = await resolveMentionedUsers(body, channel.schoolId);
 
   const message = await prisma.$transaction(async (tx) => {
     const created = await tx.chatMessage.create({
@@ -286,6 +456,7 @@ export const sendChatMessage = action("sendChatMessage", async (input: unknown):
         channelId: channel.id,
         authorId: user.id,
         body,
+        ...(replyToId ? { replyToId } : {}),
         mentions: {
           create: mentioned
             .filter((m) => m.id !== user.id)
@@ -362,8 +533,162 @@ export const sendChatMessage = action("sendChatMessage", async (input: unknown):
     metadata: { kind: channel.kind, mentions: mentioned.length },
   });
 
+  await publishRoomEvent(channel.id, { type: "message.created", messageId: message.id, userId: user.id, at: nowIso() });
+
   return { ok: true, data: { id: message.id } };
 }, { verb: "send your message" });
+
+/**
+ * Change the text of your own message, within the 15-minute window.
+ *
+ * Existing mention rows stay; only @handles added by the edit are resolved
+ * and notified, so fixing a typo never pings the same people twice.
+ */
+export const editChatMessage = action("editChatMessage", async (input: unknown): Promise<ActionResult> => {
+  const user = await requireUser();
+  const parsed = editChatMessageSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+  const { messageId, body } = parsed.data;
+  await assertChatRate(user.id);
+
+  const { message, channel } = await loadMessageWithAccess(messageId, user);
+  if (message.authorId !== user.id) {
+    throw new AppError("VALIDATION_FAILED", { params: { message: "You can only edit your own messages" } });
+  }
+  if (!canEditMessage(message, user.id)) {
+    throw new AppError("VALIDATION_FAILED", { params: { message: "This message can no longer be edited" } });
+  }
+
+  const mentioned = (await resolveMentionedUsers(body, channel.schoolId)).filter((m) => m.id !== user.id);
+  const existing = new Set(
+    (await prisma.chatMention.findMany({ where: { messageId }, select: { userId: true } })).map((m) => m.userId)
+  );
+  const added = mentioned.filter((m) => !existing.has(m.id));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.chatMessage.update({ where: { id: messageId }, data: { body, editedAt: new Date() } });
+    if (added.length > 0) {
+      await tx.chatMention.createMany({ data: added.map((m) => ({ messageId, userId: m.id })) });
+      await tx.notification.createMany({
+        data: added.map((m) => ({
+          schoolId: channel.schoolId,
+          recipientId: m.id,
+          actorId: user.id,
+          type: "CHAT_MENTION" as const,
+          channelId: channel.id,
+        })),
+      });
+    }
+  });
+
+  await publishRoomEvent(channel.id, { type: "message.updated", messageId, userId: user.id, at: nowIso() });
+  return { ok: true };
+}, { verb: "edit your message" });
+
+/**
+ * Remove a message. The author may remove their own at any time; a Super
+ * Admin may remove any message in a channel they can see (moderation,
+ * audited). The text is blanked in the row, not hidden (owner decision
+ * 2026-11-24), and its reactions and mentions go with it.
+ */
+export const deleteChatMessage = action("deleteChatMessage", async (input: unknown): Promise<ActionResult> => {
+  const user = await requireUser();
+  const parsed = deleteChatMessageSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { message, channel } = await loadMessageWithAccess(parsed.data.messageId, user);
+  const isAuthor = message.authorId === user.id;
+  const isAdmin = user.role === "SUPER_ADMIN";
+  if (!isAuthor && !isAdmin) {
+    throw new AppError("VALIDATION_FAILED", { params: { message: "You can only delete your own messages" } });
+  }
+  if (message.deletedAt) return { ok: true };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.chatReaction.deleteMany({ where: { messageId: message.id } });
+    await tx.chatMention.deleteMany({ where: { messageId: message.id } });
+    await tx.chatMessage.update({ where: { id: message.id }, data: { body: "", deletedAt: new Date() } });
+  });
+
+  if (!isAuthor) {
+    await writeAudit({
+      action: AUDIT_ACTIONS.CHAT_MESSAGE_MODERATE,
+      resource: "ChatMessage",
+      resourceId: message.id,
+      userId: user.id,
+      schoolId: channel.schoolId,
+      metadata: { channelId: channel.id, kind: channel.kind },
+    });
+  }
+
+  await publishRoomEvent(channel.id, { type: "message.updated", messageId: message.id, userId: user.id, at: nowIso() });
+  return { ok: true };
+}, { verb: "delete the message" });
+
+/** Add or remove one of the six reactions on a message. */
+export const toggleChatReaction = action("toggleChatReaction", async (input: unknown): Promise<ActionResult<{ on: boolean }>> => {
+  const user = await requireUser();
+  const parsed = toggleChatReactionSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" };
+  }
+  const { messageId, emoji } = parsed.data;
+  await assertChatRate(user.id);
+
+  const { message, channel } = await loadMessageWithAccess(messageId, user);
+  if (message.deletedAt) throw resourceNotFound("Message");
+
+  const existing = await prisma.chatReaction.findUnique({
+    where: { messageId_userId_emoji: { messageId, userId: user.id, emoji } },
+    select: { id: true },
+  });
+  let on: boolean;
+  if (existing) {
+    await prisma.chatReaction.delete({ where: { id: existing.id } });
+    on = false;
+  } else {
+    try {
+      await prisma.chatReaction.create({ data: { messageId, userId: user.id, emoji } });
+    } catch (err) {
+      // A double tap racing itself: the unique index already holds the row.
+      if ((err as { code?: string }).code !== "P2002") throw err;
+    }
+    on = true;
+  }
+
+  await publishRoomEvent(channel.id, { type: "reaction.changed", messageId, userId: user.id, at: nowIso() });
+  return { ok: true, data: { on } };
+}, { verb: "react to the message" });
+
+/**
+ * A 60-second ticket to join this channel's live room, or `{ live: false }`
+ * when live chat is unavailable (no Durable Object binding, e.g. `next dev`,
+ * or no signing secret). The client then keeps polling.
+ */
+export const openChatSocket = action("openChatSocket", async (input: unknown): Promise<ActionResult<ChatSocketTicket>> => {
+  const user = await requireUser();
+  const parsed = openChatSocketSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const channel = await assertChannelAccess(parsed.data.channelId, user);
+  if (!hasChatRoomBinding()) return { ok: true, data: { live: false } };
+  const secret = chatSocketSecret();
+  if (!secret) return { ok: true, data: { live: false } };
+
+  const ticket = await signTicket(
+    {
+      c: channel.id,
+      u: user.id,
+      n: displayNameOf(user),
+      i: initialsOf(user),
+      r: user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "MEMBER",
+    },
+    secret
+  );
+  return { ok: true, data: { live: true, ticket, url: "/chat-ws" } };
+}, { verb: "connect to live chat" });
 
 /** Move this person's read marker to now. */
 export const markChannelRead = action("markChannelRead", async (input: unknown): Promise<ActionResult> => {
@@ -379,6 +704,10 @@ export const markChannelRead = action("markChannelRead", async (input: unknown):
   });
   // The bell alert exists to get somebody here. Arriving is what clears it.
   await markChatNotificationsRead({ userId: user.id, channelId: channel.id });
+  // A Super Admin's read is never shown to staff, so it is not published.
+  if (user.role !== "SUPER_ADMIN") {
+    await publishRoomEvent(channel.id, { type: "read.changed", userId: user.id, at: nowIso() });
+  }
   return { ok: true };
 }, { verb: "mark the conversation read" });
 

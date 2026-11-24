@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { REACTION_EMOJI } from "@/lib/chat/view";
 
 /**
  * Chat input rules.
@@ -13,13 +14,35 @@ export const CHAT_BODY_MAX = 2000;
 
 export const chatChannelKindSchema = z.enum(["SCHOOL", "ADMIN_DIRECT"]);
 
+const chatBodySchema = z
+  .string()
+  .trim()
+  .min(1, "Type a message first")
+  .max(CHAT_BODY_MAX, `Keep it under ${CHAT_BODY_MAX} characters`);
+
 export const sendChatMessageSchema = z.object({
   channelId: z.string().uuid("Unknown conversation"),
-  body: z
-    .string()
-    .trim()
-    .min(1, "Type a message first")
-    .max(CHAT_BODY_MAX, `Keep it under ${CHAT_BODY_MAX} characters`),
+  body: chatBodySchema,
+  /** The message this one quotes; must be in the same channel. */
+  replyToId: z.string().uuid().optional(),
+});
+
+export const editChatMessageSchema = z.object({
+  messageId: z.string().uuid(),
+  body: chatBodySchema,
+});
+
+export const deleteChatMessageSchema = z.object({
+  messageId: z.string().uuid(),
+});
+
+export const toggleChatReactionSchema = z.object({
+  messageId: z.string().uuid(),
+  emoji: z.enum(REACTION_EMOJI, { message: "Pick one of the six reactions" }),
+});
+
+export const openChatSocketSchema = z.object({
+  channelId: z.string().uuid(),
 });
 
 export const openChannelSchema = z.object({

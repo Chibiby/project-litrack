@@ -241,6 +241,11 @@ export const AUDIT_ACTIONS = {
    * never the body, which is a person's own words to a colleague.
    */
   CHAT_MESSAGE_SEND: "CHAT_MESSAGE_SEND",
+  /**
+   * A Super Admin removed someone else's chat message (moderation). Message
+   * and channel ids only — the text is blanked by the delete and never logged.
+   */
+  CHAT_MESSAGE_MODERATE: "CHAT_MESSAGE_MODERATE",
   /** A Super Admin opened a school's staff-room channel. Deduped like ADMIN_SCHOOL_VIEW. */
   CHAT_ADMIN_VIEW: "CHAT_ADMIN_VIEW",
   /** A support ticket raised from the assistant. Ids and category only, never the body. */
@@ -456,6 +461,7 @@ export const SECURITY_AUDIT_ACTIONS = [
   AUDIT_ACTIONS.IMPERSONATION_END,
   AUDIT_ACTIONS.ADMIN_SCHOOL_VIEW,
   AUDIT_ACTIONS.CHAT_ADMIN_VIEW,
+  AUDIT_ACTIONS.CHAT_MESSAGE_MODERATE,
   // Tenant and account lifecycle
   AUDIT_ACTIONS.SCHOOL_CREATE,
   AUDIT_ACTIONS.SCHOOL_DELETE,
