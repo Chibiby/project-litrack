@@ -11,9 +11,16 @@
  * `wrangler.jsonc` — an expression with no entry in this map is a silent no-op.
  */
 import worker from "./.open-next/worker.js";
+import { handleChatSocket } from "./src/lib/chat/live/socket-route.ts";
 
 // Durable Object classes and any other named bindings OpenNext generates.
 export * from "./.open-next/worker.js";
+
+// Live chat rooms (binding CHAT_ROOM). See src/lib/chat/live/chat-room.ts.
+export { ChatRoom } from "./src/lib/chat/live/chat-room.ts";
+
+/** WebSocket joins for live chat; verified here, before OpenNext sees them. */
+const CHAT_SOCKET_PATH = "/chat-ws";
 
 /** Cron expression (UTC) → the route that does the work. */
 const CRON_ROUTES = {
@@ -29,6 +36,13 @@ const CRON_ROUTES = {
 
 export default {
   ...worker,
+
+  async fetch(request, env, ctx) {
+    if (new URL(request.url).pathname === CHAT_SOCKET_PATH) {
+      return handleChatSocket(request, env);
+    }
+    return worker.fetch(request, env, ctx);
+  },
 
   async scheduled(event, env, ctx) {
     const path = CRON_ROUTES[event.cron];

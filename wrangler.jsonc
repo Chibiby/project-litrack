@@ -55,6 +55,14 @@
       "bucket_name": "litrack-backups"
     }
   ],
+  // Live chat rooms: one Durable Object per channel, holding its WebSockets
+  // (src/lib/chat/live/chat-room.ts, exported from worker.js). SQLite-backed
+  // class, the kind the Free plan allows. Joined only through /chat-ws with a
+  // signed ticket; without this binding the chat falls back to polling.
+  "durable_objects": {
+    "bindings": [{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }]
+  },
+  "migrations": [{ "tag": "v1-chat-room", "new_sqlite_classes": ["ChatRoom"] }],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
