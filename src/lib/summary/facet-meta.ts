@@ -50,6 +50,12 @@ export const SUMMARY_FACET_META: Record<SummaryFacetId, SummaryFacetMeta> = {
     description: "Schools with no data, pending items, stale or incomplete records, or discrepancies.",
     paramKinds: [],
   },
+  "full-compliance": {
+    id: "full-compliance",
+    label: "Full compliance",
+    description: "Schools with complete, up-to-date records and no discrepancies, and how long they have kept it.",
+    paramKinds: [],
+  },
   profiling: {
     id: "profiling",
     label: "Teacher and School Head profiling",

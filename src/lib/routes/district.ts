@@ -52,6 +52,7 @@ export const DISTRICT_SUMMARY_FACETS = [
   { id: "attendance", label: "Weekly attendance" },
   { id: "reading-levels", label: "Monthly reading level" },
   { id: "compliance", label: "Non-compliance" },
+  { id: "full-compliance", label: "Full compliance" },
   { id: "profiling", label: "Teacher and School Head profiling" },
   { id: "aral", label: "ARAL learners" },
   { id: "bosy", label: "BOSY" },

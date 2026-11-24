@@ -28,6 +28,8 @@ vi.mock("@/lib/prisma", () => ({
     get $executeRaw() {
       return executeRaw;
     },
+    schoolComplianceState: { findMany: async () => [] },
+    schoolComplianceEvent: { findMany: async () => [] },
     $transaction: (fn: (tx: { $queryRaw: typeof queryRaw; $executeRaw: typeof executeRaw }) => unknown) =>
       fn({ $queryRaw: queryRaw, $executeRaw: executeRaw }),
   },
@@ -203,7 +205,13 @@ describe("facet raw rows are division-wide and fenced to the scope's schools", (
 
     expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(boundIdArrays()).toEqual([]);
-    const shown = new Set(result.sections.flatMap((s) => s.table.groups.map((g) => g.schoolId)).filter(Boolean));
+    // Full compliance draws no tables; its schools are in its directory.
+    const shown = new Set(
+      [
+        ...result.sections.flatMap((s) => s.table.groups.map((g) => g.schoolId)),
+        ...(result.fullCompliance?.directory.map((d) => d.schoolId) ?? []),
+      ].filter(Boolean)
+    );
     expect([...shown].sort()).toEqual(["sch-glan-ces", "sch-gumasa"]);
     expect(result.schoolCount).toBe(2);
   });

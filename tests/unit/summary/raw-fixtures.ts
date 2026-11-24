@@ -302,6 +302,13 @@ function rowsFor(facet: SummaryFacetId, ids: readonly string[]): AnyRaw[] {
       return ids.flatMap(readingLevelRows);
     case "compliance":
       return ids.map((id) => complianceRow(id, ALL_RAW_SCHOOL_IDS.indexOf(id)));
+    case "full-compliance":
+      return ids.map((id) => ({
+        ...complianceRow(id, ALL_RAW_SCHOOL_IDS.indexOf(id)),
+        compliant_since: null,
+        tracking_since: null,
+        events: [],
+      }));
     case "profiling":
       return ids.flatMap(profilingRows);
     case "aral":
@@ -337,6 +344,7 @@ function orphanRows(facet: SummaryFacetId): AnyRaw[] {
     case "reading-levels":
       return [{ kind: "population", school_id: nul, gt: "G9", month: null, lang: null, prev: null, val: null, n: 99 } as RawReadingLevelRow];
     case "compliance":
+    case "full-compliance":
       return [];
     case "profiling":
       return [{ school_id: nul, who: "TEACHER", field: "designation", bucket: "Orphan Designation", count: 9 } as RawProfilingRow];

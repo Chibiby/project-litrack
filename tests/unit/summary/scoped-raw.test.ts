@@ -45,6 +45,8 @@ vi.mock("@/lib/prisma", () => ({
         return schoolFindMany;
       },
     },
+    schoolComplianceState: { findMany: async () => [] },
+    schoolComplianceEvent: { findMany: async () => [] },
     get $queryRaw() {
       return queryRaw;
     },
@@ -96,6 +98,7 @@ const { shapeEndOfTerm, schoolYearLabelChoice } = await import("@/lib/summary/qu
 const { shapeAttendance } = await import("@/lib/summary/queries/attendance");
 const { shapeReadingLevels } = await import("@/lib/summary/queries/reading-levels");
 const { shapeCompliance } = await import("@/lib/summary/queries/compliance");
+const { shapeFullCompliance } = await import("@/lib/summary/queries/full-compliance");
 const { shapeProfiling } = await import("@/lib/summary/queries/profiling");
 const { shapeAral, shapeAralTeachers, shapeAdvisory } = await import("@/lib/summary/queries/aral");
 const { shapeBosy, shapeMosy } = await import("@/lib/summary/queries/mosy-bosy");
@@ -120,6 +123,7 @@ const PARAMS: Record<SummaryFacetId, Record<string, string>> = {
   attendance: { from: "2026-09", to: "2026-09" },
   "reading-levels": { from: "2026-09", to: "2026-09" },
   compliance: {},
+  "full-compliance": {},
   profiling: {},
   aral: {},
   "aral-teachers": {},
@@ -201,7 +205,7 @@ function referenceResult(
   params: Record<string, string | null>,
   requestedLabel: string | null
 ): FacetResult {
-  const activeOnly = facet === "compliance";
+  const activeOnly = facet === "compliance" || facet === "full-compliance";
   const schools = scopeSchools(ids, activeOnly);
   // The old query's output is by construction fenced: cast is the test's
   // stand-in for "the SQL ran for exactly these schools".
@@ -220,6 +224,8 @@ function referenceResult(
       return shapeReadingLevels({ raw, schools, level, from: params.from!, to: params.to!, computedAt });
     case "compliance":
       return shapeCompliance({ raw, schools, level, todayKey: params.today!, computedAt });
+    case "full-compliance":
+      return shapeFullCompliance({ raw, schools, level, todayKey: params.today!, computedAt });
     case "profiling":
       return shapeProfiling({ raw, schools, level, computedAt });
     case "aral":
@@ -302,7 +308,7 @@ describe("(2) nothing only an out-of-scope school has reaches the output", () =>
     it.each(SCOPES.flatMap((s) => LEVELS.map((level) => [s.name, level, s] as const)))(
       "%s, level %s",
       async (_name, level, s) => {
-        const ids = facet === "compliance" ? scopeSchools(s.ids, true).map((x) => x.id) : s.ids;
+        const ids = facet === "compliance" || facet === "full-compliance" ? scopeSchools(s.ids, true).map((x) => x.id) : s.ids;
         const res = await load(facet, s.scope, s.demo, level);
         const text = JSON.stringify(res);
         for (const token of leakTokens(ids)) expect(text, `leaked "${token}"`).not.toContain(token);
@@ -475,7 +481,7 @@ describe("(4) every scope and level of a period runs the SQL once", () => {
     expect(Array.isArray(stored.rows)).toBe(true);
     expect(first.computedAt).toBe(stored.computedAt);
     for (const s of SCOPES) {
-      if (scopeSchools(s.ids, facet === "compliance").length === 0) continue;
+      if (scopeSchools(s.ids, facet === "compliance" || facet === "full-compliance").length === 0) continue;
       for (const level of LEVELS) {
         isDemoVisible.mockResolvedValue(s.demo);
         const res = await SUMMARY_FACETS[facet].load(s.scope, { ...PARAMS[facet], level });

@@ -34,6 +34,7 @@ import { queryEndOfTermRows, shapeEndOfTerm } from "@/lib/summary/queries/end-of
 import { queryAttendanceRows, shapeAttendance } from "@/lib/summary/queries/attendance";
 import { queryReadingLevelRows, shapeReadingLevels } from "@/lib/summary/queries/reading-levels";
 import { queryComplianceRows, shapeCompliance } from "@/lib/summary/queries/compliance";
+import { queryFullComplianceRows, shapeFullCompliance } from "@/lib/summary/queries/full-compliance";
 import { queryProfilingRows, shapeProfiling } from "@/lib/summary/queries/profiling";
 import {
   queryAralLearnerRows,
@@ -276,6 +277,7 @@ function defineFacet<S extends z.ZodTypeAny, R extends ResolvedParams, T extends
         : def.id === "aral" ||
             def.id === "aral-teachers" ||
             def.id === "advisory" ||
+            def.id === "full-compliance" ||
             def.id === "bosy" ||
             def.id === "mosy"
           ? exportListReportTable
@@ -394,6 +396,19 @@ export const SUMMARY_FACETS: Record<SummaryFacetId, SummaryFacet> = {
     query: (input) => queryComplianceRows(input.todayKey as string),
     shape: (raw, { schools, params, todayKey, computedAt }) =>
       shapeCompliance({ raw, schools, level: params.level, todayKey, computedAt }),
+  }),
+
+  "full-compliance": defineFacet({
+    id: "full-compliance",
+    params: levelOnlyParamsSchema,
+    resolve: (p, todayKey) => ({ level: p.level, today: todayKey }),
+    activeSchoolsOnly: true,
+    queryInput: (_params, todayKey) => ({ todayKey }),
+    // Compliance rows plus each school's stored state and change log, merged
+    // before `scopeRaw`, so the fence covers the history too.
+    query: (input) => queryFullComplianceRows(input.todayKey as string),
+    shape: (raw, { schools, params, todayKey, computedAt }) =>
+      shapeFullCompliance({ raw, schools, level: params.level, todayKey, computedAt }),
   }),
 
   profiling: defineFacet({

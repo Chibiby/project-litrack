@@ -1,3 +1,4 @@
+import type { FullComplianceStatus } from "@/lib/summary/shape/full-compliance";
 /**
  * Shapes shared by every summary facet (docs/specs/district-admin.md 3.6).
  *
@@ -13,6 +14,7 @@ export const SUMMARY_FACET_IDS = [
   "attendance",
   "reading-levels",
   "compliance",
+  "full-compliance",
   "profiling",
   "aral",
   "bosy",
@@ -163,6 +165,37 @@ export type FacetResult = {
   exportList?: SummaryList;
   /** Choices for the facet's own selects, e.g. `schoolYearLabels` for end-of-term. */
   options?: Record<string, string[]>;
+  /** Facet `full-compliance` only: everything its page draws. */
+  fullCompliance?: FullComplianceView;
   /** ISO instant the figures were computed, for "Figures as of HH:MM". */
   computedAt: string;
+};
+
+/** One school on the Full Compliance page. */
+export type FullComplianceSchool = {
+  schoolId: string;
+  name: string;
+  schoolIdCode: string;
+  /** The district, or "No district". */
+  district: string;
+  status: FullComplianceStatus;
+  /** Flag labels open today. */
+  flags: string[];
+  /** Days compliant in a row, both ends counted; null when not compliant or not yet tracked. */
+  streak: number | null;
+  /** The last 90 days of status changes, newest first. */
+  history: { dateKey: string; from: string | null; to: string; flags: string[] }[];
+};
+
+export type FullComplianceView = {
+  cards: { total: number; compliant: number; consistent: number; ratePct: number };
+  ranking: { district: string; compliant: number; total: number; pct: number }[];
+  recent: { school: FullComplianceSchool; dateKey: string }[];
+  lost: { school: FullComplianceSchool; dateKey: string; flags: string[] }[];
+  leaderboard: FullComplianceSchool[];
+  recognition: FullComplianceSchool[];
+  directory: FullComplianceSchool[];
+  /** First day of the daily check in this scope, or null before it ever ran. */
+  trackingSince: string | null;
+  todayKey: string;
 };

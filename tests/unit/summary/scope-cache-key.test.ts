@@ -33,6 +33,8 @@ vi.mock("@/lib/prisma", () => ({
     get $executeRaw() {
       return executeRaw;
     },
+    schoolComplianceState: { findMany: async () => [] },
+    schoolComplianceEvent: { findMany: async () => [] },
     $transaction: (fn: (tx: { $queryRaw: typeof queryRaw; $executeRaw: typeof executeRaw }) => unknown) =>
       fn({ $queryRaw: queryRaw, $executeRaw: executeRaw }),
   },
