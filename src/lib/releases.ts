@@ -135,6 +135,15 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.86.1",
+    date: "2026-11-24",
+    title: "Switching light and dark mode stays smooth every time",
+    announce: true,
+    fixes: [
+      "Switching between light and dark mode again and again no longer stalls halfway and jumps to the end. Every switch now plays as smoothly as the first one.",
+    ],
+  },
+  {
     version: "2.86.0",
     date: "2026-11-24",
     title: "The side menu shows what is waiting for you",
