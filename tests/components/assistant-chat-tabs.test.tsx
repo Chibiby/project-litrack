@@ -34,6 +34,7 @@ vi.mock("next/link", () => ({
 vi.mock("@/lib/actions/assistant", () => ({ askAssistant: vi.fn() }));
 vi.mock("@/lib/actions/support", () => ({ fetchMyTickets: vi.fn(async () => ({ ok: true, data: [] })) }));
 vi.mock("@/lib/actions/chat", () => ({
+  openChatSocket: vi.fn(async () => ({ ok: true, data: { live: false } })),
   getMyChatUnread: vi.fn(async () => ({ ok: true, data: { school: false, admin: false } })),
   openChannel: vi.fn(async ({ kind }: { kind: keyof typeof CHANNELS }) => ({
     ok: true,
