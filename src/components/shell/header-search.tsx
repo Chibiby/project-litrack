@@ -204,15 +204,17 @@ export function HeaderSearch({
       }}
       className={cn("group/search relative", className)}
     >
-      {/* Stands in for the placeholder, which cannot draw keycaps. Hidden
-          once the box holds text, like a placeholder. */}
+      {/* At rest the box shows its shortcut as keycaps, which a placeholder
+          cannot draw. Focus or text hides it; focus brings back the real
+          placeholder describing what the box searches. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-9 z-10 flex h-11 items-center gap-1 text-sm text-slate-500 group-data-[filled]/search:hidden dark:text-slate-400 lg:h-9"
+        className="pointer-events-none absolute inset-y-0 left-9 z-10 flex h-11 items-center gap-1 text-sm text-slate-500 group-focus-within/search:hidden group-data-[filled]/search:hidden dark:text-slate-400 lg:h-9"
       >
         <kbd className={KEYCAP}>{modifier}</kbd>
         <kbd className={KEYCAP}>K</kbd>
-        <span className="ml-0.5">to search</span>
+        <span aria-hidden className="ml-0.5 text-slate-400 dark:text-slate-500">|</span>
+        <span>Search</span>
       </span>
       <SearchInput
             escapeClears={false}
@@ -223,6 +225,7 @@ export function HeaderSearch({
           setOpen(true);
         }}
         label={placeholder}
+        placeholder={placeholder}
         role="combobox"
         aria-expanded={showList}
         aria-controls={listId}
@@ -253,7 +256,7 @@ export function HeaderSearch({
         // with its own blur and a bright hairline border, so it reads as a
         // lighter pane of the same glass rather than a solid white slab.
         // Focus firms the fill up so typed text stays crisp.
-        inputClassName="h-11 rounded-full border-white/70 bg-glass/45 text-sm shadow-field backdrop-blur-md placeholder:text-slate-500 focus-visible:border-primary/40 focus-visible:bg-glass/70 dark:border-white/15 dark:bg-glass/[0.06] dark:shadow-none dark:placeholder:text-slate-400 dark:focus-visible:bg-glass/10 lg:h-9"
+        inputClassName="h-11 rounded-full border-white/70 bg-glass/45 text-sm shadow-field backdrop-blur-md placeholder:text-transparent focus:placeholder:text-slate-500 focus-visible:border-primary/40 focus-visible:bg-glass/70 dark:border-white/15 dark:bg-glass/[0.06] dark:shadow-none dark:focus:placeholder:text-slate-400 dark:focus-visible:bg-glass/10 lg:h-9"
       />
 
       {showList && (
