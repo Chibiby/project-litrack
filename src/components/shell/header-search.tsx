@@ -88,6 +88,8 @@ function matchPages(pages: HeaderSearchPage[], trimmed: string): Row[] {
     }));
 }
 
+const SHORTCUT_HINT_DELAY_MS = 600;
+const SHORTCUT_HINT_MS = 3500;
 const KEYCAP =
   "inline-flex h-5 min-w-5 items-center justify-center rounded border border-slate-300 border-b-2 bg-white/80 px-1 font-sans text-[11px] font-medium leading-none text-slate-600 dark:border-white/20 dark:bg-white/10 dark:text-slate-300";
 const noSubscribe = () => () => undefined;
@@ -118,6 +120,21 @@ export function HeaderSearch({
   // and Linux, ⌘ on a Mac, drawn as keycaps. The server cannot know, so it
   // renders "Ctrl".
   const modifier = useSyncExternalStore(noSubscribe, clientShortcut, () => "Ctrl");
+  // The keycap hint shows once per page load (this header mounts on a load
+  // or sign-in, not on in-app navigation): in after a beat, out a few
+  // seconds later.
+  const [showShortcut, setShowShortcut] = useState(false);
+  useEffect(() => {
+    const show = window.setTimeout(() => setShowShortcut(true), SHORTCUT_HINT_DELAY_MS);
+    const hide = window.setTimeout(
+      () => setShowShortcut(false),
+      SHORTCUT_HINT_DELAY_MS + SHORTCUT_HINT_MS
+    );
+    return () => {
+      window.clearTimeout(show);
+      window.clearTimeout(hide);
+    };
+  }, []);
 
   const trimmed = query.trim();
   const [prevTrimmed, setPrevTrimmed] = useState(trimmed);
@@ -204,16 +221,24 @@ export function HeaderSearch({
       }}
       className={cn("group/search relative", className)}
     >
-      {/* At rest the box shows its shortcut as keycaps, which a placeholder
-          cannot draw. Focus or text hides it; focus brings back the real
-          placeholder describing what the box searches. */}
+      {/* At rest the box reads "Search". Just after a page load or sign-in
+          the Ctrl K keycaps (which a placeholder cannot draw) slide in for a
+          few seconds as a hint, then fold away. Focus or text hides all of
+          it; focus brings back the real placeholder. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-9 z-10 flex h-11 items-center gap-1 text-sm text-slate-500 group-focus-within/search:hidden group-data-[filled]/search:hidden dark:text-slate-400 lg:h-9"
+        className="pointer-events-none absolute inset-y-0 left-9 z-10 flex h-11 items-center pl-px text-sm text-slate-500 transition-opacity duration-base ease-standard group-focus-within/search:opacity-0 group-data-[filled]/search:opacity-0 motion-reduce:transition-none dark:text-slate-400 lg:h-9"
       >
-        <kbd className={KEYCAP}>{modifier}</kbd>
-        <kbd className={KEYCAP}>K</kbd>
-        <span aria-hidden className="ml-0.5 text-slate-400 dark:text-slate-500">|</span>
+        <span
+          className={cn(
+            "flex items-center gap-1 overflow-hidden whitespace-nowrap pr-1.5 transition-[max-width,padding,opacity] duration-slow ease-standard motion-reduce:transition-none",
+            showShortcut ? "max-w-32 opacity-100" : "max-w-0 pr-0 opacity-0"
+          )}
+        >
+          <kbd className={KEYCAP}>{modifier}</kbd>
+          <kbd className={KEYCAP}>K</kbd>
+          <span className="ml-0.5 text-slate-400 dark:text-slate-500">|</span>
+        </span>
         <span>Search</span>
       </span>
       <SearchInput
@@ -256,7 +281,7 @@ export function HeaderSearch({
         // with its own blur and a bright hairline border, so it reads as a
         // lighter pane of the same glass rather than a solid white slab.
         // Focus firms the fill up so typed text stays crisp.
-        inputClassName="h-11 rounded-full border-white/70 bg-glass/45 text-sm shadow-field backdrop-blur-md placeholder:text-transparent focus:placeholder:text-slate-500 focus-visible:border-primary/40 focus-visible:bg-glass/70 dark:border-white/15 dark:bg-glass/[0.06] dark:shadow-none dark:focus:placeholder:text-slate-400 dark:focus-visible:bg-glass/10 lg:h-9"
+        inputClassName="h-11 rounded-full border-white/70 bg-glass/45 text-sm shadow-field backdrop-blur-md placeholder:text-transparent placeholder:transition-colors placeholder:duration-base focus:placeholder:text-slate-500 focus-visible:border-white focus-visible:bg-glass/75 focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0 dark:border-white/15 dark:bg-glass/[0.06] dark:shadow-none dark:focus:placeholder:text-slate-400 dark:focus-visible:border-white/30 dark:focus-visible:bg-glass/10 dark:focus-visible:ring-primary/25 lg:h-9"
       />
 
       {showList && (
