@@ -1,13 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { ClipboardList, UserMinus, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { TabNav } from "@/components/school-head/tab-nav";
 import { SEARCH_BAR_WIDTH, SearchInput } from "@/components/ui/search-input";
 import { FilterMenu } from "@/components/ui/filter-menu";
 import { AdvisorySelect } from "@/components/learners/advisory-select";
 import { SelectItem } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { FacetSelect } from "@/components/ui/facet-select";
 import { SortSelect } from "@/components/ui/sort-select";
 import {
@@ -21,7 +18,7 @@ import {
 /**
  * v2 roster controls, to the owner's Learners mockups.
  *
- * `LearnerRosterNav` sits above the table panel: the three tabs and the add
+ * `LearnerRosterNav` sits above the table panel: the two tabs and the add
  * control. The highlighted advisory dropdown lives in the page hero's
  * top-right corner instead (see `TeacherLearnersPage`), not in this row.
  * `LearnerListToolbar` is the panel's own top row: search, the advisory
@@ -118,77 +115,35 @@ export function withSection(s: RosterUrlState, section: string): RosterUrlState 
   return { ...s, section, advisory: section === "all" ? s.advisory : null };
 }
 
-const TAB_BASE =
-  "h-11 shrink-0 gap-1.5 rounded-md px-3 text-caption font-medium sm:gap-2 sm:px-4 sm:text-sm lg:h-9";
-const TAB_ON =
-  "border-transparent bg-gradient-to-r from-aral-600 to-aral-500 text-white shadow-sm shadow-aral-500/30 hover:from-aral-600 hover:to-aral-600 hover:text-white";
-
+/**
+ * The Active / Removed tabs, as underline tabs (the shared `TabNav`, the
+ * same style as the Transfer page's kind tabs), with the add control on the
+ * right. ARAL Profiling is reached from its own sidebar row, not from here.
+ */
 export function LearnerRosterNav({
   basePath,
   state,
-  showProfiling,
   addControl,
 }: {
   basePath: string;
   state: RosterUrlState;
-  /** Hidden for Super Admin, who teaches no ARAL learners. */
-  showProfiling: boolean;
   addControl?: React.ReactNode;
 }) {
-  const activeHref = rosterHref(basePath, {
-    ...state,
-    archivedView: false,
-    q: "",
-  });
-  const archivedHref = rosterHref(basePath, {
-    ...state,
-    archivedView: true,
-    q: "",
-  });
+  const activeHref = rosterHref(basePath, { ...state, archivedView: false, q: "" });
+  const archivedHref = rosterHref(basePath, { ...state, archivedView: true, q: "" });
 
   return (
-    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-      <nav
-        aria-label="Learner lists"
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 xl:pb-0"
-      >
-        <Button
-          asChild
-          variant="outline"
-          className={cn(TAB_BASE, !state.archivedView && TAB_ON)}
-        >
-          <Link
-            href={activeHref}
-            aria-current={!state.archivedView ? "page" : undefined}
-          >
-            <Users className="size-4" aria-hidden />
-            Active Learners
-          </Link>
-        </Button>
-        <Button
-          asChild
-          variant="outline"
-          className={cn(TAB_BASE, state.archivedView && TAB_ON)}
-        >
-          <Link
-            href={archivedHref}
-            aria-current={state.archivedView ? "page" : undefined}
-          >
-            <UserMinus className="size-4" aria-hidden />
-            Removed Learners
-          </Link>
-        </Button>
-        {showProfiling ? (
-          <Button asChild variant="outline" className={TAB_BASE}>
-            <Link href={ARAL_PROFILING_HREF}>
-              <ClipboardList className="size-4" aria-hidden />
-              Learner Profiling
-            </Link>
-          </Button>
-        ) : null}
-      </nav>
-
-      {addControl ? <div className="shrink-0">{addControl}</div> : null}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <TabNav
+        label="Learner lists"
+        className="min-w-0 flex-1"
+        activeKey={state.archivedView ? "removed" : "active"}
+        items={[
+          { key: "active", label: "Active Learners", href: activeHref },
+          { key: "removed", label: "Removed Learners", href: archivedHref },
+        ]}
+      />
+      {addControl ? <div className="shrink-0 sm:pb-1">{addControl}</div> : null}
     </div>
   );
 }

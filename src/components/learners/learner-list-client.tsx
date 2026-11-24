@@ -623,7 +623,6 @@ function LearnerListPanel({
       <LearnerRosterNav
         basePath={basePath}
         state={urlState}
-        showProfiling={!isSuperAdmin}
         addControl={addControl}
       />
 

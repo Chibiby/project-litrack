@@ -166,15 +166,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("LearnerListClient — Actions column", () => {
-  it("links the roster to its archive and learner profiling workspace", () => {
+  it("shows Active and Removed as tabs, with no Learner Profiling button", () => {
     renderRoster();
 
-    expect(
-      screen.getByRole("link", { name: "Removed Learners" }).getAttribute("href")
-    ).toBe("/teacher/learners?filter=archived");
-    expect(
-      screen.getByRole("link", { name: "Learner Profiling" }).getAttribute("href")
-    ).toBe("/teacher/aral/profiling");
+    const tabs = screen.getByRole("navigation", { name: "Learner lists" });
+    const active = within(tabs).getByRole("link", { name: "Active Learners" });
+    expect(active.getAttribute("href")).toBe("/teacher/learners");
+    expect(active.getAttribute("aria-current")).toBe("page");
+    const removed = within(tabs).getByRole("link", { name: "Removed Learners" });
+    expect(removed.getAttribute("href")).toBe("/teacher/learners?filter=archived");
+    expect(removed.getAttribute("aria-current")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Learner Profiling" })).toBeNull();
   });
 
   it("archives a selected learner instead of deleting their record", async () => {
