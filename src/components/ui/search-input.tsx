@@ -82,7 +82,7 @@ export function SearchFieldIcon({ className }: { className?: string }) {
     <Search
       aria-hidden
       className={cn(
-        "pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground",
+        "pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground",
         className
       )}
     />

@@ -135,6 +135,29 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.83.0",
+    date: "2026-11-24",
+    title: "Division Transfers, an ARAL-only home for volunteers, livelier numbers",
+    announce: true,
+    fixes: [
+      {
+        text: "Transfers now sits under Management. Pick the school a person is moving from, then send its learners, teachers or ARAL volunteers to another school. The old Learner Transfers page opens Transfers.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Non-DepEd ARAL Volunteers get a home made for ARAL: the menu and dashboard show only your ARAL grades, learners, attendance, reading levels and profiles. No advisory, MOSY or BOSY.",
+        roles: ["TEACHER"],
+      },
+      {
+        text: "On Learners, Active Learners and Removed Learners are now tabs, and the Learner Profiling button is gone. ARAL Profiling in the menu still opens it.",
+        roles: ["TEACHER"],
+      },
+      "The numbers on summary cards count up from zero the first time you open a page after signing in.",
+      "Switching between light and dark mode now spreads with a soft, wavy edge that looks different every time, and it runs smoothly even when you switch quickly.",
+      "The magnifying glass in the top search box shows at the top of the page again, not only after you scroll.",
+    ],
+  },
+  {
     version: "2.82.0",
     date: "2026-11-23",
     title: "Transfers between schools, ARAL Tutor is back, Friday is locked",
