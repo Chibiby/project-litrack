@@ -136,6 +136,35 @@ export interface NavOptions {
   isDeveloperAdmin?: boolean;
 }
 
+/**
+ * Work-waiting counts for sidebar rows, keyed by `NavItem.id`. Loaded by each
+ * role layout (`src/lib/nav/badges.ts`); a missing or zero entry shows no badge.
+ */
+export type NavBadges = Partial<Record<string, number>>;
+
+/**
+ * Put `badges` on the rows they name. A row with no entry keeps the badge the
+ * menu already gave it (the School Head's Teachers count); a zero clears it.
+ */
+export function applyNavBadges(groups: NavGroup[], badges: NavBadges | undefined): NavGroup[] {
+  if (!badges) return groups;
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => {
+      if (!(item.id in badges)) return item;
+      const count = badges[item.id] ?? 0;
+      const next: NavItem = { ...item, badge: count };
+      if (count <= 0) delete next.badge;
+      return next;
+    }),
+  }));
+}
+
+/** Badge text: past 99 the pill would outgrow the row, so it reads "99+". */
+export function formatNavBadge(count: number): string {
+  return count > 99 ? "99+" : String(count);
+}
+
 /** The ARAL Profiling list: Sections C–E status for every ARAL learner a teacher is the ARAL tutor of. */
 export const ARAL_PROFILING_HREF = "/teacher/aral/profiling";
 

@@ -8,6 +8,8 @@ import { PostLoginSplash } from "@/components/post-login-splash";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { getProfilePhotoBellNotifications } from "@/lib/notifications";
 import { getSchoolTransferBellNotifications } from "@/lib/transfers/notify";
+import { getSchoolHeadNavBadges } from "@/lib/nav/badges";
+import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
 import { readImpersonation } from "@/lib/auth/impersonation-session";
 import { SCHOOL_HEAD_ROUTES } from "@/lib/routes/school-head";
 import { geminiConfigured } from "@/lib/assistant/gemini";
@@ -36,6 +38,7 @@ export default async function SchoolHeadAppLayout({
 
   let schoolName: string | undefined;
   let pendingTeacherCount: number | undefined;
+  let pendingTransferRequestCount: number | undefined;
 
   // Run concurrently — each independently try/caught below via
   // `Promise.allSettled`, so one failing (a transient pool error must not
@@ -65,6 +68,7 @@ export default async function SchoolHeadAppLayout({
   if (user.role === "SCHOOL_HEAD" && user.schoolId) {
     if (metricCountsResult.status === "fulfilled") {
       pendingTeacherCount = metricCountsResult.value?.pendingTeacherCount;
+      pendingTransferRequestCount = metricCountsResult.value?.pendingTransferRequestCount;
     } else {
       console.error("[school-head/layout] pending teacher count failed:", metricCountsResult.reason);
     }
@@ -87,6 +91,17 @@ export default async function SchoolHeadAppLayout({
         avatarPath={user.avatarPath}
         schoolName={schoolName}
         pendingTeacherCount={pendingTeacherCount}
+        // Same rule as the Teachers badge: a real School Head's own school only.
+        // Streamed, not awaited; a failed count shows no badge.
+        navBadges={
+          user.role === "SCHOOL_HEAD" && user.schoolId
+            ? getSchoolHeadNavBadges(
+                user.schoolId,
+                pendingTransferRequestCount === undefined ? undefined : { pendingTransferRequestCount },
+                formatLocalDateKey(schoolToday())
+              ).catch(() => ({}))
+            : undefined
+        }
         aiEnabled={geminiConfigured()}
         schoolYearGate={loadHeaderSchoolYearGate(user)}
         // Not while an admin impersonates this head: `user` IS the head's own

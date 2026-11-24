@@ -82,6 +82,23 @@ export async function getChatNotifications(user: {
  * Called when the channel is opened: the notification exists to get somebody
  * there, and it has done its job the moment they arrive.
  */
+/**
+ * The Super Admin team answers schools as one inbox: once any admin has opened
+ * or answered a conversation, the other admins' bell alerts for it are spent.
+ * Bounded by the channel, the chat alert types, unread rows and the role.
+ */
+export async function markChatNotificationsReadForAdmins(channelId: string): Promise<void> {
+  await prisma.notification.updateMany({
+    where: {
+      channelId,
+      readAt: null,
+      type: { in: ["CHAT_MENTION", "CHAT_DIRECT_MESSAGE"] },
+      recipient: { role: "SUPER_ADMIN" },
+    },
+    data: { readAt: new Date() },
+  });
+}
+
 export async function markChatNotificationsRead(input: {
   userId: string;
   channelId: string;

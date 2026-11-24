@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { parseMentionHandles } from "@/lib/chat/mentions";
-import { markChatNotificationsRead } from "@/lib/chat/notifications";
+import { markChatNotificationsRead, markChatNotificationsReadForAdmins } from "@/lib/chat/notifications";
 import { canEditMessage, EDIT_WINDOW_MS, type ReactionEmoji } from "@/lib/chat/view";
 import { chatSocketSecret, hasChatRoomBinding, publishRoomEvent } from "@/lib/chat/live/publish";
 import { signTicket } from "@/lib/chat/live/ticket";
@@ -534,6 +534,9 @@ export const sendChatMessage = action("sendChatMessage", async (input: unknown):
     metadata: { kind: channel.kind, mentions: mentioned.length },
   });
 
+  // An admin's reply answers the school for the whole team.
+  if (user.role === "SUPER_ADMIN") await markChatNotificationsReadForAdmins(channel.id);
+
   await publishRoomEvent(channel.id, { type: "message.created", messageId: message.id, userId: user.id, at: nowIso() });
 
   return { ok: true, data: { id: message.id } };
@@ -715,6 +718,8 @@ export const markChannelRead = action("markChannelRead", async (input: unknown):
   });
   // The bell alert exists to get somebody here. Arriving is what clears it.
   await markChatNotificationsRead({ userId: user.id, channelId: channel.id });
+  // Admins share one inbox: one admin opening the conversation clears it for all.
+  if (user.role === "SUPER_ADMIN") await markChatNotificationsReadForAdmins(channel.id);
   // A Super Admin's read is never shown to staff, so it is not published.
   if (user.role !== "SUPER_ADMIN") {
     await publishRoomEvent(channel.id, { type: "read.changed", userId: user.id, at: nowIso() });

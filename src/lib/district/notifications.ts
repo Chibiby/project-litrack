@@ -43,10 +43,15 @@ import type { ShellNotification } from "@/components/shell/notifications-menu";
  */
 const getRequestMemo = cache(() => new Map<string, Promise<number>>());
 
-export async function getDistrictNotifications(
+/**
+ * Open support tickets from schools in this district admin's scope. Shared by
+ * the bell and the sidebar's Support badge, deduped per request, so the two
+ * never disagree and the count is read once.
+ */
+export function getOpenTicketCountInScope(
   user: Pick<User, "id">,
   scope: AdminScope
-): Promise<ShellNotification[]> {
+): Promise<number> {
   const key = `${user.id}|${scopeCacheKey(scope, false)}`;
   const memo = getRequestMemo();
   let pending = memo.get(key);
@@ -61,8 +66,14 @@ export async function getDistrictNotifications(
     });
     memo.set(key, pending);
   }
+  return pending;
+}
 
-  const count = await pending;
+export async function getDistrictNotifications(
+  user: Pick<User, "id">,
+  scope: AdminScope
+): Promise<ShellNotification[]> {
+  const count = await getOpenTicketCountInScope(user, scope);
   if (count === 0) return [];
 
   return [

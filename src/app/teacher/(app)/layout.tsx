@@ -12,6 +12,7 @@ import { AralAssignmentAlerts } from "@/components/notifications/aral-assignment
 import { UnlockGrantAlerts } from "@/components/notifications/unlock-grant-alerts";
 import { getProfilePhotoBellNotifications } from "@/lib/notifications";
 import { getSchoolTransferBellNotifications } from "@/lib/transfers/notify";
+import { getTeacherNavBadges } from "@/lib/nav/badges";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
 import { readImpersonation } from "@/lib/auth/impersonation-session";
@@ -128,6 +129,12 @@ export default async function TeacherAppLayout({
         aiEnabled={geminiConfigured()}
         schoolYearGate={loadHeaderSchoolYearGate(user)}
         trackTeacherPresence={!impersonating}
+        // Streamed, not awaited; a failed count shows no badge.
+        navBadges={
+          user.role === "TEACHER" && user.schoolId
+            ? getTeacherNavBadges(user.id, user.schoolId).catch(() => ({}))
+            : undefined
+        }
         // Not while an admin impersonates this teacher: `user` IS the teacher's
         // own account then, and acknowledging would stamp their row — the real
         // teacher would never be shown the release they have not read.

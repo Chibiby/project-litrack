@@ -9,6 +9,23 @@ vi.mock("@/lib/prisma", () => ({
 import { listAdminChatSchools } from "@/lib/chat/queries";
 
 describe("listAdminChatSchools", () => {
+  it("reads the newest read by any Super Admin, so one admin's read counts for all", async () => {
+    findMany.mockResolvedValue([]);
+    await listAdminChatSchools("admin-1");
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          reads: {
+            where: { user: { role: "SUPER_ADMIN" } },
+            orderBy: { lastReadAt: "desc" },
+            take: 1,
+            select: { lastReadAt: true },
+          },
+        }),
+      })
+    );
+  });
+
   it("maps member presence onto direct threads but not the school room", async () => {
     const lastOnlineAt = new Date("2026-09-12T10:00:00.000Z");
     findMany.mockResolvedValue([

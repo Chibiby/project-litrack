@@ -55,7 +55,11 @@ vi.mock("@/lib/audit", () => ({
   writeAudit: (...a: unknown[]) => writeAudit(...a),
   AUDIT_ACTIONS: { CHAT_MESSAGE_SEND: "CHAT_MESSAGE_SEND", CHAT_MESSAGE_MODERATE: "CHAT_MESSAGE_MODERATE" },
 }));
-vi.mock("@/lib/chat/notifications", () => ({ markChatNotificationsRead: vi.fn() }));
+const markForAdmins = vi.fn();
+vi.mock("@/lib/chat/notifications", () => ({
+  markChatNotificationsRead: vi.fn(),
+  markChatNotificationsReadForAdmins: (...a: unknown[]) => markForAdmins(...a),
+}));
 vi.mock("next/navigation", () => ({ unstable_rethrow: () => undefined }));
 vi.mock("@/lib/errors/report", () => ({ reportError: vi.fn(() => "E-REF") }));
 
@@ -124,6 +128,18 @@ describe("access", () => {
 });
 
 describe("sendChatMessage replies", () => {
+  it("an admin's reply clears every admin's alerts for the conversation", async () => {
+    requireUser.mockResolvedValue(admin);
+    const res = await chat.sendChatMessage({ channelId: CHANNEL, body: "Noted, fixing it now" });
+    expect(res).toMatchObject({ ok: true });
+    expect(markForAdmins).toHaveBeenCalledWith(CHANNEL);
+  });
+
+  it("a member's message does not clear the admins' alerts", async () => {
+    await chat.sendChatMessage({ channelId: CHANNEL, body: "Help please" });
+    expect(markForAdmins).not.toHaveBeenCalled();
+  });
+
   it("refuses a reply to another channel's message", async () => {
     db.chatMessage.findUnique.mockResolvedValue(message({ id: REPLY_TARGET, channelId: OTHER_CHANNEL }));
     const res = await chat.sendChatMessage({ channelId: CHANNEL, body: "re", replyToId: REPLY_TARGET });
@@ -317,6 +333,17 @@ describe("markChannelRead", () => {
   it("publishes a member's read", async () => {
     await chat.markChannelRead({ channelId: CHANNEL });
     expect(publishRoomEvent).toHaveBeenCalledWith(CHANNEL, expect.objectContaining({ type: "read.changed", userId: teacher.id }));
+  });
+
+  it("a super admin's read clears every admin's chat alerts for the channel", async () => {
+    requireUser.mockResolvedValue(admin);
+    await chat.markChannelRead({ channelId: CHANNEL });
+    expect(markForAdmins).toHaveBeenCalledWith(CHANNEL);
+  });
+
+  it("a member's read leaves the admins' alerts alone", async () => {
+    await chat.markChannelRead({ channelId: CHANNEL });
+    expect(markForAdmins).not.toHaveBeenCalled();
   });
 
   it("super admin read publishes nothing", async () => {

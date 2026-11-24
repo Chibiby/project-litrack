@@ -39,9 +39,12 @@ import type { UserRole } from "@prisma/client";
 import { Menu, Shield } from "lucide-react";
 import { NavGlassIndicator } from "@/components/shell/nav-glass-indicator";
 import {
+  applyNavBadges,
   flattenNavGroups,
+  formatNavBadge,
   getNavGroups,
   resolveActiveItemId,
+  type NavBadges,
   type NavItem,
 } from "@/lib/nav/nav-config";
 
@@ -83,6 +86,8 @@ interface AppSidebarProps {
   pendingTeacherCount?: number;
   /** Super Admin only — shows Developer Controls; see `NavOptions.isDeveloperAdmin`. */
   isDeveloperAdmin?: boolean;
+  /** Work-waiting counts per row id; see `src/lib/nav/badges.ts`. */
+  navBadges?: NavBadges;
   /** Desktop only — mobile Sheet always shows the full expanded chrome. */
   expanded?: boolean;
   /** Skip width transition until localStorage sync (avoids hydrate flash). */
@@ -227,8 +232,9 @@ function NavLink({
             className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-aral"
           />
         ) : (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 bg-aral text-xs font-medium text-aral-foreground">
-            {item.badge}
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 bg-aral text-xs font-medium tabular-nums text-aral-foreground">
+            {formatNavBadge(item.badge)}
+            <span className="sr-only"> waiting</span>
           </span>
         )
       ) : null}
@@ -259,6 +265,7 @@ export function AppSidebar({
   advisoryPlacements,
   pendingTeacherCount,
   isDeveloperAdmin,
+  navBadges,
   expanded = true,
   transitionsEnabled = true,
 }: AppSidebarProps) {
@@ -267,14 +274,17 @@ export function AppSidebar({
   const [prevPathname, setPrevPathname] = useState(pathname);
   const navGroups = useMemo(
     () =>
-      getNavGroups(role, grades ?? [], {
-        isAralVolunteer,
-        isFloating,
-        advisoryPlacements,
-        pendingTeacherCount,
-        isDeveloperAdmin,
-      }),
-    [role, grades, isAralVolunteer, isFloating, advisoryPlacements, pendingTeacherCount, isDeveloperAdmin]
+      applyNavBadges(
+        getNavGroups(role, grades ?? [], {
+          isAralVolunteer,
+          isFloating,
+          advisoryPlacements,
+          pendingTeacherCount,
+          isDeveloperAdmin,
+        }),
+        navBadges
+      ),
+    [role, grades, isAralVolunteer, isFloating, advisoryPlacements, pendingTeacherCount, isDeveloperAdmin, navBadges]
   );
   const navItems = useMemo(() => flattenNavGroups(navGroups), [navGroups]);
   // `navPath`, not `pathname`: during a click the router has not committed yet

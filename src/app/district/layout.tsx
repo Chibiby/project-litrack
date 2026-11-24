@@ -1,5 +1,6 @@
 import { requireAdminScope } from "@/lib/auth/district-scope";
 import { getDistrictNotifications } from "@/lib/district/notifications";
+import { getDistrictNavBadges } from "@/lib/nav/badges";
 import { RoleShell } from "@/components/role-shell";
 import { loadHeaderSchoolYearGate } from "@/lib/school-year/header-gate";
 import { ImpersonationNotice } from "@/components/admin/impersonation-notice";
@@ -37,6 +38,9 @@ export default async function DistrictLayout({
         // Not awaited: streamed through RoleShell/AppHeader so the chrome paints
         // before the open-ticket count resolves.
         notifications={getDistrictNotifications(user, scope)}
+        // Streamed, not awaited; a failed count shows no badge.
+        navBadges={getDistrictNavBadges(user, scope).catch(() => ({}))}
+        pollNavBadges
         schoolYearGate={loadHeaderSchoolYearGate(user)}
         // Not while an admin impersonates: acknowledging would stamp the
         // district admin's own row, and they would never see the release.

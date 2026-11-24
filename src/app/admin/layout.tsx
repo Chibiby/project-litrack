@@ -6,6 +6,7 @@ import { AdminShellGate } from "@/components/admin-shell-gate";
 import { geminiConfigured } from "@/lib/assistant/gemini";
 import { getChatNotifications } from "@/lib/chat/notifications";
 import { isDeveloperAdmin, superAdminLabel } from "@/lib/auth/admin-tier";
+import { getAdminNavBadges } from "@/lib/nav/badges";
 
 // Force dynamic so Next doesn't try to statically prerender these auth-gated
 // pages at build time, when Supabase/DATABASE_URL env may not be reachable.
@@ -41,6 +42,9 @@ export default async function AdminLayout({
             // Not awaited: streamed through RoleShell/AppHeader as a promise so the
             // sidebar and header paint before the notifications query resolves.
             notifications={getChatNotifications(user)}
+            // Streamed, not awaited; a failed count shows no badge.
+            navBadges={getAdminNavBadges().catch(() => ({}))}
+            pollNavBadges
             schoolYearGate={loadHeaderSchoolYearGate(user)}
             lastSeenReleaseVersion={user.lastSeenReleaseVersion}
           >

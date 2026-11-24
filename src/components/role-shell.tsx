@@ -9,6 +9,8 @@ import { ReleaseNotesModal } from "@/components/release-notes-modal";
 import type { ShellNotification } from "@/components/shell/notifications-menu";
 import type { HeaderSchoolYearGate } from "@/components/shell/school-year-badge";
 import { useSidebarExpanded } from "@/hooks/use-sidebar-expanded";
+import { useNavBadges } from "@/components/nav/use-nav-badges";
+import type { NavBadges } from "@/lib/nav/nav-config";
 import { CONTENT_OFFSET_CLASS } from "@/lib/sidebar-layout";
 import { LightRays } from "@/components/ui/light-rays";
 import { cn } from "@/lib/utils";
@@ -85,6 +87,13 @@ interface RoleShellProps {
   lastSeenReleaseVersion?: string | null;
   /** Mount the active-app heartbeat for a real, non-impersonated teacher. */
   trackTeacherPresence?: boolean;
+  /**
+   * Sidebar badge counts (`src/lib/nav/badges.ts`). A promise is passed
+   * unresolved so the chrome paints before the counts arrive.
+   */
+  navBadges?: NavBadges | Promise<NavBadges>;
+  /** Admin consoles: re-read the Support badge every 30 s (`/api/nav/badges`). */
+  pollNavBadges?: boolean;
   children: React.ReactNode;
 }
 
@@ -113,9 +122,12 @@ export function RoleShell({
   aiEnabled,
   lastSeenReleaseVersion,
   trackTeacherPresence = false,
+  navBadges,
+  pollNavBadges = false,
   children,
 }: RoleShellProps) {
   const { expanded, toggle, hydrated } = useSidebarExpanded();
+  const badges = useNavBadges(navBadges, pollNavBadges);
 
   return (
     <RoleShellContext.Provider value={true}>
@@ -139,6 +151,7 @@ export function RoleShell({
             advisoryPlacements={advisoryPlacements}
             pendingTeacherCount={pendingTeacherCount}
             isDeveloperAdmin={isDeveloperAdmin}
+            navBadges={badges}
             expanded={expanded}
             transitionsEnabled={hydrated}
           />

@@ -65,8 +65,12 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
           lastOnlineAt: true,
         },
       },
+      // The admin team shares one inbox: a conversation any Super Admin has
+      // read (or answered — a send marks the sender's read) is read for all.
       reads: {
-        where: { userId: adminId },
+        where: { user: { role: "SUPER_ADMIN" } },
+        orderBy: { lastReadAt: "desc" },
+        take: 1,
         select: { lastReadAt: true },
       },
       // The newest message only, for the conversation list's preview line.
