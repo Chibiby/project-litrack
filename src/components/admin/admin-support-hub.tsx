@@ -10,8 +10,8 @@ import { useUnreadTitle } from "@/components/chat/use-unread-title";
 import { SupportInbox } from "@/components/support/support-inbox";
 import { Button } from "@/components/ui/button";
 import type { AdminChatSchool } from "@/lib/chat/queries";
-import { listAdminConversations, type ChatChannelView } from "@/lib/actions/chat";
-import { callAction } from "@/lib/ui/call-action";
+import type { ChatChannelView } from "@/lib/actions/chat";
+import { pollAdminConversations } from "@/lib/chat/poll-client";
 import type { TicketRow } from "@/lib/support/queries";
 import { cn } from "@/lib/utils";
 import { ADMIN_ROUTES } from "@/lib/routes/admin";
@@ -59,7 +59,7 @@ export function AdminSupportHub({
     let cancelled = false;
     const tick = () => {
       if (document.visibilityState !== "visible") return;
-      void callAction(() => listAdminConversations()).then((result) => {
+      void pollAdminConversations().then((result) => {
         if (!cancelled && result.ok && result.data) setPolled(result.data);
       });
     };
@@ -124,7 +124,9 @@ export function AdminSupportHub({
       </div>
 
       {tab === "chat" ? (
-        <div id="admin-support-chat" role="tabpanel">
+        // pb-20 below md: the assistant button floats over the bottom-right of a
+        // phone screen and would otherwise sit on the composer's Send button.
+        <div id="admin-support-chat" role="tabpanel" className="pb-20 md:pb-0">
           <AdminChatBrowser
             schools={currentSchools}
             initialChannelId={channelId}

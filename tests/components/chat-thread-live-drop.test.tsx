@@ -10,6 +10,14 @@ import type { ChatChannelView } from "@/lib/actions/chat";
 vi.mock("next/navigation", () => ({ unstable_isUnrecognizedActionError: () => false }));
 
 const readChannel = vi.fn();
+// The thread polls over GET through poll-client; route it to this file's
+// readChannel mock so the tests drive one source of channel data.
+vi.mock("@/lib/chat/poll-client", async () => {
+  const chat = await import("@/lib/actions/chat");
+  const read = chat.readChannel as unknown as (input: { channelId: string }) => Promise<unknown>;
+  return { pollChannel: (channelId: string) => read({ channelId }) };
+});
+
 vi.mock("@/lib/actions/chat", () => ({
   readChannel: (...a: unknown[]) => readChannel(...a),
   sendChatMessage: vi.fn(),

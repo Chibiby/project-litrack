@@ -10,8 +10,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const listAdminConversations = vi.fn(async () => ({ ok: true, data: [] }));
-vi.mock("@/lib/actions/chat", () => ({
-  listAdminConversations: () => listAdminConversations(),
+vi.mock("@/lib/chat/poll-client", () => ({
+  pollAdminConversations: () => listAdminConversations(),
 }));
 
 vi.mock("@/components/chat/admin-chat-browser", () => ({

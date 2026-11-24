@@ -18,13 +18,13 @@ import {
   listMentionTargets,
   markChannelRead,
   openChannel,
-  readChannel,
   sendChatMessage,
   toggleChatReaction,
   type ChatChannelView,
   type ChatMessageView,
 } from "@/lib/actions/chat";
 import { callAction } from "@/lib/ui/call-action";
+import { pollChannel } from "@/lib/chat/poll-client";
 import { canEditMessage, groupMessages, seenLabel, typingLabel, type ReactionEmoji } from "@/lib/chat/view";
 import { getPresenceStatus } from "@/lib/presence/status";
 import { cn } from "@/lib/utils";
@@ -188,7 +188,8 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
   /** Resolves to the failure message, or null. Pollers ignore it and keep the previous messages. */
   const refresh = useCallback(
     async (id: string, options: { force?: boolean } = {}): Promise<string | null> => {
-      const result = await callAction(() => readChannel({ channelId: id }));
+      // GET, not an action: see src/app/api/chat/channel/route.ts.
+      const result = await pollChannel(id);
       if (!result.ok) return result.error;
       if (!result.data) return null;
 
