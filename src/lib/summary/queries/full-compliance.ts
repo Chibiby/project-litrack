@@ -1,4 +1,5 @@
 import "server-only";
+import { formatSchoolDate } from "@/lib/format-datetime";
 import type { ComplianceBaseStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatLocalDateKey, schoolToday } from "@/lib/date-keys";
@@ -220,7 +221,7 @@ export function shapeFullCompliance(args: {
     notes: [
       "A school is compliant when it has no flag on the Non-compliance page.",
       trackingSince
-        ? `Streaks are counted from the daily check, which began on ${trackingSince}.`
+        ? `Streaks are counted from the daily check, which began on ${formatSchoolDate(`${trackingSince}T12:00:00+08:00`)}.`
         : "Streaks start with the first daily check, run each night at 00:05.",
     ],
     gaps: [],
