@@ -90,7 +90,7 @@ function Cell({
       <span className="block text-sm font-medium">{primary}</span>
       <span className="block text-xs text-muted-foreground">{secondary}</span>
       {gradeLabel ? (
-        <span className="mt-0.5 block text-xs italic text-muted-foreground">{gradeLabel}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{gradeLabel}</span>
       ) : null}
       {notes && notes.length > 0 ? (
         <ul className="ml-auto mt-1 max-w-56 space-y-0.5 text-left text-xs text-foreground/80">
@@ -149,7 +149,7 @@ function Row({
       {notCollected ? (
         <td
           colSpan={buckets.length}
-          className="border-b border-border/60 px-3 py-2.5 align-top text-sm italic text-muted-foreground"
+          className="border-b border-border/60 px-3 py-2.5 align-top text-sm text-muted-foreground"
         >
           Not collected for this grade
         </td>

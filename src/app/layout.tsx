@@ -8,6 +8,7 @@ import { ClientErrorListener } from "@/components/errors/client-error-listener";
 import { SilentUpdater } from "@/components/app-update/silent-updater";
 import { OfflineBanner } from "@/components/errors/offline-banner";
 import { PressFeedback } from "@/components/press-feedback";
+import { SaveShortcut } from "@/components/save-shortcut";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ThemeScript } from "@/components/theme/theme-script";
 import "./globals.css";
@@ -98,6 +99,7 @@ export default function RootLayout({
           <ClientErrorListener />
           <SilentUpdater />
           <PressFeedback />
+          <SaveShortcut />
         </ThemeProvider>
       </body>
     </html>

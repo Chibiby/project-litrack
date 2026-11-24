@@ -183,6 +183,10 @@
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
 
+  /* Headings wrap into even lines instead of leaving one word alone on the
+     last line. Long body text keeps normal wrapping. */
+  h1, h2, h3 { text-wrap: balance; }
+
   /* Browser-owned surfaces. These ship with defaults that belong to no design
      system — selection, caret, scrollbars and underline offset all read as
      "assembled" until they are themed from the same tokens as everything else. */

@@ -628,7 +628,7 @@ export const AralTermGradesGridForm = forwardRef<AralTermGradesGridFormHandle, P
             <span className="text-center">#</span>
             <span className="min-w-0 leading-tight">
               <span className="block">Learner Name</span>
-              <span className="block text-xs italic">Advisory Section</span>
+              <span className="block text-xs">Advisory Section</span>
             </span>
             <span className={cn(PHONE_SUBJECTS, "truncate")}>Subjects ({termCaption})</span>
             <NextSubjectsButton onClick={onNextSubjects} windows={phoneWindow.windows} />
