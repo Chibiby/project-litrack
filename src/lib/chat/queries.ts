@@ -107,7 +107,7 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
             body: last.body,
             deletedAt: last.deletedAt,
             authorFirstName:
-              last.author?.firstName?.trim() || last.author?.fullName?.trim().split(/s+/)[0] || "Someone",
+              last.author?.firstName?.trim() || last.author?.fullName?.trim().split(/\s+/)[0] || "Someone",
           },
           adminId
         )

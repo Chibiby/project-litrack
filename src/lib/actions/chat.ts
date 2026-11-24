@@ -8,7 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { parseMentionHandles } from "@/lib/chat/mentions";
 import { markChatNotificationsRead } from "@/lib/chat/notifications";
-import { canEditMessage, type ReactionEmoji } from "@/lib/chat/view";
+import { canEditMessage, EDIT_WINDOW_MS, type ReactionEmoji } from "@/lib/chat/view";
 import { chatSocketSecret, hasChatRoomBinding, publishRoomEvent } from "@/lib/chat/live/publish";
 import { signTicket } from "@/lib/chat/live/ticket";
 import {
@@ -568,7 +568,17 @@ export const editChatMessage = action("editChatMessage", async (input: unknown):
   const added = mentioned.filter((m) => !existing.has(m.id));
 
   await prisma.$transaction(async (tx) => {
-    await tx.chatMessage.update({ where: { id: messageId }, data: { body, editedAt: new Date() } });
+    // Re-checked in the write itself: a delete (or the window closing) can land
+    // between the read above and here, and an edit must never put text back
+    // into a removed message.
+    const now = new Date();
+    const { count } = await tx.chatMessage.updateMany({
+      where: { id: messageId, deletedAt: null, createdAt: { gte: new Date(now.getTime() - EDIT_WINDOW_MS) } },
+      data: { body, editedAt: now },
+    });
+    if (count === 0) {
+      throw new AppError("VALIDATION_FAILED", { params: { message: "This message can no longer be edited" } });
+    }
     if (added.length > 0) {
       await tx.chatMention.createMany({ data: added.map((m) => ({ messageId, userId: m.id })) });
       await tx.notification.createMany({

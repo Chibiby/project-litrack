@@ -50,6 +50,14 @@ describe("listAdminChatSchools previews", () => {
     expect(school?.staffRoom?.preview).toBe("Ana: Help please");
   });
 
+  it("falls back to the first word of the full name when firstName is blank", async () => {
+    findMany.mockResolvedValue([
+      room([{ authorId: "t-2", body: "Hello", deletedAt: null, author: { firstName: " ", fullName: "Jose Santos" } }]),
+    ]);
+    const [school] = await listAdminChatSchools("admin-1");
+    expect(school?.staffRoom?.preview).toBe("Jose: Hello");
+  });
+
   it("preview says Message removed", async () => {
     findMany.mockResolvedValue([
       room([{ authorId: "t-1", body: "", deletedAt: new Date(), author: { firstName: "Ana", fullName: "Ana Cruz" } }]),

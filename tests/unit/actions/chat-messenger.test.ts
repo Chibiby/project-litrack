@@ -34,7 +34,7 @@ const admin = {
 
 const db = {
   chatChannel: { findUnique: vi.fn(), update: vi.fn() },
-  chatMessage: { findUnique: vi.fn(), findMany: vi.fn(async (): Promise<unknown[]> => []), update: vi.fn(), create: vi.fn(), count: vi.fn(async () => 1) },
+  chatMessage: { findUnique: vi.fn(), findMany: vi.fn(async (): Promise<unknown[]> => []), update: vi.fn(), updateMany: vi.fn(async () => ({ count: 1 })), create: vi.fn(), count: vi.fn(async () => 1) },
   chatReaction: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
   chatMention: { findMany: vi.fn(async (): Promise<unknown[]> => []), createMany: vi.fn(), deleteMany: vi.fn() },
   chatRead: { findMany: vi.fn(async (): Promise<unknown[]> => []), upsert: vi.fn() },
@@ -171,10 +171,24 @@ describe("editChatMessage", () => {
   it("saves the text with editedAt and publishes", async () => {
     const res = await chat.editChatMessage({ messageId: MSG, body: "fixed" });
     expect(res).toMatchObject({ ok: true });
-    expect(db.chatMessage.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: MSG }, data: expect.objectContaining({ body: "fixed", editedAt: expect.any(Date) }) })
+    // Guarded write: only a still-live message inside the edit window.
+    expect(db.chatMessage.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: MSG, deletedAt: null, createdAt: { gte: expect.any(Date) } },
+        data: expect.objectContaining({ body: "fixed", editedAt: expect.any(Date) }),
+      })
     );
     expect(publishRoomEvent).toHaveBeenCalledWith(CHANNEL, expect.objectContaining({ type: "message.updated", messageId: MSG }));
+  });
+
+  it("refuses an edit that lands after the message was deleted, and writes no mentions", async () => {
+    db.chatMessage.updateMany.mockResolvedValueOnce({ count: 0 });
+    db.user.findMany.mockResolvedValueOnce([{ id: "new-1", role: "TEACHER" }]);
+    const res = await chat.editChatMessage({ messageId: MSG, body: "hi @new" });
+    expect(res).toMatchObject({ ok: false, error: "This message can no longer be edited" });
+    expect(db.chatMention.createMany).not.toHaveBeenCalled();
+    expect(db.notification.createMany).not.toHaveBeenCalled();
+    expect(publishRoomEvent).not.toHaveBeenCalled();
   });
 
   it("edit notifies only newly added mentions", async () => {
