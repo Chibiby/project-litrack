@@ -565,16 +565,12 @@
 /* While the reveal runs, the page holds still: the new theme appears at once
    instead of fading, and the background rays pause, so the page paints once
    and the edge sweeps over a still picture. The toggle's own sun/moon morph
-   keeps playing. The glass blur behind cards and bars is the costliest part of
-   each frame, so it is off until the hold ends (cards look flatter for a few
-   seconds, then the blur returns). */
+   keeps playing. */
 .theme-switching :where(*:not([data-theme-icon], [data-theme-icon] *)),
 .theme-switching :where(*:not([data-theme-icon], [data-theme-icon] *))::before,
 .theme-switching :where(*:not([data-theme-icon], [data-theme-icon] *))::after {
   transition: none !important;
   animation-play-state: paused !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
 }
 
 /*
