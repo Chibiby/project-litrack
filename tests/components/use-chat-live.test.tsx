@@ -134,6 +134,51 @@ describe("useChatLive", () => {
     expect(result.current.onlineUserIds).toEqual(["u2", "u3"]);
   });
 
+  it("drops a typing name 6 s after its last typing frame", async () => {
+    const { result } = renderHook(() => useChatLive("c1", () => {}));
+    await flush();
+    act(() => {
+      FakeSocket.all[0].open();
+      FakeSocket.all[0].receive({ type: "typing", userIds: ["u2"], names: ["Ben"] });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    // Renewed while Ben keeps typing.
+    act(() => FakeSocket.all[0].receive({ type: "typing", userIds: ["u2"], names: ["Ben"] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    expect(result.current.typingNames).toEqual(["Ben"]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(result.current.typingNames).toEqual([]);
+  });
+
+  it("gives up on a socket that keeps dropping right after it opens", async () => {
+    renderHook(() => useChatLive("c1", () => {}));
+    for (let i = 0; i < 6; i += 1) {
+      await flush();
+      const ws = FakeSocket.all.at(-1);
+      if (!ws) break;
+      act(() => {
+        ws.open();
+        ws.drop(1006);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+    }
+    await flush();
+    const opened = FakeSocket.all.length;
+    expect(opened).toBeLessThanOrEqual(3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(FakeSocket.all).toHaveLength(opened);
+  });
+
   it("throttles typing frames", async () => {
     const { result } = renderHook(() => useChatLive("c1", () => {}));
     await flush();

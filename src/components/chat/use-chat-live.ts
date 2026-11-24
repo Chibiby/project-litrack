@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openChatSocket } from "@/lib/actions/chat";
 import { callAction } from "@/lib/ui/call-action";
-import type { RoomEvent } from "@/lib/chat/live/room-logic";
+import { TYPING_EXPIRE_MS, type RoomEvent } from "@/lib/chat/live/room-logic";
 
 /**
  * The live half of a chat thread: one WebSocket to the channel's room.
@@ -20,6 +20,13 @@ const MAX_FAILURES = LIVE_BACKOFF_MS.length;
 
 /** At most one "typing" frame per this many ms. */
 export const TYPING_THROTTLE_MS = 3_000;
+
+/**
+ * A socket must stay open this long before its failures are forgiven. One that
+ * opens and drops at once (an overloaded room, a proxy that kills it) would
+ * otherwise reset the count every time and reconnect forever.
+ */
+const STABLE_OPEN_MS = 30_000;
 
 /** Close code the room uses to ask for re-authorization (fresh ticket). */
 const REAUTHORIZE_CODE = 4001;
@@ -59,8 +66,12 @@ export function useChatLive(
     let stopped = false;
     let failures = 0;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    // The room only clears typing on its 30 s sweep; expire it here too, so
+    // someone who paused with text in the box stops "typing" after 6 s.
+    let typingExpiry: ReturnType<typeof setTimeout> | undefined;
 
     function reset() {
+      if (typingExpiry) clearTimeout(typingExpiry);
       setLive(false);
       setTyping({ userIds: [], names: [] });
       setOnlineUserIds([]);
@@ -84,9 +95,10 @@ export function useChatLive(
       const ws = new WebSocket(socketUrl(res.data.url, res.data.ticket));
       socketRef.current = ws;
       let opened = false;
+      let openedAt = 0;
       ws.onopen = () => {
         opened = true;
-        failures = 0;
+        openedAt = Date.now();
         setLive(true);
       };
       ws.onmessage = (message: MessageEvent) => {
@@ -100,6 +112,10 @@ export function useChatLive(
         if (event.type === "typing") {
           const t = event as Extract<RoomEvent, { type: "typing" }>;
           setTyping({ userIds: t.userIds ?? [], names: t.names ?? [] });
+          if (typingExpiry) clearTimeout(typingExpiry);
+          if ((t.userIds ?? []).length > 0) {
+            typingExpiry = setTimeout(() => setTyping({ userIds: [], names: [] }), TYPING_EXPIRE_MS);
+          }
         } else if (event.type === "presence") {
           setOnlineUserIds((event as Extract<RoomEvent, { type: "presence" }>).userIds ?? []);
         } else if (
@@ -117,6 +133,7 @@ export function useChatLive(
       ws.onclose = (close: CloseEvent) => {
         if (socketRef.current === ws) socketRef.current = null;
         if (stopped) return;
+        if (opened && Date.now() - openedAt >= STABLE_OPEN_MS) failures = 0;
         if (opened && close.code === REAUTHORIZE_CODE) {
           reset();
           void connect();
@@ -130,6 +147,7 @@ export function useChatLive(
     return () => {
       stopped = true;
       if (retry) clearTimeout(retry);
+      if (typingExpiry) clearTimeout(typingExpiry);
       socketRef.current?.close();
       socketRef.current = null;
       reset();
