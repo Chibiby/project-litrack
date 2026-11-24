@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.87.1",
+    date: "2026-11-25",
+    title: "Faster summaries and learner lists",
+    announce: false,
+    fixes: [
+      "The all-schools learner lists open faster, page after page.",
+      "The Division Summary attendance figures load in about half the time.",
+      "The Super Admin dashboard and IP learner counts now refresh every 15 minutes, or at once when a learner is added, archived or imported.",
+    ],
+  },
+  {
     version: "2.87.0",
     date: "2026-11-25",
     title: "Page numbers on every list, and a quicker search box",
