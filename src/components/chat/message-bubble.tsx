@@ -176,6 +176,7 @@ export function MessageBubble({
 
         {showActions && (
           <div
+            aria-live="off"
             className={cn(
               "absolute bottom-full z-10 mb-1 flex items-center gap-1",
               mine ? "right-0" : "left-0"

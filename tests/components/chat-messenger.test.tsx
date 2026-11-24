@@ -106,6 +106,13 @@ describe("messenger chat thread", () => {
     expect(chip.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("keeps the message action bar out of the live region so it is not announced", () => {
+    renderThread(channel([msg("1", "a", "hello", 1)]));
+    activate("hello");
+    const reply = screen.getByRole("button", { name: "Reply" });
+    expect(reply.closest("[aria-live]")?.getAttribute("aria-live")).toBe("off");
+  });
+
   it("reply shows a quote chip and sends replyToId", async () => {
     sendChatMessage.mockResolvedValue({ ok: true, data: { id: "2" } });
     renderThread(channel([msg("1", "a", "question?", 1)]));
