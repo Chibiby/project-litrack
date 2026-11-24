@@ -12,14 +12,24 @@ import {
   filterComplianceResult,
   parseComplianceFlagParam,
 } from "@/lib/summary/shape/compliance";
-import { isPastMonth, monthKeyOf, shiftMonth } from "@/lib/summary/shape/months";
+import {
+  isPastMonth,
+  monthKeyOf,
+  shiftMonth,
+} from "@/lib/summary/shape/months";
 import { pageDistrictSection } from "@/lib/summary/shape/district-page";
 import {
   pageSchoolSection,
   readSchoolQuery,
   readSchoolTableParams,
 } from "@/lib/summary/shape/school-page";
-import { DEFAULT_SUMMARY_LEVEL, type FacetResult, type SummaryFacetId, type SummaryLevel, type SummarySection } from "@/lib/summary/types";
+import {
+  DEFAULT_SUMMARY_LEVEL,
+  type FacetResult,
+  type SummaryFacetId,
+  type SummaryLevel,
+  type SummarySection,
+} from "@/lib/summary/types";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Surface } from "@/components/ui/surface";
 import { ListNavigationProvider } from "@/components/nav/list-navigation";
@@ -28,11 +38,18 @@ import { SummaryScopeBar } from "./summary-scope-bar";
 import { SummarySchoolSearch } from "./summary-school-search";
 import type { SchoolPaging } from "./summary-school-paging";
 import { SummaryParamControls } from "./summary-param-controls";
-import { SummaryExportMenu, type SummaryExportRequest } from "./summary-export-menu";
+import {
+  SummaryExportMenu,
+  type SummaryExportRequest,
+} from "./summary-export-menu";
 import { SummarySectionCard } from "./summary-section-card";
 import { SummaryListCard } from "./summary-list-card";
 import { SummaryNotes } from "./summary-notes";
-import { SummaryPeriodBarSkeleton, SummaryResultsSkeleton } from "./summary-skeleton";
+import { FullCompliancePanel } from "./full-compliance-panel";
+import {
+  SummaryPeriodBarSkeleton,
+  SummaryResultsSkeleton,
+} from "./summary-skeleton";
 import { SummaryBackLink } from "./summary-facet-index";
 import { resolvePageSummaryScope } from "./resolve-page-scope";
 import { formatComputedAt, formatCount } from "./summary-format";
@@ -47,13 +64,19 @@ const MONTH_OPTION_COUNT = 24;
 
 function monthOptions(): string[] {
   const current = monthKeyOf(formatLocalDateKey(schoolToday()));
-  return Array.from({ length: MONTH_OPTION_COUNT }, (_, i) => shiftMonth(current, -i));
+  return Array.from({ length: MONTH_OPTION_COUNT }, (_, i) =>
+    shiftMonth(current, -i),
+  );
 }
 
 const DISTRICT_PORTAL_LEVELS: readonly SummaryLevel[] = ["school", "overall"];
+/** Full compliance is a list of schools: no overall or by-district figures. */
+const SCHOOL_ONLY_LEVELS: readonly SummaryLevel[] = ["school"];
 
 function levelOf(flat: FlatSearchParams): SummaryLevel {
-  return flat.level === "overall" || flat.level === "district" || flat.level === "school"
+  return flat.level === "overall" ||
+    flat.level === "district" ||
+    flat.level === "school"
     ? flat.level
     : DEFAULT_SUMMARY_LEVEL;
 }
@@ -77,12 +100,12 @@ const loadFacetResult = cache(
   async (
     facetId: SummaryFacetId,
     scope: SummaryScope,
-    searchParams: Record<string, string | string[] | undefined>
+    searchParams: Record<string, string | string[] | undefined>,
   ): Promise<FacetResult | null> => {
     const facet = getSummaryFacet(facetId);
     if (!facet) return null;
     return facet.load(scope, facetParamsFromSearch(facet, searchParams));
-  }
+  },
 );
 
 export type SummaryFacetViewProps = {
@@ -111,10 +134,11 @@ export async function SummaryFacetView({
   const page = await resolvePageSummaryScope(
     adminScope,
     { district: flat.district, schoolId: flat.schoolId },
-    { route: `${basePath}/[facet]`, userId }
+    { route: `${basePath}/[facet]`, userId },
   );
 
-  const noDistrictsAssigned = adminScope.kind === "districts" && adminScope.districts.length === 0;
+  const noDistrictsAssigned =
+    adminScope.kind === "districts" && adminScope.districts.length === 0;
   if (!noDistrictsAssigned) {
     // Start the figures now so they load alongside the school list. The
     // Suspense child awaiting the same cached promise reports a failure through
@@ -126,7 +150,13 @@ export async function SummaryFacetView({
   const districts =
     adminScope.kind === "districts"
       ? [...adminScope.districts]
-      : [...new Set(schools.map((s) => s.district).filter((d): d is string => d !== null))].sort();
+      : [
+          ...new Set(
+            schools
+              .map((s) => s.district)
+              .filter((d): d is string => d !== null),
+          ),
+        ].sort();
 
   if (noDistrictsAssigned) {
     return (
@@ -148,15 +178,22 @@ export async function SummaryFacetView({
   // frame) while a sort or page change loads, instead of showing the fallback.
   const periodKey = JSON.stringify(withoutListParams(flat));
   const scopeLabel = page.school?.name ?? page.district;
-  const showSchoolSearch = level === "school" && page.school === null;
-  const showDistrictSearch = level === "district" && !flat.district && !flat.schoolId;
+  // Full compliance pages its directory itself and has its own status filter.
+  const showSchoolSearch =
+    level === "school" && page.school === null && facetId !== "full-compliance";
+  const showDistrictSearch =
+    level === "district" && !flat.district && !flat.schoolId;
 
   return (
     <ListNavigationProvider>
       <div className="min-w-0 space-y-4">
         <SummaryBackLink basePath={basePath} />
 
-        <Surface as="section" aria-label="Summary filters" className="min-w-0 rounded-lg">
+        <Surface
+          as="section"
+          aria-label="Summary filters"
+          className="min-w-0 rounded-lg"
+        >
           <div className="p-3 sm:p-4 lg:px-5">
             <SummaryScopeBar
               basePath={facetPath}
@@ -171,13 +208,30 @@ export async function SummaryFacetView({
                 schoolIdCode: s.schoolIdCode,
                 district: s.district,
               }))}
-              allDistrictsLabel={adminScope.kind === "districts" ? "All my districts" : "All districts"}
-              levels={districtPortal ? DISTRICT_PORTAL_LEVELS : undefined}
+              allDistrictsLabel={
+                adminScope.kind === "districts"
+                  ? "All my districts"
+                  : "All districts"
+              }
+              levels={
+                facetId === "full-compliance"
+                  ? SCHOOL_ONLY_LEVELS
+                  : districtPortal
+                    ? DISTRICT_PORTAL_LEVELS
+                    : undefined
+              }
               showDistrictFilter={!districtPortal || districts.length > 1}
-              flag={facetId === "compliance" ? parseComplianceFlagParam(flat.flag) : undefined}
+              flag={
+                facetId === "compliance"
+                  ? parseComplianceFlagParam(flat.flag)
+                  : undefined
+              }
               flagOptions={
                 facetId === "compliance"
-                  ? COMPLIANCE_FLAG_FILTER_IDS.map((id) => ({ id, label: COMPLIANCE_FLAG_FILTER_LABELS[id] }))
+                  ? COMPLIANCE_FLAG_FILTER_IDS.map((id) => ({
+                      id,
+                      label: COMPLIANCE_FLAG_FILTER_LABELS[id],
+                    }))
                   : undefined
               }
             />
@@ -197,7 +251,11 @@ export async function SummaryFacetView({
         </Surface>
 
         {showSchoolSearch ? (
-          <SummarySchoolSearch basePath={facetPath} searchParams={flat} query={readSchoolQuery(flat)} />
+          <SummarySchoolSearch
+            basePath={facetPath}
+            searchParams={flat}
+            query={readSchoolQuery(flat)}
+          />
         ) : null}
         {showDistrictSearch ? (
           <SummarySchoolSearch
@@ -208,7 +266,10 @@ export async function SummaryFacetView({
           />
         ) : null}
 
-        <ListBusyRegion label="summary figures" skeleton={<SummaryResultsSkeleton />}>
+        <ListBusyRegion
+          label="summary figures"
+          skeleton={<SummaryResultsSkeleton />}
+        >
           <Suspense key={periodKey} fallback={<SummaryResultsSkeleton />}>
             <SummaryFacetResults
               facetId={facetId}
@@ -224,7 +285,10 @@ export async function SummaryFacetView({
   );
 }
 
-function exportRequest(result: FacetResult, flat: FlatSearchParams): SummaryExportRequest {
+function exportRequest(
+  result: FacetResult,
+  flat: FlatSearchParams,
+): SummaryExportRequest {
   const p = result.params;
   const req: SummaryExportRequest = { level: result.level };
   if (flat.district) req.district = flat.district;
@@ -272,7 +336,9 @@ async function SummaryPeriodBar({
           <p className="mt-0.5 text-sm text-muted-foreground">
             {scopeLabel ? `${scopeLabel} · ` : ""}
             {formatCount(result.schoolCount)} {schoolWord}
-            {time ? ` · Figures as of ${time} (refreshed ${isPastPeriod(result.params) ? "every hour" : "every 5 minutes"})` : ""}
+            {time
+              ? ` · Figures as of ${time} (refreshed ${isPastPeriod(result.params) ? "every hour" : "every 5 minutes"})`
+              : ""}
           </p>
         </div>
         <SummaryParamControls
@@ -285,7 +351,10 @@ async function SummaryPeriodBar({
         />
       </div>
       <div className="shrink-0">
-        <SummaryExportMenu facetId={facetId} request={exportRequest(result, flat)} />
+        <SummaryExportMenu
+          facetId={facetId}
+          request={exportRequest(result, flat)}
+        />
       </div>
     </div>
   );
@@ -323,7 +392,8 @@ async function SummaryFacetResults({
   const codes = new Map(schoolCodes);
   // By district: every district's per-grade rows made a ~1 MB page per table,
   // so show DISTRICT_PAGE_SIZE districts at a time, grade rows kept under theirs.
-  const districtPaged = result.level === "district" && !flat.district && !flat.schoolId;
+  const districtPaged =
+    result.level === "district" && !flat.district && !flat.schoolId;
   const pageOf = (section: SummarySection): SchoolPaging | undefined => {
     if (districtPaged) {
       const params = readSchoolTableParams(flat, section.id);
@@ -356,24 +426,37 @@ async function SummaryFacetResults({
           title="No schools in this scope"
           description="There are no schools to summarize for the district or school you chose."
         />
+      ) : result.fullCompliance ? (
+        <FullCompliancePanel view={result.fullCompliance} />
       ) : (
         <>
           {result.sections.length + result.lists.length > 3 ? (
             <nav aria-label="On this page" className="min-w-0">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">On this page</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                On this page
+              </p>
               <ul className="flex flex-wrap gap-2">
                 {result.sections.map((s) => (
                   <li key={s.id} className="min-w-0 max-w-full">
                     <a href={`#${sectionAnchorId(s.id)}`} className={JUMP_LINK}>
-                      <span className="truncate" title={s.title}>{s.title}</span>
+                      <span className="truncate" title={s.title}>
+                        {s.title}
+                      </span>
                     </a>
                   </li>
                 ))}
                 {result.lists.map((l) => (
                   <li key={l.id} className="min-w-0 max-w-full">
-                    <a href={`#${sectionAnchorId(`list-${l.id}`)}`} className={JUMP_LINK}>
-                      <span className="truncate" title={l.title}>{l.title}</span>
-                      <span className="ml-1.5 tabular-nums">({l.rows.length})</span>
+                    <a
+                      href={`#${sectionAnchorId(`list-${l.id}`)}`}
+                      className={JUMP_LINK}
+                    >
+                      <span className="truncate" title={l.title}>
+                        {l.title}
+                      </span>
+                      <span className="ml-1.5 tabular-nums">
+                        ({l.rows.length})
+                      </span>
                     </a>
                   </li>
                 ))}
