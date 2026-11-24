@@ -45,7 +45,7 @@ The status is decided at read time from today's facts plus one stored date,
 |---|---|
 | Not evaluated | The school has no learners encoded, or no active school year. |
 | Non-compliant | One or more flags today. |
-| At risk | Zero flags, but a deadline is close: the last attendance mark is 10–14 days old (the limit is 14), or this month has no reading level and 5 days or fewer remain in it. |
+| At risk | Zero flags, but the last attendance mark is 10–13 days old (it is flagged at 14). Ruling during build: reading levels and MOSY have no grace period (Non-compliance flags them on day one), so they can never make a compliant school at risk. |
 | Newly compliant | Zero flags, and became compliant within the last 7 days (the streak began with a recorded change, not on the day tracking started). |
 | Consistently compliant | Zero flags for 30 or more consecutive days. |
 | Fully compliant | Zero flags, none of the above. |
