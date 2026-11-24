@@ -176,6 +176,23 @@ safety net. Typing and live presence simply don't show without the socket.
   typing line is `aria-live="polite"`; long-press has a keyboard path (focus
   the bubble, press the "More" button).
 
+## Owner decisions (2026-11-24)
+
+- **Presence hides Super Admin.** Staff see each other's "Active now / Active
+  Xm ago" and typing. A Super Admin never shows as online, connected or
+  typing to non-admin viewers, in any room (school rooms they visit and the
+  admin line alike). The room tags each socket with the viewer's role and
+  filters Super Admin entries out of `presence` and `typing` sent to
+  non-admin sockets; `readChannel` omits Super Admin presence for non-admin
+  viewers. Super Admin read markers ("Seen by") are also left out for
+  non-admin viewers, since a seen line would reveal the same thing.
+- **Delete blanks the text.** `deleteChatMessage` sets `deletedAt` and
+  replaces `body` with an empty string in the same update, removes the
+  message's reactions and its unresolved mention rows. The bubble shows
+  "Message removed"; a reply quoting it shows "Message removed". There is no
+  moderation copy. Admin deletes are audited (message id, channel id, no
+  text).
+
 ## Builder's calls (decided here, not by the owner)
 
 - Grouping window 5 minutes; edit window 15 minutes; ticket TTL 60 s.
