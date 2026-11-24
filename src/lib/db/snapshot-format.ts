@@ -84,6 +84,7 @@ export const KEYSET_KEYS: Readonly<Record<string, readonly string[]>> = {
   DistrictAdminAssignment: ["userId", "district"],
   TeacherSection: ["teacherId", "sectionId"],
   ChatRead: ["channelId", "userId"],
+  SchoolComplianceState: ["schoolId"],
 };
 
 export function keysetKeysFor(model: string): readonly string[] {

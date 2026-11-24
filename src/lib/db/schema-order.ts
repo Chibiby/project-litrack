@@ -212,6 +212,11 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
   // restore is exactly the failure this list exists to prevent, and a
   // post-incident trail is worth keeping across one. Retention already bounds
   // it to ERROR_EVENT_RETENTION_DAYS, so it cannot grow a backup without limit.
+  // After School, which both point at. Derived monitoring data written by the
+  // compliance-record cron: operational, so clearing a school starts its
+  // compliance history over, which matches a school with no data again.
+  { model: "SchoolComplianceState", delegate: "schoolComplianceState", operational: true, schoolScope: bySchoolId },
+  { model: "SchoolComplianceEvent", delegate: "schoolComplianceEvent", operational: true, schoolScope: bySchoolId },
   { model: "ErrorEvent", delegate: "errorEvent", operational: true, schoolScope: bySchoolId },
   // Out of snapshots and restores -- see `inSnapshot` above. Still operational,
   // so "clear operational data" empties it as before.

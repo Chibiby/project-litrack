@@ -596,6 +596,8 @@ model School {
   sectionTransferRequests SectionTransferRequest[]
   schoolTransfersOut      SchoolTransferRequest[]  @relation("SchoolTransferFrom")
   schoolTransfersIn       SchoolTransferRequest[]  @relation("SchoolTransferTo")
+  complianceState         SchoolComplianceState?
+  complianceEvents        SchoolComplianceEvent[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -2426,4 +2428,50 @@ model ErrorEvent {
   @@index([ref])
   @@index([code, createdAt])
   @@index([schoolId, createdAt])
+}
+
+/// A school's compliance on the Full Compliance page, as of its last daily
+/// check (docs/superpowers/specs/2026-11-24-full-compliance-design.md).
+enum ComplianceBaseStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  /// No learners encoded, or no active school year.
+  NOT_EVALUATED
+}
+
+/// One row per school: its compliance at the last daily check. Written only by
+/// the compliance-record cron. Kept small on purpose: history lives in
+/// SchoolComplianceEvent, one row per change, never one per day.
+model SchoolComplianceState {
+  schoolId       String               @id
+  status         ComplianceBaseStatus
+  /// Local YYYY-MM-DD the current compliant streak began; null when not compliant.
+  compliantSince String?
+  /// Local YYYY-MM-DD of the last daily check.
+  lastCheckedOn  String
+  /// ComplianceFlag ids at the last check.
+  flags          String[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// One row per change of a school's compliance status.
+model SchoolComplianceEvent {
+  id         String                @id @default(uuid())
+  schoolId   String
+  /// Local YYYY-MM-DD the change was seen.
+  dateKey    String
+  /// Null never happens today (the first check writes no event); kept nullable for safety.
+  fromStatus ComplianceBaseStatus?
+  toStatus   ComplianceBaseStatus
+  /// ComplianceFlag ids after the change.
+  flags      String[]
+  createdAt  DateTime              @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, dateKey]) // Per-school history
+  @@index([dateKey]) // Recent changes across the division
 }

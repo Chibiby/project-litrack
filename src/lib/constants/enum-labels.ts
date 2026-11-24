@@ -740,6 +740,13 @@ export const SCHOOL_TRANSFER_STATUS_LABELS = {
   EXPIRED: "Expired",
 } as const;
 
+/** `ComplianceBaseStatus`: a school's state at its last daily compliance check. */
+export const COMPLIANCE_BASE_STATUS_LABELS = {
+  COMPLIANT: "Compliant",
+  NON_COMPLIANT: "Non-compliant",
+  NOT_EVALUATED: "Not evaluated",
+} as const;
+
 /** `SectionTransferRequestStatus`; "Declined" matches the teachers-declined wording. */
 export const SECTION_TRANSFER_REQUEST_STATUS_LABELS = {
   PENDING: "Waiting",
