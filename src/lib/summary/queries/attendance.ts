@@ -55,27 +55,34 @@ export async function queryAttendanceRows(range: {
   const end = monthStartKey(shiftMonth(range.to, 1));
   const sql = Prisma.sql`
     WITH pop AS (${populationCte({ aral: true })}),
+    -- One row per (school, grade, week), counted in one hash pass. The earlier
+    -- shape kept one row per mark (~920k on production) and sorted them on
+    -- disk. The holiday test sits inside the count as a LEFT JOIN, which cannot
+    -- repeat a mark: AttendanceDayMeta is unique on (gradeLevelId, date).
     att AS (
-      SELECT p."schoolId", p."gradeLevelId", a."date", a."weekStart", a."status"::text AS status
+      SELECT p."schoolId", p."gradeLevelId", a."weekStart",
+             (COUNT(*) FILTER (
+               WHERE a."status" = 'PRESENT'
+                 AND EXTRACT(ISODOW FROM a."date") <= 5
+                 AND m."gradeLevelId" IS NULL
+             ))::int AS present,
+             COUNT(*)::int AS marks
       FROM "Attendance" a
       JOIN pop p ON p."id" = a."learnerId"
+      LEFT JOIN "AttendanceDayMeta" m
+        ON m."gradeLevelId" = p."gradeLevelId" AND m."date" = a."date" AND m."isHoliday" = true
       WHERE a."weekStart" >= ${start}::date AND a."weekStart" < ${end}::date
         AND a."weekStart" <= ${range.todayKey}::date
+      GROUP BY 1, 2, 3
     )
     SELECT 'roster'::text AS kind, "schoolId" AS school_id, "gradeLevelId" AS grade_level_id, gt,
            NULL::text AS week, COUNT(*)::int AS n
       FROM pop GROUP BY 2, 3, 4
     UNION ALL
     SELECT 'present', att."schoolId", att."gradeLevelId", NULL, to_char(att."weekStart", 'YYYY-MM-DD'),
-           COUNT(*)::int
+           att.present
       FROM att
-      WHERE att.status = 'PRESENT'
-        AND EXTRACT(ISODOW FROM att."date") <= 5
-        AND NOT EXISTS (
-          SELECT 1 FROM "AttendanceDayMeta" m
-          WHERE m."gradeLevelId" = att."gradeLevelId" AND m."date" = att."date" AND m."isHoliday" = true
-        )
-      GROUP BY 2, 3, 5
+      WHERE att.present > 0
     UNION ALL
     SELECT 'holiday', NULL, m."gradeLevelId", NULL,
            to_char(m."date" - (EXTRACT(ISODOW FROM m."date")::int - 1), 'YYYY-MM-DD'), COUNT(*)::int
@@ -86,7 +93,7 @@ export async function queryAttendanceRows(range: {
         AND m."gradeLevelId" IN (SELECT DISTINCT "gradeLevelId" FROM pop)
       GROUP BY 3, 5
     UNION ALL
-    SELECT 'marks', att."schoolId", NULL, NULL, NULL, COUNT(*)::int FROM att GROUP BY 2
+    SELECT 'marks', att."schoolId", NULL, NULL, NULL, SUM(att.marks)::int FROM att GROUP BY 2
   `;
   return runSummaryQuery<RawAttendanceRow>(sql);
 }
