@@ -135,6 +135,16 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.84.1",
+    date: "2026-11-24",
+    title: "Smoother light and dark switching",
+    announce: true,
+    fixes: [
+      "Switching between light and dark mode is smoother, even when you switch quickly. The background stays still for a few seconds after you switch, and the cards look a little flatter for that moment.",
+      "Clicking the light/dark switch again while it is still changing now switches back at once.",
+    ],
+  },
+  {
     version: "2.84.0",
     date: "2026-11-24",
     title: "Full compliance: see which schools keep their records complete",
