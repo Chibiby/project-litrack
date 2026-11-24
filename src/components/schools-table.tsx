@@ -1,6 +1,7 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
+import { PageNav } from "@/components/ui/pagination";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,7 @@ import {
   NoValue,
   RowActions,
 } from "@/components/ui/table";
-import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Eye, Pencil } from "lucide-react";
+import { Trash2, ExternalLink, KeyRound, Copy, CheckCircle2, AlertTriangle, Eye, Pencil } from "lucide-react";
 import { copyText } from "@/lib/ui/copy-text";
 import { cn } from "@/lib/utils";
 import { deleteSchool, regenerateSchoolHeadCredential } from "@/lib/actions/school";
@@ -47,9 +48,7 @@ import {
 } from "@/lib/ui/optimistic";
 import {
   ListNavigationProvider,
-  LinkStatusPulse,
   useListNavigate,
-  useListPending,
 } from "@/components/nav/list-navigation";
 import { ListBusyRegion, TableSectionSkeleton } from "@/components/loading";
 import { PrefetchLink } from "@/components/nav/prefetch-link";
@@ -247,55 +246,21 @@ function hrefFor(list: SchoolsTableList, page: number, basePath: string): string
 function SchoolsPager({
   list,
   hrefFor: buildHref,
-  buttonClassName,
 }: {
   list: SchoolsTableList;
   hrefFor: (list: SchoolsTableList, page: number) => string;
-  buttonClassName?: string;
 }) {
-  const pending = useListPending();
-  const canGoBack = list.page > 1;
-  const canGoForward = list.page < list.totalPages;
-
   return (
-    <div className="flex items-center justify-between gap-3">
-      <Button
-        asChild
-        variant="outline"
-        size="sm"
-        className={cn("rounded-lg", buttonClassName)}
-        disabled={!canGoBack}
-      >
-        <Link
-          href={buildHref(list, Math.min(list.page - 1, list.totalPages))}
-          className={!canGoBack ? "pointer-events-none opacity-50" : ""}
-          aria-disabled={!canGoBack || pending}
-        >
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Previous
-          <LinkStatusPulse />
-        </Link>
-      </Button>
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <span className="text-sm text-muted-foreground">
-        Page {list.page} of {list.totalPages}
+        Page {list.page.toLocaleString()} of {list.totalPages.toLocaleString()}
       </span>
-      <Button
-        asChild
-        variant="outline"
-        size="sm"
-        className={cn("rounded-lg", buttonClassName)}
-        disabled={!canGoForward}
-      >
-        <Link
-          href={buildHref(list, list.page + 1)}
-          className={!canGoForward ? "pointer-events-none opacity-50" : ""}
-          aria-disabled={!canGoForward || pending}
-        >
-          Next
-          <ChevronRight className="ml-1 h-4 w-4" />
-          <LinkStatusPulse />
-        </Link>
-      </Button>
+      <PageNav
+        page={list.page}
+        totalPages={list.totalPages}
+        label="Schools pages"
+        hrefFor={(page) => buildHref(list, page)}
+      />
     </div>
   );
 }
@@ -861,7 +826,6 @@ function SchoolsTableInner({
         <SchoolsPager
           list={list}
           hrefFor={(l, page) => hrefFor(l, page, basePath)}
-          buttonClassName={isAdminColumns ? "lg:h-9" : undefined}
         />
       ) : null}
     </div>

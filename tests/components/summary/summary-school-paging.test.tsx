@@ -86,7 +86,7 @@ describe("by-school summary table paging", () => {
     expect(rows[0]!.textContent).toContain("School 01");
 
     const nav = screen.getByRole("navigation", { name: "Gender pages" });
-    expect(within(nav).getByText("Page 1 of 2")).toBeTruthy();
+    expect(within(nav).getByRole("link", { name: "Page 1" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByText("Showing 1–25 of 30 schools")).toBeTruthy();
     expect(within(nav).getByText("Previous").closest("a")).toBeNull();
   });

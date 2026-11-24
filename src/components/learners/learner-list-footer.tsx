@@ -1,7 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { PageNav } from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -10,33 +9,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LEARNER_PAGE_SIZE_OPTIONS } from "@/lib/learners/pagination";
-import { PrefetchLink } from "@/components/nav/prefetch-link";
-import { LinkStatusPulse, useListNavigate } from "@/components/nav/list-navigation";
-import { adjacentPages } from "@/lib/nav/list-params";
+import { useListNavigate } from "@/components/nav/list-navigation";
 
 /**
  * Roster footer, to the comp: the range on the left, numbered pages in the
  * middle, rows-per-page on the right.
  *
- * Deliberately separate from the shared `LearnerPagination`, which three other
- * tables still use with prev/next only — this one is the roster's, and changing
- * the shared component would have redesigned those pages by accident.
+ * Pages use the shared `PageNav`; rows per page is the roster's own.
  */
 
-/** Page numbers to render, collapsing long runs to `…` around the current page. */
-export function pageWindow(page: number, totalPages: number): (number | "gap")[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-  const out: (number | "gap")[] = [1];
-  const start = Math.max(2, page - 1);
-  const end = Math.min(totalPages - 1, page + 1);
-  if (start > 2) out.push("gap");
-  for (let i = start; i <= end; i += 1) out.push(i);
-  if (end < totalPages - 1) out.push("gap");
-  out.push(totalPages);
-  return out;
-}
+export { pageWindow } from "@/lib/ui/page-window";
 
 function hrefFor(
   basePath: string,
@@ -72,11 +54,6 @@ export function LearnerListFooter({
   const from = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, totalCount);
 
-  // Only the page immediately before/after the current one is worth a hover
-  // prefetch — the footer can render up to seven numbered links, and each
-  // prefetch of this force-dynamic route re-runs auth plus Prisma work.
-  const adjacent = adjacentPages(page, totalPages);
-
   function changePageSize(next: string) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(searchParams)) {
@@ -108,84 +85,12 @@ export function LearnerListFooter({
         )}
       </p>
 
-      {totalPages > 1 ? (
-        <nav aria-label="Learner list pages" className="flex shrink-0 items-center gap-1">
-          <Button
-            asChild={page > 1}
-            size="icon"
-            variant="outline"
-            className="relative"
-            disabled={page <= 1}
-            aria-label="Previous page"
-          >
-            {page > 1 ? (
-              <PrefetchLink
-                href={hrefFor(basePath, page - 1, searchParams)}
-                intent={adjacent.includes(page - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden />
-                <LinkStatusPulse overlay />
-              </PrefetchLink>
-            ) : (
-              <ChevronLeft className="h-4 w-4" aria-hidden />
-            )}
-          </Button>
-
-          <span className="whitespace-nowrap px-2 tabular-nums text-foreground sm:hidden">
-            {page} / {totalPages}
-          </span>
-          {pageWindow(page, totalPages).map((entry, i) =>
-            entry === "gap" ? (
-              <span
-                key={`gap-${i}`}
-                aria-hidden
-                className="hidden px-1 text-muted-foreground sm:inline"
-              >
-                …
-              </span>
-            ) : (
-              <Button
-                key={entry}
-                asChild
-                size="icon"
-                variant={entry === page ? "default" : "outline"}
-                className="relative hidden tabular-nums sm:inline-flex"
-                aria-current={entry === page ? "page" : undefined}
-              >
-                <PrefetchLink
-                  href={hrefFor(basePath, entry, searchParams)}
-                  aria-label={`Page ${entry}`}
-                  intent={adjacent.includes(entry)}
-                >
-                  {entry}
-                  <LinkStatusPulse overlay />
-                </PrefetchLink>
-              </Button>
-            )
-          )}
-
-          <Button
-            asChild={page < totalPages}
-            size="icon"
-            variant="outline"
-            className="relative"
-            disabled={page >= totalPages}
-            aria-label="Next page"
-          >
-            {page < totalPages ? (
-              <PrefetchLink
-                href={hrefFor(basePath, page + 1, searchParams)}
-                intent={adjacent.includes(page + 1)}
-              >
-                <ChevronRight className="h-4 w-4" aria-hidden />
-                <LinkStatusPulse overlay />
-              </PrefetchLink>
-            ) : (
-              <ChevronRight className="h-4 w-4" aria-hidden />
-            )}
-          </Button>
-        </nav>
-      ) : null}
+      <PageNav
+        page={page}
+        totalPages={totalPages}
+        label="Learner list pages"
+        hrefFor={(p) => hrefFor(basePath, p, searchParams)}
+      />
 
       <div className="hidden items-center gap-2 md:flex">
         <label

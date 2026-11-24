@@ -52,7 +52,7 @@ describe("LearnerPagination — link mode", () => {
   it("renders real anchors so middle-click / ctrl-click / copy-link keep working", () => {
     renderLink();
     const next = screen.getByText("Next").closest("a");
-    const prev = screen.getByText("Prev").closest("a");
+    const prev = screen.getByText("Previous").closest("a");
     expect(next).toBeTruthy();
     expect(next?.getAttribute("href")).toBe("/teacher/learners?page=3");
     expect(prev).toBeTruthy();
@@ -101,7 +101,10 @@ describe("LearnerPagination — link mode", () => {
         />
       </ListNavigationProvider>
     );
-    const prev = screen.getByText("Prev").closest("a") as HTMLElement;
+    // Page 1 has no previous page: a disabled button, so nothing to prefetch.
+    expect(screen.getByText("Previous").closest("a")).toBeNull();
+    const prev = screen.getByRole("button", { name: "Previous page" }) as HTMLButtonElement;
+    expect(prev.disabled).toBe(true);
     const { fireEvent } = await import("@testing-library/react");
     fireEvent.mouseEnter(prev);
     act(() => {
@@ -123,7 +126,7 @@ describe("LearnerPagination — link mode with NO ListNavigationProvider ancesto
       <LearnerPagination basePath="/teacher/learners" page={2} totalPages={5} searchParams={{}} />
     );
     const next = screen.getByText("Next").closest("a");
-    const prev = screen.getByText("Prev").closest("a");
+    const prev = screen.getByText("Previous").closest("a");
     expect(next?.getAttribute("href")).toBe("/teacher/learners?page=3");
     expect(prev?.getAttribute("href")).toBe("/teacher/learners");
   });
@@ -147,7 +150,7 @@ describe("LearnerPagination — client mode", () => {
     );
     screen.getByText("Next").click();
     expect(onPageChange).toHaveBeenCalledWith(3);
-    screen.getByText("Prev").click();
+    screen.getByText("Previous").click();
     expect(onPageChange).toHaveBeenCalledWith(1);
     expect(push).not.toHaveBeenCalled();
     expect(prefetch).not.toHaveBeenCalled();
@@ -174,7 +177,7 @@ describe("LearnerPagination — client mode", () => {
     render(
       <LearnerPagination mode="client" page={1} totalPages={5} onPageChange={onPageChange} />
     );
-    const prev = screen.getByText("Prev").closest("button") as HTMLButtonElement;
+    const prev = screen.getByText("Previous").closest("button") as HTMLButtonElement;
     expect(prev.disabled).toBe(true);
   });
 

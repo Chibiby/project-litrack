@@ -128,7 +128,7 @@ describe("SchoolsTable — instant feedback while a list navigation is pending",
     render(<SchoolsTable schools={[SCHOOL]} list={LIST} />);
 
     const nextLink = screen.getByRole("link", { name: /Next/ });
-    expect(nextLink.getAttribute("aria-disabled")).toBe("false");
+    expect(nextLink.getAttribute("aria-disabled")).toBeNull();
     expect(nextLink.hasAttribute("disabled")).toBe(false);
 
     searchFor("Naidas");
@@ -181,8 +181,8 @@ describe("SchoolsTable — instant feedback while a list navigation is pending",
       />
     );
 
-    const prevLink = screen.getByRole("link", { name: /Previous/ });
-    expect(prevLink.getAttribute("aria-disabled")).toBe("true");
-    expect(prevLink.hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("link", { name: /Previous/ })).toBeNull();
+    const prev = screen.getByRole("button", { name: "Previous page" });
+    expect(prev.hasAttribute("disabled")).toBe(true);
   });
 });

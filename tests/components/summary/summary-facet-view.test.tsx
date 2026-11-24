@@ -253,14 +253,14 @@ describe("SummaryFacetView — by-district results are paged with grade rows kep
       "district:District 01|G1",
       "district:District 01|G2",
     ]);
-    expect(screen.getByText("Page 1 of 3")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Page 1" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByText("Showing 1–5 of 12 districts")).toBeTruthy();
   });
 
   it("renders the 2 remaining districts on page 3", async () => {
     const { container } = await renderDistricts({ "page.gender": "3" });
     expect(rowKeys(container)).toHaveLength(6);
-    expect(screen.getByText("Page 3 of 3")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Page 3" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("pager and sort links use the same param scheme as schools", async () => {
@@ -462,7 +462,7 @@ describe("SummaryFacetView — by-school results are paged before they reach the
     const { container } = await renderResults({});
     expect(rowKeys(container)).toHaveLength(25);
     expect(screen.getByRole("navigation", { name: "Gender pages" })).toBeTruthy();
-    expect(screen.getByText("Page 1 of 3")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Page 1" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByText("Showing 1–25 of 60 schools")).toBeTruthy();
   });
 
@@ -477,7 +477,7 @@ describe("SummaryFacetView — by-school results are paged before they reach the
   it("renders the 10 remaining schools on page 3", async () => {
     const { container } = await renderResults({ "page.gender": "3" });
     expect(rowKeys(container)).toHaveLength(10);
-    expect(screen.getByText("Page 3 of 3")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Page 3" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("finds one school by its school ID", async () => {

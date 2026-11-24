@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState, useTransition } from "react";
+import { PageNav } from "@/components/ui/pagination";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -25,8 +26,6 @@ import {
   AlertTriangle,
   BookOpen,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   GraduationCap,
   Layers,
@@ -46,7 +45,6 @@ import { compareNames } from "@/lib/sort/compare";
 import { defineSort, type SortOption } from "@/lib/sort/registry";
 import {
   ListNavigationProvider,
-  LinkStatusPulse,
   useListNavigate,
   useListPending,
 } from "@/components/nav/list-navigation";
@@ -890,44 +888,9 @@ function SchoolLearnersPanelBody({
         {learnerPages > 1 ? (
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <span className="text-sm text-muted-foreground">
-              Page {learnerPage} of {learnerPages}
+              Page {learnerPage.toLocaleString()} of {learnerPages.toLocaleString()}
             </span>
-            <div className="flex gap-2">
-              <Button asChild={learnerPage > 1} variant="outline" size="sm" className="lg:h-9" disabled={learnerPage <= 1}>
-                {learnerPage > 1 ? (
-                  <Link href={learnerHref(learnerPage - 1)}>
-                    <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
-                    Previous
-                    <LinkStatusPulse />
-                  </Link>
-                ) : (
-                  <span>
-                    <ChevronLeft className="mr-1 h-4 w-4" aria-hidden />
-                    Previous
-                  </span>
-                )}
-              </Button>
-              <Button
-                asChild={learnerPage < learnerPages}
-                variant="outline"
-                size="sm"
-                className="lg:h-9"
-                disabled={learnerPage >= learnerPages}
-              >
-                {learnerPage < learnerPages ? (
-                  <Link href={learnerHref(learnerPage + 1)}>
-                    Next
-                    <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
-                    <LinkStatusPulse />
-                  </Link>
-                ) : (
-                  <span>
-                    Next
-                    <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
-                  </span>
-                )}
-              </Button>
-            </div>
+            <PageNav page={learnerPage} totalPages={learnerPages} label="Learner pages" hrefFor={learnerHref} />
           </div>
         ) : null}
       </Surface>

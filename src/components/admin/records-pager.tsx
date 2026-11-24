@@ -1,8 +1,7 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { PageNav } from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -10,26 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PrefetchLink } from "@/components/nav/prefetch-link";
-import {
-  LinkStatusPulse,
-  useListNavigate,
-} from "@/components/nav/list-navigation";
-import { pageWindow } from "@/components/learners/learner-list-footer";
-import { adjacentPages } from "@/lib/nav/list-params";
+import { useListNavigate } from "@/components/nav/list-navigation";
 import { RECORDS_PAGE_SIZE_OPTIONS } from "@/lib/admin/records-pagination";
-
-/**
- * The link's loading dot, pinned to the button's corner so it never pushes
- * the page number or arrow off centre.
- */
-function CornerPulse() {
-  return (
-    <span className="pointer-events-none absolute right-0.5 top-0.5 [&>span]:ml-0 [&>span]:size-2">
-      <LinkStatusPulse />
-    </span>
-  );
-}
 
 /**
  * Footer for a server-paginated records list: the range on the left, numbered
@@ -74,7 +55,6 @@ export function RecordsPager({
 
   const from = (Math.min(page, totalPages) - 1) * pageSize + 1;
   const to = Math.min(Math.min(page, totalPages) * pageSize, totalCount);
-  const adjacent = adjacentPages(page, totalPages);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3 text-sm">
@@ -105,87 +85,7 @@ export function RecordsPager({
         </p>
       )}
 
-      {totalPages > 1 ? (
-        <nav
-          aria-label={`${noun} pages`}
-          className="flex shrink-0 items-center gap-1"
-        >
-          <Button
-            asChild={page > 1}
-            size="icon"
-            variant="outline"
-            className="relative"
-            disabled={page <= 1}
-            aria-label="Previous page"
-          >
-            {page > 1 ? (
-              <PrefetchLink
-                href={pageHref(page > totalPages ? totalPages : page - 1)}
-                intent={adjacent.includes(page - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden />
-                <CornerPulse />
-              </PrefetchLink>
-            ) : (
-              <ChevronLeft className="h-4 w-4" aria-hidden />
-            )}
-          </Button>
-
-          <span className="whitespace-nowrap px-2 tabular-nums text-foreground sm:hidden">
-            {page} / {totalPages}
-          </span>
-          {pageWindow(page, totalPages).map((entry, i) =>
-            entry === "gap" ? (
-              <span
-                key={`gap-${i}`}
-                aria-hidden
-                className="hidden px-1 text-muted-foreground sm:inline"
-              >
-                …
-              </span>
-            ) : (
-              <Button
-                key={entry}
-                asChild
-                size="icon"
-                variant={entry === page ? "default" : "outline"}
-                className="relative hidden tabular-nums sm:inline-flex"
-                aria-current={entry === page ? "page" : undefined}
-              >
-                <PrefetchLink
-                  href={pageHref(entry)}
-                  aria-label={`Page ${entry}`}
-                  intent={adjacent.includes(entry)}
-                >
-                  {entry}
-                  <CornerPulse />
-                </PrefetchLink>
-              </Button>
-            ),
-          )}
-
-          <Button
-            asChild={page < totalPages}
-            size="icon"
-            variant="outline"
-            className="relative"
-            disabled={page >= totalPages}
-            aria-label="Next page"
-          >
-            {page < totalPages ? (
-              <PrefetchLink
-                href={pageHref(page + 1)}
-                intent={adjacent.includes(page + 1)}
-              >
-                <ChevronRight className="h-4 w-4" aria-hidden />
-                <CornerPulse />
-              </PrefetchLink>
-            ) : (
-              <ChevronRight className="h-4 w-4" aria-hidden />
-            )}
-          </Button>
-        </nav>
-      ) : null}
+      <PageNav page={page} totalPages={totalPages} label={`${noun} pages`} hrefFor={pageHref} />
 
       <div className="hidden items-center gap-2 md:flex">
         <label

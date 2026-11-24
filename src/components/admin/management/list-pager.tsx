@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { SearchX } from "lucide-react";
+import { PageNav } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { LinkStatusPulse, useListPending } from "@/components/nav/list-navigation";
 
 /** `basePath` with the current query string and `page` set (page 1 drops it). */
 export function useListPageHref(basePath: string): (page: number) => string {
@@ -49,7 +47,7 @@ export function PageOutOfRangeState({
   );
 }
 
-/** Previous / next pager for a server-paginated list. Renders inside a `ListNavigationProvider`. */
+/** Numbered pager for a server-paginated list. Renders inside a `ListNavigationProvider`. */
 export function ListPager({
   basePath,
   page,
@@ -66,16 +64,10 @@ export function ListPager({
   /** Plural, lower case: "accounts", "learners". */
   noun: string;
 }) {
-  const pending = useListPending();
   const hrefFor = useListPageHref(basePath);
   const outOfRange = page > totalPages;
   const firstItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastItem = Math.min(page * pageSize, totalCount);
-  const canGoBack = page > 1;
-  const canGoForward = page < totalPages;
-  // Past the end, "Previous" lands on the real last page rather than page - 1,
-  // which would still be past the end.
-  const previousPage = outOfRange ? totalPages : page - 1;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-3 sm:px-4">
@@ -84,49 +76,7 @@ export function ListPager({
           ? `${totalCount.toLocaleString()} ${noun} on ${totalPages.toLocaleString()} ${totalPages === 1 ? "page" : "pages"}`
           : `Showing ${firstItem.toLocaleString()}–${lastItem.toLocaleString()} of ${totalCount.toLocaleString()} ${noun}`}
       </span>
-      <nav className="flex items-center gap-1" aria-label={`${noun} pages`}>
-        <Button
-          asChild={canGoBack}
-          variant="ghost"
-          size="icon"
-          disabled={!canGoBack}
-          aria-disabled={canGoBack && pending ? true : undefined}
-          aria-label="Previous page"
-        >
-          {canGoBack ? (
-            <Link href={hrefFor(previousPage)}>
-              <ChevronLeft aria-hidden />
-              <LinkStatusPulse />
-            </Link>
-          ) : (
-            <span>
-              <ChevronLeft aria-hidden />
-            </span>
-          )}
-        </Button>
-        <span className="min-w-14 text-center text-xs font-medium text-muted-foreground">
-          {page} / {totalPages}
-        </span>
-        <Button
-          asChild={canGoForward}
-          variant="ghost"
-          size="icon"
-          disabled={!canGoForward}
-          aria-disabled={canGoForward && pending ? true : undefined}
-          aria-label="Next page"
-        >
-          {canGoForward ? (
-            <Link href={hrefFor(page + 1)}>
-              <ChevronRight aria-hidden />
-              <LinkStatusPulse />
-            </Link>
-          ) : (
-            <span>
-              <ChevronRight aria-hidden />
-            </span>
-          )}
-        </Button>
-      </nav>
+      <PageNav page={page} totalPages={totalPages} label={`${noun} pages`} hrefFor={hrefFor} />
     </div>
   );
 }

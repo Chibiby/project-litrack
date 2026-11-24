@@ -59,10 +59,18 @@ export function SummaryTableNavLink({
   href,
   className,
   children,
+  "aria-label": ariaLabel,
+  "aria-current": ariaCurrent,
+  spinner = "inline",
 }: {
   href: string;
   className?: string;
   children: ReactNode;
+  "aria-label"?: string;
+  "aria-current"?: "page";
+  /** "corner" pins the spinner to the link's corner (the link must be
+   *  `relative`), so a page-number button keeps its digit centred. */
+  spinner?: "inline" | "corner";
 }) {
   const frame = useContext(FrameContext);
   const active = Boolean(frame?.pending && frame.activeHref === href);
@@ -87,13 +95,18 @@ export function SummaryTableNavLink({
     <a
       href={href}
       onClick={onClick}
+      aria-label={ariaLabel}
+      aria-current={ariaCurrent}
       aria-busy={active || undefined}
       aria-disabled={frame?.pending && !active ? true : undefined}
       className={className}
     >
       {children}
-      <span aria-hidden className="inline-block size-3 shrink-0" style={{ opacity: active ? 1 : 0 }}>
-        <span className="block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      <span
+        aria-hidden
+        className={spinner === "corner" ? "pointer-events-none absolute right-0.5 top-0.5 size-2.5" : "inline-block size-3 shrink-0"}
+        style={{ opacity: active ? 1 : 0 }}>
+        <span className="block size-full animate-spin rounded-full border-2 border-current border-t-transparent" />
       </span>
     </a>
   );
