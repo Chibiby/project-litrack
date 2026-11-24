@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
@@ -88,6 +88,9 @@ function matchPages(pages: HeaderSearchPage[], trimmed: string): Row[] {
     }));
 }
 
+const noSubscribe = () => () => undefined;
+const clientShortcut = () => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘K" : "Ctrl K");
+
 export function HeaderSearch({
   searchHref,
   placeholder = "Search learners, teachers, pages…",
@@ -109,6 +112,9 @@ export function HeaderSearch({
   const [active, setActive] = useState(0);
   const [searchFailed, setSearchFailed] = useState(false);
   const [, startTransition] = useTransition();
+  // The resting box shows its shortcut, not a description: Ctrl on Windows
+  // and Linux, ⌘ on a Mac. The server cannot know, so it renders "Ctrl K".
+  const shortcut = useSyncExternalStore(noSubscribe, clientShortcut, () => "Ctrl K");
 
   const trimmed = query.trim();
   const [prevTrimmed, setPrevTrimmed] = useState(trimmed);
@@ -186,6 +192,7 @@ export function HeaderSearch({
   return (
     <form
       role="search"
+      data-filled={query ? "" : undefined}
       onSubmit={(event) => {
         event.preventDefault();
         const row = rows[active];
@@ -203,7 +210,7 @@ export function HeaderSearch({
           setOpen(true);
         }}
         label={placeholder}
-        placeholder={placeholder}
+        placeholder={`${shortcut} to search`}
         role="combobox"
         aria-expanded={showList}
         aria-controls={listId}
