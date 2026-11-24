@@ -32,6 +32,30 @@ export const THEME_SWITCHING_CLASS = "theme-switching";
 /** Only the newest switch may clear the class; an older one ends early. */
 let latestSwitch = 0;
 
+/**
+ * How long the page stays still after the last reveal ends. Quick back-and-forth
+ * switching then never restarts the rays and colour fades between reveals, so
+ * each new reveal starts on a page that is already at rest.
+ */
+export const RESUME_MOTION_MS = 3000;
+let resumeTimer: ReturnType<typeof setTimeout> | undefined;
+
+function holdMotion(root: HTMLElement): void {
+  if (resumeTimer !== undefined) clearTimeout(resumeTimer);
+  resumeTimer = undefined;
+  // Toggling the class restyles the whole page; skip it when already held.
+  if (!root.classList.contains(THEME_SWITCHING_CLASS)) root.classList.add(THEME_SWITCHING_CLASS);
+}
+
+function resumeMotionLater(root: HTMLElement, id: number): void {
+  if (id !== latestSwitch) return;
+  if (resumeTimer !== undefined) clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(() => {
+    resumeTimer = undefined;
+    if (id === latestSwitch) root.classList.remove(THEME_SWITCHING_CLASS);
+  }, RESUME_MOTION_MS);
+}
+
 const REVEAL_MS = 1570;
 /**
  * The first quarter is the old `cubic-bezier(0.8, 0, 0.75, 0.5)` over 780ms up
@@ -72,14 +96,12 @@ export function playThemeWaves(origin: WaveOrigin | undefined, swap: () => void)
   const frames = supportsPathClip() ? blobRevealFrames(x, y, radius, makeBlobSeed()) : null;
   const root = document.documentElement;
   const id = ++latestSwitch;
-  root.classList.add(THEME_SWITCHING_CLASS);
+  holdMotion(root);
 
   const transition = doc.startViewTransition(() => flushSync(swap));
   transition.finished
     .catch(() => undefined)
-    .then(() => {
-      if (id === latestSwitch) root.classList.remove(THEME_SWITCHING_CLASS);
-    });
+    .then(() => resumeMotionLater(root, id));
   transition.ready
     .then(() => {
       const target = { fill: "forwards" as const, pseudoElement: "::view-transition-new(root)" };
