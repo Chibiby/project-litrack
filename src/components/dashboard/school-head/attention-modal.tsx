@@ -182,7 +182,9 @@ export function SchoolAttentionModal({
           ))}
         </ul>
 
-        <DialogFooter>
+        {/* Pinned to the bottom of the scrolling dialog, so "Got it" stays in
+            reach on a phone when the list is taller than the screen. */}
+        <DialogFooter className="sticky -bottom-6 -mx-6 -mb-6 border-t border-border/60 bg-background px-6 pb-6 pt-3">
           <Button type="button" onClick={close}>
             Got it
           </Button>
