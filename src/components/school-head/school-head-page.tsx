@@ -121,7 +121,7 @@ export function SchoolHeadPage({
   children,
 }: SchoolHeadPageProps) {
   return (
-    <main id="main-content" className="w-full p-4 lg:p-6">
+    <main id="main-content" className="w-full p-4 pb-24 lg:p-6 lg:pb-24">
       {hero ? (
         <div className="mb-6">{hero}</div>
       ) : (

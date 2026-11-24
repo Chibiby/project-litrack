@@ -45,7 +45,7 @@ export function AppShell({
   // the title block and main content.
   if (inRoleShell) {
     return (
-      <main id="main-content" className="w-full p-4 lg:p-6">
+      <main id="main-content" className="w-full p-4 pb-24 lg:p-6 lg:pb-24">
         {!hideTitle ? (
           <PageTitleBlock title={title} subtitle={subtitle} actions={actions} />
         ) : null}
@@ -152,7 +152,7 @@ function AppShellFallback({
             onToggleSidebar={toggle}
           />
 
-          <main id="main-content" className="w-full p-4 lg:p-6">
+          <main id="main-content" className="w-full p-4 pb-24 lg:p-6 lg:pb-24">
             {!hideTitle ? (
               <PageTitleBlock
                 title={title}
