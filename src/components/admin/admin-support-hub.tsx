@@ -6,6 +6,7 @@ import { FileText, Mail, MessageCircle } from "lucide-react";
 import { AdminEmailComposer } from "@/components/admin/admin-email-composer";
 import type { AdminEmailRecipientOption } from "@/lib/admin-email/queries";
 import { AdminChatBrowser } from "@/components/chat/admin-chat-browser";
+import { useUnreadTitle } from "@/components/chat/use-unread-title";
 import { SupportInbox } from "@/components/support/support-inbox";
 import { Button } from "@/components/ui/button";
 import type { AdminChatSchool } from "@/lib/chat/queries";
@@ -34,16 +35,22 @@ export function AdminSupportHub({
   const router = useRouter();
   const [tab, setTab] = useState<"chat" | "tickets" | "email">(initialTab);
   const [channelId, setChannelId] = useState(initialChannelId);
+  useUnreadTitle(
+    schools.reduce(
+      (n, school) => n + (school.staffRoom?.unread ? 1 : 0) + school.directThreads.filter((t) => t.unread).length,
+      0
+    )
+  );
 
-  // Presence is a live status, not a page-load fact. Refresh the server query
-  // while this workspace is actually visible so a teacher can move online or
-  // offline without the admin manually reloading the page.
+  // Presence and the conversation list are live, not page-load facts. Refresh
+  // the server query every 10 s while this workspace is visible, so a new
+  // concern, its preview and who is active show without a manual reload.
   useEffect(() => {
     if (tab !== "chat") return;
     const tick = () => {
       if (document.visibilityState === "visible") router.refresh();
     };
-    const timer = window.setInterval(tick, 30_000);
+    const timer = window.setInterval(tick, 10_000);
     document.addEventListener("visibilitychange", tick);
     return () => {
       window.clearInterval(timer);

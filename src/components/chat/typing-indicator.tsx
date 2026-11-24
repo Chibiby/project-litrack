@@ -2,15 +2,19 @@
 
 import { cn } from "@/lib/utils";
 
-/** Three bouncing dots. Used for "Ana is typing…" and the assistant's thinking state. */
+/**
+ * Three dots in a staggered fade. Used for "Ana is typing…" and the
+ * assistant's thinking state. A fade, not a bounce: `animate-bounce` on a 6px
+ * dot reads as a jump.
+ */
 export function TypingDots({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-0.5", className)} aria-hidden>
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="size-1.5 rounded-full bg-muted-foreground/70 motion-safe:animate-bounce"
-          style={{ animationDelay: `${i * 140}ms`, animationDuration: "1s" }}
+          className="size-1.5 rounded-full bg-muted-foreground/70 motion-safe:animate-pulse"
+          style={{ animationDelay: `${i * 160}ms` }}
         />
       ))}
     </span>

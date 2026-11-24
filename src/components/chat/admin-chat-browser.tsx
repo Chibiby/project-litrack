@@ -10,12 +10,13 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SearchInput } from "@/components/ui/search-input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChatThread } from "@/components/chat/chat-thread";
 import type { ChatChannelView } from "@/lib/actions/chat";
 import { PresenceLabel } from "@/components/chat/presence-label";
 import { DemoBadge } from "@/components/demo-badge";
+import { ChatAvatar } from "@/components/chat/message-group";
+import { getPresenceStatus } from "@/lib/presence/status";
 import { cn } from "@/lib/utils";
 import type { AdminChatSchool } from "@/lib/chat/queries";
 
@@ -42,6 +43,8 @@ type Conversation = {
   lastMessageAt: Date | null;
   unread: boolean;
   isDemoSchool: boolean;
+  /** Member was active in the last 3 minutes (private threads only). */
+  online: boolean;
 };
 
 export function AdminChatBrowser({
@@ -107,10 +110,11 @@ export function AdminChatBrowser({
           schoolId: school.schoolId,
           label: school.schoolName,
           hint: "School chat",
-          preview: "Open the staff room to view messages",
+          preview: school.staffRoom.preview ?? "No messages yet",
           lastMessageAt: school.staffRoom.lastMessageAt,
           unread: school.staffRoom.unread,
           isDemoSchool: school.isDemoSchool,
+          online: false,
         });
       }
       for (const thread of school.directThreads) {
@@ -120,10 +124,11 @@ export function AdminChatBrowser({
           schoolId: school.schoolId,
           label: thread.memberName,
           hint: thread.memberRole,
-          preview: "Private concern",
+          preview: thread.preview ?? "Private concern",
           lastMessageAt: thread.lastMessageAt,
           unread: thread.unread,
           isDemoSchool: school.isDemoSchool,
+          online: getPresenceStatus(thread.lastOnlineAt).online,
         });
       }
     }
@@ -318,6 +323,20 @@ export function AdminChatBrowser({
   );
 }
 
+/** "2:14 PM" today, "Yesterday", then "Nov 18". */
+function listTimeLabel(date: Date, now: Date = new Date()): string {
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((day(now) - day(date)) / 86_400_000);
+  if (diffDays <= 0) return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+  if (diffDays === 1) return "Yesterday";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
+}
+
 function ConversationButton({
   conversation,
   active,
@@ -332,27 +351,56 @@ function ConversationButton({
       type="button"
       variant="ghost"
       onClick={onClick}
+      aria-current={active ? "true" : undefined}
       className={cn(
-        "h-auto w-full justify-start gap-3 rounded-lg px-3 py-2.5 text-left",
+        "h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-left",
         active ? "bg-aral-soft hover:bg-aral-soft" : "hover:bg-accent"
       )}
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-        {conversation.kind === "SCHOOL" ? <Users className="size-4" aria-hidden /> : conversation.label.slice(0, 2).toUpperCase()}
-      </span>
+      {conversation.kind === "SCHOOL" ? (
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Users className="size-4" aria-hidden />
+        </span>
+      ) : (
+        <ChatAvatar initials={initialsOf(conversation.label)} online={conversation.online} />
+      )}
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-sm font-medium">{conversation.label}</span>
+            <span className={cn("truncate text-sm", conversation.unread ? "font-semibold" : "font-medium")}>
+              {conversation.label}
+            </span>
             {conversation.isDemoSchool ? <DemoBadge /> : null}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {conversation.lastMessageAt ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(conversation.lastMessageAt) : ""}
+          <span
+            className={cn(
+              "shrink-0 text-xs",
+              conversation.unread ? "font-semibold text-primary" : "text-muted-foreground"
+            )}
+          >
+            {conversation.lastMessageAt ? listTimeLabel(conversation.lastMessageAt) : ""}
           </span>
         </span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{conversation.preview}</span>
+        <span className="mt-0.5 flex items-center gap-2">
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-xs",
+              conversation.unread ? "font-medium text-foreground" : "text-muted-foreground"
+            )}
+          >
+            {conversation.preview}
+          </span>
+          {conversation.unread && (
+            <span className="size-2.5 shrink-0 rounded-full bg-primary">
+              <span className="sr-only">Unread</span>
+            </span>
+          )}
+        </span>
+        <span className="mt-0.5 block truncate text-2xs text-muted-foreground">
+          {conversation.hint}
+          {conversation.online ? " · Active now" : ""}
+        </span>
       </span>
-      {conversation.unread && <Badge className="size-5 justify-center rounded-full bg-red-500 p-0 text-xs text-white">1</Badge>}
     </Button>
   );
 }

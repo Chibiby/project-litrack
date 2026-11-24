@@ -71,6 +71,50 @@ describe("AdminChatBrowser", () => {
     expect(screen.queryByText("Online")).toBeNull();
   });
 
+  it("row shows the last message preview and an online dot when lastOnlineAt within 3 min", () => {
+    render(
+      <AdminChatBrowser
+        schools={[
+          {
+            schoolId: "school-1",
+            schoolName: "Malandag Central ES",
+            isDemoSchool: false,
+            staffRoom: { id: "room", lastMessageAt: new Date(), unread: false, preview: "Ana: Can I ask?" },
+            directThreads: [
+              {
+                id: "online-thread",
+                memberId: "m-1",
+                memberName: "Marivic Acibar",
+                memberRole: "Teacher",
+                lastMessageAt: new Date(),
+                lastOnlineAt: new Date(Date.now() - 60_000),
+                unread: false,
+                preview: "You: Fixed now",
+              },
+              {
+                id: "away-thread",
+                memberId: "m-2",
+                memberName: "Jose Rizal",
+                memberRole: "School Head",
+                lastMessageAt: new Date(),
+                lastOnlineAt: new Date(Date.now() - 10 * 60_000),
+                unread: false,
+              },
+            ],
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText("Ana: Can I ask?")).not.toBeNull();
+    expect(screen.getByText("You: Fixed now")).not.toBeNull();
+    const online = screen.getByRole("button", { name: /Marivic Acibar/ });
+    const away = screen.getByRole("button", { name: /Jose Rizal/ });
+    expect(online.querySelector("[data-online]")).not.toBeNull();
+    expect(away.querySelector("[data-online]")).toBeNull();
+    expect(online.textContent).toContain("Active now");
+  });
+
   it("marks a demo school's conversation and hides the badge for a real one", () => {
     render(
       <AdminChatBrowser

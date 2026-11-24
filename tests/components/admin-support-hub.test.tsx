@@ -46,7 +46,7 @@ describe("AdminSupportHub", () => {
     expect(replace).toHaveBeenCalledWith("/admin/monitoring/support?tab=tickets", { scroll: false });
   });
 
-  it("refreshes current presence while the chat workspace remains visible", () => {
+  it("hub refreshes every 10 s while the chat workspace is visible", () => {
     vi.useFakeTimers();
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
@@ -54,9 +54,10 @@ describe("AdminSupportHub", () => {
     });
     render(<AdminSupportHub schools={[]} tickets={[]} />);
 
-    vi.advanceTimersByTime(30_000);
-
+    vi.advanceTimersByTime(10_000);
     expect(refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(20_000);
+    expect(refresh).toHaveBeenCalledTimes(3);
   });
 
   it("opens the email workspace from a routed third tab", () => {

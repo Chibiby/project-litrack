@@ -20,7 +20,7 @@ export function ChatAvatar({
         {initials}
       </span>
       {online && (
-        <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card bg-success-500" />
+        <span data-online className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card bg-success-500" />
       )}
     </span>
   );

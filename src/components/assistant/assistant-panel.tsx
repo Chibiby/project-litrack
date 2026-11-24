@@ -21,6 +21,7 @@ import { AssistantTicketForm } from "@/components/assistant/assistant-ticket-for
 import { askAssistant, type AssistantLink } from "@/lib/actions/assistant";
 import { ChatThread } from "@/components/chat/chat-thread";
 import { getMyChatUnread } from "@/lib/actions/chat";
+import { TypingDots } from "@/components/chat/typing-indicator";
 import { callAction } from "@/lib/ui/call-action";
 import { fetchMyTickets, type MySupportTicket } from "@/lib/actions/support";
 import {
@@ -464,7 +465,7 @@ export function AssistantPanel({
               entries.map((entry) =>
                 entry.kind === "user" ? (
                   <div key={entry.id} className="flex justify-end">
-                    <p className="max-w-[80%] rounded-lg rounded-br-sm bg-aral px-3.5 py-2 text-caption leading-relaxed text-aral-foreground">
+                    <p className="max-w-[80%] rounded-2xl rounded-br-md bg-aral px-3.5 py-2 text-caption leading-relaxed text-aral-foreground">
                       {entry.text}
                     </p>
                   </div>
@@ -547,28 +548,19 @@ function BotEntry({
   if (entry.state === "asking") {
     return (
       <div
-        className="flex w-fit items-center gap-1 rounded-lg rounded-bl-sm bg-muted px-3.5 py-3"
+        className="flex w-fit items-center rounded-2xl rounded-bl-md bg-muted px-3.5 py-3"
         role="status"
       >
         <span className="sr-only">Thinking…</span>
-        {/* A staggered fade, not a hop. `animate-bounce` translates 25% on a
-            bounce curve, which on a 6px dot is a jump; the pulse keeps the
-            familiar typing rhythm without the dated easing. */}
-        {[0, 1, 2].map((dot) => (
-          <span
-            key={dot}
-            className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60"
-            style={{ animationDelay: `${dot * 160}ms` }}
-            aria-hidden
-          />
-        ))}
+        {/* The same dots the chat shows while someone types. */}
+        <TypingDots className="gap-1" />
       </div>
     );
   }
 
   if (entry.state === "failed") {
     return (
-      <div className="max-w-[85%] space-y-2 rounded-lg rounded-bl-sm bg-muted px-3.5 py-2.5">
+      <div className="max-w-[85%] space-y-2 rounded-2xl rounded-bl-md bg-muted px-3.5 py-2.5">
         <p className="text-caption leading-relaxed">{entry.text}</p>
         {canEscalate && (
           <Button
@@ -588,7 +580,7 @@ function BotEntry({
 
   return (
     <div className="space-y-2">
-      <div className="max-w-[85%] whitespace-pre-line rounded-lg rounded-bl-sm bg-muted px-3.5 py-2.5 text-caption leading-relaxed">
+      <div className="max-w-[85%] whitespace-pre-line rounded-2xl rounded-bl-md bg-muted px-3.5 py-2.5 text-caption leading-relaxed">
         {entry.text}
       </div>
       {/* The prose came from the model; these are the app's own routes, picked

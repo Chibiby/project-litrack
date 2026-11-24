@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { previewLine } from "@/lib/chat/view";
 
 /**
  * The admin's view of chat across the estate.
@@ -15,7 +16,13 @@ export type AdminChatSchool = {
   /** Whether this school is the Test Lab demo tenant. */
   isDemoSchool: boolean;
   /** The staff room, if it has been opened. Null before anyone has looked. */
-  staffRoom: { id: string; lastMessageAt: Date | null; unread: boolean } | null;
+  staffRoom: {
+    id: string;
+    lastMessageAt: Date | null;
+    unread: boolean;
+    /** "Ana: Can I ask…", "You: …" or "Message removed". Absent for an empty room. */
+    preview?: string;
+  } | null;
   /** Private threads members opened with the admin team. */
   directThreads: {
     id: string;
@@ -25,6 +32,7 @@ export type AdminChatSchool = {
     lastMessageAt: Date | null;
     lastOnlineAt: Date | null;
     unread: boolean;
+    preview?: string;
   }[];
 };
 
@@ -61,6 +69,17 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
         where: { userId: adminId },
         select: { lastReadAt: true },
       },
+      // The newest message only, for the conversation list's preview line.
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          authorId: true,
+          body: true,
+          deletedAt: true,
+          author: { select: { firstName: true, fullName: true } },
+        },
+      },
     },
   });
 
@@ -80,8 +99,27 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
       channel.lastMessageAt && (!readAt || channel.lastMessageAt > readAt)
     );
 
+    const last = channel.messages?.[0];
+    const preview = last
+      ? previewLine(
+          {
+            authorId: last.authorId,
+            body: last.body,
+            deletedAt: last.deletedAt,
+            authorFirstName:
+              last.author?.firstName?.trim() || last.author?.fullName?.trim().split(/s+/)[0] || "Someone",
+          },
+          adminId
+        )
+      : undefined;
+
     if (channel.kind === "SCHOOL") {
-      entry.staffRoom = { id: channel.id, lastMessageAt: channel.lastMessageAt, unread };
+      entry.staffRoom = {
+        id: channel.id,
+        lastMessageAt: channel.lastMessageAt,
+        unread,
+        ...(preview ? { preview } : {}),
+      };
     } else {
       const member = channel.member;
       entry.directThreads.push({
@@ -95,6 +133,7 @@ export async function listAdminChatSchools(adminId: string): Promise<AdminChatSc
         lastMessageAt: channel.lastMessageAt,
         lastOnlineAt: member?.lastOnlineAt ?? null,
         unread,
+        ...(preview ? { preview } : {}),
       });
     }
 
