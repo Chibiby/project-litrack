@@ -205,6 +205,56 @@ describe("messenger chat thread", () => {
     expect(screen.getByText("edited")).toBeTruthy();
   });
 
+  it("marks read again after the throttle when a second message lands within 5 s", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderThread(channel([msg("1", "a", "hi", 1)]));
+      await waitFor(() => expect(markChannelRead).toHaveBeenCalledTimes(1));
+      readChannel.mockResolvedValue({ ok: true, data: channel([msg("1", "a", "hi", 1), msg("2", "a", "again", 0)]) });
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await screen.findByText("again");
+      await act(async () => {
+        vi.advanceTimersByTime(5_100);
+      });
+      await waitFor(() => expect(markChannelRead.mock.calls.length).toBeGreaterThanOrEqual(2));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("marks read when Jump to latest is pressed", async () => {
+    renderThread(channel([msg("1", "a", "hi", 1)]));
+    const log = screen.getByRole("log");
+    Object.defineProperty(log, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(log, "clientHeight", { value: 400, configurable: true });
+    log.scrollTop = 100;
+    fireEvent.scroll(log);
+    markChannelRead.mockClear();
+    readChannel.mockResolvedValue({ ok: true, data: channel([msg("1", "a", "hi", 1), msg("2", "a", "new one", 0)]) });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await screen.findByText("new one");
+    expect(markChannelRead).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Jump to latest/ }));
+    });
+    expect(markChannelRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks read when the tab becomes visible again even if nothing changed", async () => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    renderThread(channel([msg("1", "a", "arrived while away", 1)]));
+    expect(markChannelRead).not.toHaveBeenCalled();
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await waitFor(() => expect(markChannelRead).toHaveBeenCalledTimes(1));
+  });
+
   it("does not mark read while scrolled up", async () => {
     renderThread(channel([msg("1", "a", "hi", 1)]));
     const log = screen.getByRole("log");

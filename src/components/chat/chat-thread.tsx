@@ -157,14 +157,33 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
   /** Set when the first load failed, so a later successful poll can clear it. */
   const loadFailedRef = useRef(false);
 
+  /** A mark the throttle held back, sent once the gap has passed. */
+  const markTimerRef = useRef<number | undefined>(undefined);
+
   const markRead = useCallback((id: string, force = false) => {
-    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-    if (!atBottomRef.current) return;
-    const now = Date.now();
-    if (!force && now - lastMarkAtRef.current < MARK_READ_MIN_GAP_MS) return;
-    lastMarkAtRef.current = now;
-    void callAction(() => markChannelRead({ channelId: id }));
+    const canMark = () =>
+      (typeof document === "undefined" || document.visibilityState === "visible") && atBottomRef.current;
+    const send = () => {
+      window.clearTimeout(markTimerRef.current);
+      markTimerRef.current = undefined;
+      lastMarkAtRef.current = Date.now();
+      void callAction(() => markChannelRead({ channelId: id }));
+    };
+    if (!canMark()) return;
+    const wait = MARK_READ_MIN_GAP_MS - (Date.now() - lastMarkAtRef.current);
+    if (force || wait <= 0) {
+      send();
+      return;
+    }
+    // Throttled, not dropped: the newest message must still end up read.
+    if (markTimerRef.current === undefined) {
+      markTimerRef.current = window.setTimeout(() => {
+        markTimerRef.current = undefined;
+        if (canMark()) send();
+      }, wait);
+    }
   }, []);
+  useEffect(() => () => window.clearTimeout(markTimerRef.current), []);
 
   /** Resolves to the failure message, or null. Pollers ignore it and keep the previous messages. */
   const refresh = useCallback(
@@ -288,8 +307,11 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
     }
     function onVisibility() {
       if (document.visibilityState !== "visible") return;
-      // Back on the tab: check now, and poll at the live rate again.
+      // Back on the tab: whatever arrived while away is now in view, so mark
+      // it read; then check now, and poll at the live rate again.
       lastChangeAtRef.current = Date.now();
+      const id = channelIdRef.current;
+      if (id) markRead(id, true);
       poll();
       schedule();
     }
@@ -299,7 +321,8 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refresh]);
+    // live.live: reschedule the moment the socket comes up or drops.
+  }, [refresh, markRead, live.live]);
 
   const scrollToBottom = useCallback(() => {
     const log = logRef.current;
@@ -307,7 +330,10 @@ export function ChatThread({ kind, channelId, initialChannel, schoolId, memberId
     atBottomRef.current = true;
     setAtBottom(true);
     setUnseenCount(0);
-  }, []);
+    // The scroll handler sees "already at bottom" and returns early, so mark here.
+    const id = channelIdRef.current;
+    if (id) markRead(id, true);
+  }, [markRead]);
 
   useEffect(() => {
     if (forceScrollRef.current || atBottomRef.current) {
