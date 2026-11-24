@@ -1438,6 +1438,11 @@ model Learner {
   /// Prisma cannot express a partial index, and a fourth SQL-only object drifting
   /// from this file costs more than the megabytes it would save.
   @@index([deletedAt])
+  /// The cross-school learner lists (`/admin/learners`, IP learners) page in
+  /// `lastName, firstName, id` order with no school filter. Without this the
+  /// planner sorts every live learner for each page (top-N heapsort over
+  /// ~104k rows, more for a deep OFFSET); with it a page reads 25 index entries.
+  @@index([lastName, firstName, id])
 }
 
 model Announcement {
