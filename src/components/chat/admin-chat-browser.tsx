@@ -353,7 +353,7 @@ function ConversationButton({
       onClick={onClick}
       aria-current={active ? "true" : undefined}
       className={cn(
-        "h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-left",
+        "h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-left lg:h-auto",
         active ? "bg-aral-soft hover:bg-aral-soft" : "hover:bg-accent"
       )}
     >

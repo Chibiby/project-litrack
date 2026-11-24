@@ -470,11 +470,53 @@ async function insertTeacherGrades(tx: Prisma.TransactionClient, rows: Row[]): P
 }
 
 /** Insert one chunk; returns the rows the database reports it wrote. */
-async function insertChunk(tx: Prisma.TransactionClient, model: string, rows: Row[]): Promise<number> {
+/**
+ * Columns that point at another row of the same table. Rows are read in id
+ * order and inserted in chunks, so a reply can arrive a chunk before the
+ * message it quotes, and its immediate foreign-key check would fail the whole
+ * restore. These columns are written as null on insert and set in one update
+ * once the table is complete.
+ */
+const DEFERRED_SELF_REFS: Readonly<Record<string, string>> = { ChatMessage: "replyToId" };
+
+/** (row id, referenced id) pairs held back until their table is fully inserted. */
+type SelfRefs = { ids: string[]; refs: string[] };
+
+async function insertChunk(
+  tx: Prisma.TransactionClient,
+  model: string,
+  rows: Row[],
+  selfRefs?: SelfRefs
+): Promise<number> {
   if (rows.length === 0) return 0;
   if (model === TEACHER_GRADES_SECTION) return insertTeacherGrades(tx, rows);
-  const { count } = await delegateFor(tx, delegateKeyFor(model)).createMany({ data: reviveRows(model, rows) });
+  const column = DEFERRED_SELF_REFS[model];
+  let toWrite = rows;
+  if (column && selfRefs) {
+    toWrite = rows.map((row) => {
+      const ref = row[column];
+      if (typeof ref !== "string" || ref === "") return row;
+      selfRefs.ids.push(String(row.id));
+      selfRefs.refs.push(ref);
+      return { ...row, [column]: null };
+    });
+  }
+  const { count } = await delegateFor(tx, delegateKeyFor(model)).createMany({ data: reviveRows(model, toWrite) });
   return count;
+}
+
+/** Set the self-references `insertChunk` held back, now every row they can point at exists. */
+async function applySelfRefs(tx: Prisma.TransactionClient, model: string, selfRefs: SelfRefs): Promise<void> {
+  const column = DEFERRED_SELF_REFS[model];
+  if (!column || selfRefs.ids.length === 0) return;
+  for (let i = 0; i < selfRefs.ids.length; i += INSERT_CHUNK) {
+    // Model and column names come from the constant above, never from the file.
+    await tx.$executeRawUnsafe(
+      `UPDATE "${model}" AS t SET "${column}" = v.ref FROM unnest($1::text[], $2::text[]) AS v(id, ref) WHERE t."id" = v.id`,
+      selfRefs.ids.slice(i, i + INSERT_CHUNK),
+      selfRefs.refs.slice(i, i + INSERT_CHUNK)
+    );
+  }
 }
 
 /**
@@ -503,6 +545,7 @@ export async function restoreBackup(
     const events = readSnapshotEvents(decodeBackupBytes(stream));
     let pending: Row[] = [];
     let inserted = 0;
+    let selfRefs: SelfRefs = { ids: [], refs: [] };
     try {
       for (;;) {
         // `.next()` rather than `for await`: the generator's return value is
@@ -513,15 +556,16 @@ export async function restoreBackup(
         if (ev.type === "tableStart") {
           pending = [];
           inserted = 0;
+          selfRefs = { ids: [], refs: [] };
         } else if (ev.type === "row" && ev.restorable) {
           pending.push(ev.row);
           if (pending.length >= INSERT_CHUNK) {
-            inserted += await insertChunk(tx, ev.model, pending);
+            inserted += await insertChunk(tx, ev.model, pending, selfRefs);
             pending = [];
           }
         } else if (ev.type === "tableEnd") {
           if (ev.restorable) {
-            inserted += await insertChunk(tx, ev.model, pending);
+            inserted += await insertChunk(tx, ev.model, pending, selfRefs);
             // The database's own count, not the file's. They can only differ
             // if a write was silently dropped, and a restore that is short a
             // row must not commit.
@@ -530,6 +574,7 @@ export async function restoreBackup(
                 `Restore wrote ${inserted} of ${ev.count} ${ev.model} rows; rolling back`
               );
             }
+            await applySelfRefs(tx, ev.model, selfRefs);
             if (ev.model !== TEACHER_GRADES_SECTION) written[ev.model] = inserted;
           }
           pending = [];
@@ -555,9 +600,11 @@ export async function restoreSnapshot(snapshot: Snapshot): Promise<SnapshotCount
     for (const { model } of WRITE_ORDER) {
       const rows = snapshot.data[model] ?? [];
       written[model] = rows.length;
+      const selfRefs: SelfRefs = { ids: [], refs: [] };
       for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-        await insertChunk(tx, model, rows.slice(i, i + INSERT_CHUNK));
+        await insertChunk(tx, model, rows.slice(i, i + INSERT_CHUNK), selfRefs);
       }
+      await applySelfRefs(tx, model, selfRefs);
     }
 
     for (let i = 0; i < snapshot.teacherGrades.length; i += INSERT_CHUNK) {

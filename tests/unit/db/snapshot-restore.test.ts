@@ -25,6 +25,10 @@ function fakeTx() {
               calls.push({ op: "rawDelete" });
               return 0;
             }
+            if (sql.startsWith("UPDATE")) {
+              calls.push({ op: "rawUpdate", params });
+              return (params[0] as unknown[]).length;
+            }
             calls.push({ op: "rawInsert", rows: params.length / 2, params });
             return params.length / 2;
           };
@@ -181,6 +185,37 @@ describe("v2 restore write path", () => {
 
     await expect(restoreBackup(INSPECTED, opener(text))).rejects.toThrow(/wrote 9 of 10 School/);
     expect(rolledBack).toBe(true);
+  });
+
+  it("restores reply links after every message exists, so a reply in an earlier chunk than its quote still restores", async () => {
+    // Ids sort so the reply (a…) is written before the message it quotes (z…),
+    // and 1,000+ rows put them in different createMany chunks.
+    const filler = Array.from({ length: 1_200 }, (_, i) => ({
+      id: `m${String(i).padStart(5, "0")}`,
+      channelId: "c1",
+      authorId: "u1",
+      body: "x",
+      createdAt: "2026-11-24T00:00:00.000Z",
+      replyToId: null,
+    }));
+    const text = await fileText({
+      ChatMessage: [
+        { id: "a-reply", channelId: "c1", authorId: "u1", body: "yes", createdAt: "2026-11-24T00:01:00.000Z", replyToId: "z-quote" },
+        ...filler,
+        { id: "z-quote", channelId: "c1", authorId: "u1", body: "ok?", createdAt: "2026-11-24T00:00:00.000Z", replyToId: null },
+      ],
+    });
+    await restoreBackup(INSPECTED, opener(text));
+
+    const inserted = calls.filter((c) => c.op === "createMany" && c.model === "chatMessage").flatMap((c) => c.data!);
+    expect(inserted).toHaveLength(1_202);
+    expect(inserted.every((row) => row.replyToId === null)).toBe(true);
+    const updates = calls.filter((c) => c.op === "rawUpdate");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].params).toEqual([["a-reply"], ["z-quote"]]);
+    const lastInsert = calls.map((c) => c.op === "createMany" && c.model === "chatMessage").lastIndexOf(true);
+    expect(calls.indexOf(updates[0])).toBeGreaterThan(lastInsert);
+    expect(committed).toBe(true);
   });
 
   it("cancels the download when an insert fails midway", async () => {
