@@ -12,6 +12,8 @@ export function resetCountUpForSignIn(): void {
 
 /** Anything still loading: the sign-in splash, skeletons, busy regions. */
 const LOADING = "[data-post-login-splash], main .animate-pulse, main [aria-busy=\"true\"]";
+/** A pop-up over the page (such as the update notice) hides the cards. */
+const COVERED = "[role=\"dialog\"], [role=\"alertdialog\"]";
 /** How long the page must stay loaded and visible before the count starts. */
 const SETTLE_MS = 450;
 /** Skeletons that never go away do not hold the count back past this. */
@@ -19,7 +21,7 @@ const MAX_LOADING_WAIT_MS = 8000;
 
 /**
  * Runs `start` once the whole page has loaded, nothing on it is still
- * loading, and the tab is visible, after that has held for SETTLE_MS.
+ * loading, no pop-up covers it, and the tab is visible, after that has held for SETTLE_MS.
  * Returns a cancel function.
  */
 function whenPageSettled(start: () => void): () => void {
@@ -30,7 +32,10 @@ function whenPageSettled(start: () => void): () => void {
     const now = performance.now();
     const loading = now - begun < MAX_LOADING_WAIT_MS && document.querySelector(LOADING) !== null;
     const ready =
-      document.readyState === "complete" && document.visibilityState === "visible" && !loading;
+      document.readyState === "complete" &&
+      document.visibilityState === "visible" &&
+      !loading &&
+      document.querySelector(COVERED) === null;
     settledSince = ready ? (settledSince ?? now) : null;
     if (settledSince !== null && now - settledSince >= SETTLE_MS) return start();
     timer = window.setTimeout(check, 100);
