@@ -15,10 +15,7 @@ import { TableSectionSkeleton } from "@/components/loading";
 import { CrossSchoolTransferForm } from "@/components/admin/cross-school-transfer-form";
 import { NoDistrictsState } from "@/components/district/no-districts-state";
 import { describeScope, hasNoDistricts } from "@/components/district/scope-label";
-import { TransferPanel } from "@/components/transfers/transfer-panel";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { parseTransferKind } from "@/lib/transfers/queries";
+import { SchoolTransfersSection } from "@/components/transfers/school-transfers-section";
 
 export const dynamic = "force-dynamic";
 
@@ -112,12 +109,8 @@ async function DistrictTransferBody({
   );
 }
 
-/**
- * The cross-school transfer workspace for one school the admin picks. The
- * admin acts for that school: send, cancel, accept or decline, exactly as its
- * School Head would (resolveTransferActor checks the scope on every action).
- */
-async function SchoolTransfersSection({
+/** The admin's active schools, then the shared pick-a-school transfer workspace. */
+async function DistrictSchoolTransfers({
   scope,
   schoolParam,
   kindParam,
@@ -127,51 +120,13 @@ async function SchoolTransfersSection({
   kindParam: string | undefined;
 }) {
   const schools = (await resolveScopeSchools(scope, false)).filter((school) => school.isActive);
-  const schoolId = schoolParam && schools.some((school) => school.id === schoolParam) ? schoolParam : "";
-  const { param } = parseTransferKind(kindParam);
-  const href = (kind: string) =>
-    `${DISTRICT_ROUTES.transfers}?school=${encodeURIComponent(schoolId)}&kind=${kind}`;
-
   return (
-    <Surface as="section" aria-labelledby="school-transfers-title" className="min-w-0 rounded-lg">
-      <SurfaceHeader className="px-4 sm:px-5">
-        <h2 id="school-transfers-title" className="text-base font-semibold">
-          Transfers between schools
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Learners, teachers and ARAL volunteers. Nobody moves until the receiving school accepts.
-        </p>
-      </SurfaceHeader>
-      <SurfaceBody className="space-y-4 p-4 sm:p-5">
-        <form method="get" action={DISTRICT_ROUTES.transfers} className="flex flex-wrap items-end gap-2">
-          <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-sm">
-            <Label htmlFor="transfer-school">School</Label>
-            <select
-              id="transfer-school"
-              name="school"
-              defaultValue={schoolId}
-              className="flex h-11 w-full rounded-md border border-input bg-card px-3 text-sm lg:h-9"
-            >
-              <option value="">Choose a school</option>
-              {schools.map((school) => (
-                <option key={school.id} value={school.id}>
-                  {school.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <input type="hidden" name="kind" value={param} />
-          <Button type="submit" variant="outline">
-            Show transfers
-          </Button>
-        </form>
-        {schoolId ? (
-          <TransferPanel schoolId={schoolId} kindParam={param} kindHref={href} />
-        ) : (
-          <p className="text-sm text-muted-foreground">Choose a school to see and answer its transfers.</p>
-        )}
-      </SurfaceBody>
-    </Surface>
+    <SchoolTransfersSection
+      schools={schools.map((school) => ({ id: school.id, name: school.name }))}
+      schoolParam={schoolParam}
+      kindParam={kindParam}
+      basePath={DISTRICT_ROUTES.transfers}
+    />
   );
 }
 
@@ -212,7 +167,7 @@ export default async function DistrictTransfersPage({ searchParams }: PageProps)
             fallback={<TableSectionSkeleton rows={6} columns={4} className="mb-6 rounded-lg" />}
           >
             <div className="mb-6">
-              <SchoolTransfersSection
+              <DistrictSchoolTransfers
                 scope={scope}
                 schoolParam={params.school?.trim() ?? ""}
                 kindParam={params.kind}

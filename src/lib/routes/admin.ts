@@ -29,12 +29,13 @@ export const ADMIN_ROUTES = {
   newSchool: "/admin/management/schools/new",
   school: (schoolId: string) => `/admin/management/schools/${schoolId}`,
   districtAdmins: "/admin/management/district-admins",
+  /** Learners, teachers and ARAL volunteers moving between schools. */
+  transfers: "/admin/management/transfers",
 
   // School Setup
   schoolYears: "/admin/school-setup/school-years",
   termSubjects: "/admin/school-setup/term-subjects",
   reportSubmissions: "/admin/school-setup/report-submissions",
-  learnerTransfers: "/admin/school-setup/learner-transfers",
 
   // Monitoring
   divisionSummary: "/admin/monitoring/division-summary",
@@ -71,7 +72,8 @@ export const LEGACY_ADMIN_REDIRECTS: Readonly<Record<string, string>> = {
   "/admin/term-subjects": ADMIN_ROUTES.termSubjects,
   "/admin/submissions": ADMIN_ROUTES.reportSubmissions,
   "/admin/settings/submissions": ADMIN_ROUTES.reportSubmissions,
-  "/admin/transfers": ADMIN_ROUTES.learnerTransfers,
+  "/admin/transfers": ADMIN_ROUTES.transfers,
+  "/admin/school-setup/learner-transfers": ADMIN_ROUTES.transfers,
   "/admin/summary": ADMIN_ROUTES.divisionSummary,
   "/admin/support": ADMIN_ROUTES.support,
   "/admin/archive": ADMIN_ROUTES.deletedRecords,

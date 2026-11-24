@@ -183,7 +183,7 @@ describe("optimistic highlight — admin and school head rails", () => {
   const headItems = flattenNavGroups(getNavGroups("SCHOOL_HEAD"));
 
   it("lights the clicked admin row before the router commits", () => {
-    const path = resolveNavPath("/admin", { href: "/admin/school-setup/learner-transfers", from: "/admin" });
+    const path = resolveNavPath("/admin", { href: "/admin/management/transfers", from: "/admin" });
     expect(resolveActiveItemId(path, adminItems)).toBe("admin-transfers");
   });
 

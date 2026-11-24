@@ -526,13 +526,13 @@ describe("getNavGroups — admin", () => {
       "ARAL Tutors",
       "School Heads",
       "Schools",
+      "Transfers",
       "District Admins",
     ]);
     expect(groups[2].items.map((i) => i.label)).toEqual([
       "School Years",
       "End-of-Term Subjects",
       "Report Submissions",
-      "Learner Transfers",
     ]);
     expect(groups[3].items.map((i) => i.label)).toEqual(["Division Summary", "Support Inbox", "Deleted Records"]);
     // Developer Controls keeps its five original rows; assert those without
@@ -557,7 +557,7 @@ describe("getNavGroups — admin", () => {
       "admin-school-years": "/admin/school-setup/school-years",
       "admin-term-subjects": "/admin/school-setup/term-subjects",
       "admin-submissions": "/admin/school-setup/report-submissions",
-      "admin-transfers": "/admin/school-setup/learner-transfers",
+      "admin-transfers": "/admin/management/transfers",
       "admin-summary": "/admin/monitoring/division-summary",
       "admin-support": "/admin/monitoring/support",
       "admin-deleted-records": "/admin/monitoring/deleted-records",
@@ -603,7 +603,7 @@ describe("getNavGroups — admin", () => {
       ["/admin/school-setup/school-years", "admin-school-years"],
       ["/admin/school-setup/term-subjects", "admin-term-subjects"],
       ["/admin/school-setup/report-submissions", "admin-submissions"],
-      ["/admin/school-setup/learner-transfers", "admin-transfers"],
+      ["/admin/management/transfers", "admin-transfers"],
       ["/admin/monitoring/division-summary", "admin-summary"],
       ["/admin/monitoring/division-summary/learners", "admin-summary"],
       ["/admin/monitoring/support", "admin-support"],

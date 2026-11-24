@@ -61,7 +61,7 @@ const ROLE_PREFETCH: Record<PostLoginSplashRole, readonly string[]> = {
     SCHOOL_HEAD_ROUTES.school,
     SCHOOL_HEAD_ROUTES.settings,
   ],
-  admin: [ADMIN_ROUTES.schools, ADMIN_ROUTES.learnerTransfers, ADMIN_ROUTES.settings],
+  admin: [ADMIN_ROUTES.schools, ADMIN_ROUTES.transfers, ADMIN_ROUTES.settings],
 };
 
 const PHRASES = [

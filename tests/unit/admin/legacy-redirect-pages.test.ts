@@ -45,6 +45,7 @@ const { default: LegacyTermSubjects } = await import("@/app/admin/term-subjects/
 const { default: LegacySubmissions } = await import("@/app/admin/submissions/page");
 const { default: LegacySubmissionSettings } = await import("@/app/admin/settings/submissions/page");
 const { default: LegacyTransfers } = await import("@/app/admin/transfers/page");
+const { default: LegacyLearnerTransfers } = await import("@/app/admin/school-setup/learner-transfers/page");
 const { default: LegacySupport } = await import("@/app/admin/support/page");
 
 beforeEach(() => {
@@ -172,7 +173,13 @@ describe("the other moved pages", () => {
       {},
       "/admin/school-setup/report-submissions",
     ],
-    ["/admin/transfers", LegacyTransfers, { q: "cruz" }, "/admin/school-setup/learner-transfers?q=cruz"],
+    ["/admin/transfers", LegacyTransfers, { q: "cruz" }, "/admin/management/transfers?q=cruz"],
+    [
+      "/admin/school-setup/learner-transfers",
+      LegacyLearnerTransfers,
+      { school: "s1", kind: "teachers" },
+      "/admin/management/transfers?school=s1&kind=teachers",
+    ],
     [
       "/admin/support",
       LegacySupport,
@@ -188,7 +195,7 @@ describe("the other moved pages", () => {
   it("keeps repeated query keys", async () => {
     expect(
       await landed(() => LegacyTransfers({ searchParams: Promise.resolve({ status: ["a", "b"] }) }))
-    ).toBe("/admin/school-setup/learner-transfers?status=a&status=b");
+    ).toBe("/admin/management/transfers?status=a&status=b");
   });
 });
 
@@ -206,6 +213,7 @@ describe("every stub", () => {
       () => LegacySubmissions({ searchParams: Promise.resolve({}) }),
       () => LegacySubmissionSettings({ searchParams: Promise.resolve({}) }),
       () => LegacyTransfers({ searchParams: Promise.resolve({}) }),
+      () => LegacyLearnerTransfers({ searchParams: Promise.resolve({}) }),
       () => LegacySupport({ searchParams: Promise.resolve({}) }),
     ];
     const legacy = [
@@ -218,6 +226,7 @@ describe("every stub", () => {
       "/admin/submissions",
       "/admin/settings/submissions",
       "/admin/transfers",
+      "/admin/school-setup/learner-transfers",
       "/admin/summary",
       "/admin/support",
     ];

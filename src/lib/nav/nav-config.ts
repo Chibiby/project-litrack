@@ -215,6 +215,7 @@ export function getNavGroups(
             { id: "admin-aral-teachers", label: "ARAL Tutors", href: ADMIN_ROUTES.aralTeachers, icon: HandHelping },
             { id: "admin-school-heads", label: "School Heads", href: ADMIN_ROUTES.schoolHeads, icon: ShieldCheck, heavy: true },
             { id: "admin-schools", label: "Schools", href: ADMIN_ROUTES.schools, icon: School },
+            { id: "admin-transfers", label: "Transfers", href: ADMIN_ROUTES.transfers, icon: ArrowRightLeft },
             { id: "admin-district-admins", label: "District Admins", href: ADMIN_ROUTES.districtAdmins, icon: MapPinned, heavy: true },
           ],
         },
@@ -224,7 +225,6 @@ export function getNavGroups(
             { id: "admin-school-years", label: "School Years", href: ADMIN_ROUTES.schoolYears, icon: CalendarRange },
             { id: "admin-term-subjects", label: "End-of-Term Subjects", href: ADMIN_ROUTES.termSubjects, icon: ListOrdered },
             { id: "admin-submissions", label: "Report Submissions", href: ADMIN_ROUTES.reportSubmissions, icon: FileCheck2 },
-            { id: "admin-transfers", label: "Learner Transfers", href: ADMIN_ROUTES.learnerTransfers, icon: ArrowRightLeft },
           ],
         },
         {

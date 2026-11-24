@@ -466,7 +466,7 @@ export const transferLearnerCrossSchool = action(
     revalidatePath(`/teacher/grade/${targetGradeLevelId}`);
     revalidatePath("/teacher/learners");
     revalidatePath("/teacher/aral");
-    revalidatePath(ADMIN_ROUTES.learnerTransfers);
+    revalidatePath(ADMIN_ROUTES.transfers);
     revalidatePath(ADMIN_ROUTES.schools);
     revalidatePath(SCHOOL_HEAD_ROUTES.learners);
     revalidatePath(DISTRICT_ROUTES.transfers);

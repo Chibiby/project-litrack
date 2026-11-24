@@ -21,7 +21,7 @@ describe("ADMIN_ROUTES", () => {
     expect(ADMIN_ROUTES.schoolYears).toBe("/admin/school-setup/school-years");
     expect(ADMIN_ROUTES.termSubjects).toBe("/admin/school-setup/term-subjects");
     expect(ADMIN_ROUTES.reportSubmissions).toBe("/admin/school-setup/report-submissions");
-    expect(ADMIN_ROUTES.learnerTransfers).toBe("/admin/school-setup/learner-transfers");
+    expect(ADMIN_ROUTES.transfers).toBe("/admin/management/transfers");
     expect(ADMIN_ROUTES.divisionSummary).toBe("/admin/monitoring/division-summary");
     expect(ADMIN_ROUTES.support).toBe("/admin/monitoring/support");
   });
@@ -73,6 +73,7 @@ describe("ADMIN_ROUTES", () => {
         "/admin/support",
         "/admin/term-subjects",
         "/admin/transfers",
+        "/admin/school-setup/learner-transfers",
       ].sort()
     );
   });

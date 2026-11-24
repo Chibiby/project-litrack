@@ -13,7 +13,6 @@ import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { invalidateNavWarm } from "@/components/nav-prefetcher";
 import type { LearnerSearchHit } from "@/lib/learners/search";
 import { SECTION_CLEAR } from "@/lib/validators/enrollment.schema";
-import { ADMIN_ROUTES } from "@/lib/routes/admin";
 
 type SchoolOption = { id: string; name: string };
 type GradeOption = { id: string; label: string };
@@ -27,7 +26,7 @@ export function CrossSchoolTransferForm({
   grades,
   sections,
   teachers,
-  basePath = ADMIN_ROUTES.learnerTransfers,
+  basePath,
 }: {
   schools: SchoolOption[];
   fromSchoolId: string;
@@ -36,7 +35,7 @@ export function CrossSchoolTransferForm({
   sections: SectionOption[];
   teachers: TeacherOption[];
   /** The page this form re-navigates to when a school picker changes. */
-  basePath?: string;
+  basePath: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
