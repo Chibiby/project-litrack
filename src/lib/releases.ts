@@ -135,6 +135,19 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.84.0",
+    date: "2026-11-24",
+    title: "Full compliance: see which schools keep their records complete",
+    announce: true,
+    fixes: [
+      {
+        text: "Division Summary has a new Full compliance page. It shows how many schools have complete, up-to-date records with no discrepancies, ranks districts by their share of compliant schools, lists schools that recently became or stopped being compliant, and shows the longest streaks. Open any school in the list to see its last 90 days of changes, or export the whole list.",
+        roles: ["SUPER_ADMIN", "DISTRICT_ADMIN"],
+      },
+      "Every night at 00:05, LITRACK checks each school's records. Schools that stay complete, up to date and free of discrepancies for 30 days in a row are listed for recognition by the division and district offices.",
+    ],
+  },
+  {
     version: "2.83.0",
     date: "2026-11-24",
     title: "Division Transfers, an ARAL-only home for volunteers, livelier numbers",
