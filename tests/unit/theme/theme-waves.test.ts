@@ -91,3 +91,31 @@ describe("playThemeWaves page motion hold", () => {
     expect(finishers).toHaveLength(2);
   });
 });
+
+describe("playThemeWaves reveal animation cleanup", () => {
+  it("cancels the reveal animation once its transition ends, so the next reveal is the only clip animation", async () => {
+    let finish!: () => void;
+    (document as unknown as { startViewTransition: unknown }).startViewTransition = (update: () => void) => {
+      update();
+      return { ready: Promise.resolve(), finished: new Promise<void>((resolve) => (finish = resolve)) };
+    };
+    const cancel = vi.fn();
+    const root = document.documentElement as HTMLElement & { animate: unknown };
+    const original = root.animate;
+    root.animate = vi.fn(() => ({ cancel }) as unknown as Animation);
+    try {
+      // A fresh module: earlier tests leave a reveal marked as running.
+      vi.resetModules();
+      const fresh = await import("@/components/theme/theme-waves");
+      fresh.playThemeWaves({ x: 10, y: 10 }, () => {});
+      await flush();
+      expect(root.animate).toHaveBeenCalledTimes(1);
+      expect(cancel).not.toHaveBeenCalled();
+      finish();
+      await flush();
+      expect(cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      root.animate = original;
+    }
+  });
+});

@@ -119,9 +119,16 @@ export function playThemeWaves(origin: WaveOrigin | undefined, swap: () => void)
 
   const transition = doc.startViewTransition(() => flushSync(swap));
   running = transition;
+  // The reveal fills forwards so its last frame holds until the transition
+  // ends. Left alone it stays attached to <html> after that, and the next
+  // reveal then shares the clip-path with it: two clip animations on one
+  // layer cannot run on the compositor, so every switch after the first
+  // repainted the edge on the main thread and stalled mid-reveal.
+  let reveal: Animation | undefined;
   transition.finished
     .catch(() => undefined)
     .then(() => {
+      reveal?.cancel();
       if (running === transition) running = null;
       resumeMotionLater(root, id);
     });
@@ -131,10 +138,10 @@ export function playThemeWaves(origin: WaveOrigin | undefined, swap: () => void)
       if (frames) {
         // A wavy edge with a fresh random seed each switch (theme-blob.ts).
         // The radius curve is baked into the frames, so they play linearly.
-        root.animate({ clipPath: frames }, { ...target, duration: REVEAL_MS, easing: "linear" });
+        reveal = root.animate({ clipPath: frames }, { ...target, duration: REVEAL_MS, easing: "linear" });
         return;
       }
-      root.animate(
+      reveal = root.animate(
         { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
         { ...revealTiming(), ...target }
       );
