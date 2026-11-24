@@ -18,6 +18,7 @@ import type { PlacementOptions, TransferCandidate, TransferRow, TransferTarget }
 import { callAction } from "@/lib/ui/call-action";
 import { ToastedError, toastFailure } from "@/lib/ui/toast-failure";
 import { cn } from "@/lib/utils";
+import { PageNav } from "@/components/ui/pagination";
 import { CandidateTable, TransferRowTable } from "./transfer-table";
 import { countOf, SELECT_CLASS, SendTransferDialog } from "./send-transfer-dialog";
 import { AcceptTransferDialog, DeclineTransferDialog } from "./accept-transfer-dialog";
@@ -25,8 +26,8 @@ import { AcceptTransferDialog, DeclineTransferDialog } from "./accept-transfer-d
 export type TransferView = "send" | "outgoing" | "incoming" | "history";
 type RowView = Exclude<TransferView, "send">;
 
-/** Rows drawn at once on Send; a large school narrows by search or grade. */
-export const SEND_LIST_LIMIT = 100;
+/** Rows per page in every tab; search or a grade narrows Send further. */
+export const TRANSFER_PAGE_SIZE = 25;
 
 export interface TransferWorkspaceProps {
   /** The school whose side every action acts on. */
@@ -84,7 +85,16 @@ export function TransferWorkspace({
   const matching = candidates.filter(
     (c) => (!needle || c.name.toLowerCase().includes(needle)) && (!group || c.group === group)
   );
-  const shownCandidates = matching.slice(0, SEND_LIST_LIMIT);
+  // One page per tab. A new tab, search or grade starts again at page 1.
+  const pageKey = `${view}|${needle}|${group}`;
+  const [pageState, setPageState] = useState({ key: pageKey, page: 1 });
+  const fullList = view === "send" ? matching : rows[view];
+  const totalPages = Math.max(1, Math.ceil(fullList.length / TRANSFER_PAGE_SIZE));
+  const page = Math.min(pageState.key === pageKey ? pageState.page : 1, totalPages);
+  const setPage = (next: number) => setPageState({ key: pageKey, page: next });
+  const pageStart = (page - 1) * TRANSFER_PAGE_SIZE;
+  const shownCandidates = matching.slice(pageStart, pageStart + TRANSFER_PAGE_SIZE);
+  const shownRows = view === "send" ? [] : rows[view].slice(pageStart, pageStart + TRANSFER_PAGE_SIZE);
   const people = SCHOOL_TRANSFER_KIND_LABELS[kind].toLowerCase();
   const peopleLabel = kind === "ARAL_VOLUNTEER" ? "ARAL volunteers" : people;
   const listItems = view === "send" ? shownCandidates : rows[view];
@@ -120,10 +130,13 @@ export function TransferWorkspace({
       else next.delete(id);
       return next;
     });
-  // On Send, "select all" means the people on screen (after search and grade).
+  // "Select all" means the rows on this page (after search and grade), so a
+  // tick never reaches people the user has not seen.
   const toggleAll = (on: boolean) => {
-    if (view !== "send") return setSelected(on ? new Set(selectableIds) : new Set());
-    const onScreen = shownCandidates.filter((c) => c.pendingTo === null).map((c) => c.id);
+    const onScreen =
+      view === "send"
+        ? shownCandidates.filter((c) => c.pendingTo === null).map((c) => c.id)
+        : shownRows.filter((r) => selectableIds.has(r.id)).map((r) => r.id);
     setSelected((prev) => {
       const next = new Set(prev);
       for (const id of onScreen) {
@@ -229,11 +242,6 @@ export function TransferWorkspace({
                 ) : null}
               </div>
             ) : null}
-            {view === "send" && matching.length > shownCandidates.length ? (
-              <p className="text-xs text-muted-foreground">
-                Showing {shownCandidates.length} of {matching.length}. Search or pick a grade to narrow the list.
-              </p>
-            ) : null}
             {view === "send" && candidates.length > 0 && matching.length === 0 ? (
               <p className="py-6 text-sm text-muted-foreground">No {peopleLabel} match your search.</p>
             ) : null}
@@ -296,7 +304,7 @@ export function TransferWorkspace({
               />
             ) : (
               <TransferRowTable
-                rows={rows[view]}
+                rows={shownRows}
                 view={view}
                 selected={selected}
                 onToggle={toggle}
@@ -304,6 +312,16 @@ export function TransferWorkspace({
                 label={`${VIEW_LABELS[view]} ${SCHOOL_TRANSFER_KIND_SINGULAR_LABELS[kind]} transfers`}
               />
             )}
+            {totalPages > 1 && fullList.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3 text-sm">
+                <span className="text-muted-foreground">
+                  Showing {(pageStart + 1).toLocaleString()}–
+                  {Math.min(pageStart + TRANSFER_PAGE_SIZE, fullList.length).toLocaleString()} of{" "}
+                  {fullList.length.toLocaleString()}
+                </span>
+                <PageNav page={page} totalPages={totalPages} label="Transfer list pages" onPageChange={setPage} />
+              </div>
+            ) : null}
           </>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adjacentPages, listKey } from "@/lib/nav/list-params";
+import { adjacentPages, listKey, parseListPage } from "@/lib/nav/list-params";
 
 const LIST_KEYS = ["page", "sort", "q", "status"] as const;
 
@@ -124,5 +124,24 @@ describe("adjacentPages", () => {
   it("does not throw for negative totalPages", () => {
     expect(() => adjacentPages(1, -5)).not.toThrow();
     expect(adjacentPages(1, -5)).toEqual([]);
+  });
+});
+
+describe("parseListPage", () => {
+  it("reads a positive whole page number", () => {
+    expect(parseListPage("3")).toBe(3);
+    expect(parseListPage(["4", "9"])).toBe(4);
+  });
+
+  it("falls back to page 1 for missing, zero, negative or junk values", () => {
+    expect(parseListPage(undefined)).toBe(1);
+    expect(parseListPage("0")).toBe(1);
+    expect(parseListPage("-2")).toBe(1);
+    expect(parseListPage("abc")).toBe(1);
+    expect(parseListPage("2.5")).toBe(1);
+  });
+
+  it("caps absurd page numbers so the database offset stays bounded", () => {
+    expect(parseListPage("999999999")).toBe(10_000);
   });
 });

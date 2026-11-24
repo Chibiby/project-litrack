@@ -171,7 +171,7 @@ describe("TransferWorkspace", () => {
     expect(acceptSchoolTransfers).toHaveBeenCalledWith({ schoolId: "school-b", ids: ["t1", "t2"], placement: undefined });
   });
 
-  it("narrows a big school's list by name and grade, drawing at most 100 rows", () => {
+  it("pages a big school's list 25 at a time and narrows it by name and grade", () => {
     const many = Array.from({ length: 150 }, (_, i) => ({
       id: `m${i}`,
       name: `Learner ${String(i).padStart(3, "0")}`,
@@ -180,11 +180,22 @@ describe("TransferWorkspace", () => {
       group: i < 120 ? "Grade 1" : "Grade 2",
     }));
     render(<TransferWorkspace {...props({ candidates: many })} />);
-    expect(within(desktop()).getAllByRole("row")).toHaveLength(101);
-    expect(screen.getByText("Showing 100 of 150. Search or pick a grade to narrow the list.")).toBeTruthy();
+    expect(within(desktop()).getAllByRole("row")).toHaveLength(26);
+    expect(screen.getByText(/Showing 1–25 of 150/)).toBeTruthy();
 
+    // Select all on a page ticks that page only, never people not yet seen.
+    fireEvent.click(within(desktop()).getByRole("checkbox", { name: "Select all learners" }));
+    expect(screen.getByRole("button", { name: "Transfer to another school (25)" })).toBeTruthy();
+    fireEvent.click(within(desktop()).getByRole("checkbox", { name: "Select all learners" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText(/Showing 26–50 of 150/)).toBeTruthy();
+    expect(within(desktop()).getByText("Learner 025")).toBeTruthy();
+
+    // A new grade starts again at page 1.
     fireEvent.change(screen.getByRole("combobox", { name: "Grade" }), { target: { value: "Grade 2" } });
-    expect(within(desktop()).getAllByRole("row")).toHaveLength(31);
+    expect(within(desktop()).getAllByRole("row")).toHaveLength(26);
+    expect(screen.getByText(/Showing 1–25 of 30/)).toBeTruthy();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search learners" }), { target: { value: "learner 149" } });
     expect(within(desktop()).getAllByRole("row")).toHaveLength(2);

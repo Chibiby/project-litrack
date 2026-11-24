@@ -20,27 +20,38 @@ import {
   type PendingTeacherRow,
 } from "@/components/teachers-pending-table";
 import { TableSectionSkeleton } from "@/components/loading";
+import { ListPager, PageOutOfRangeState } from "@/components/admin/management/list-pager";
+import { parseListPage } from "@/lib/nav/list-params";
+
+const PENDING_PAGE_SIZE = 25;
 
 export const dynamic = "force-dynamic";
 
 interface PendingTeachersPageProps {
-  searchParams: Promise<{ schoolId?: string }>;
+  searchParams: Promise<{ schoolId?: string; page?: string }>;
 }
 
-async function PendingTeachersBody({ view }: { view: SchoolHeadView }) {
-  const pendingTeachers = await prismaFresh.user.findMany({
-    where: {
-      ...teacherRosterScope(view.schoolId),
-      ...TEACHER_ROSTER_STATE.pending,
-    },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+async function PendingTeachersBody({ view, page }: { view: SchoolHeadView; page: number }) {
+  const where = {
+    ...teacherRosterScope(view.schoolId),
+    ...TEACHER_ROSTER_STATE.pending,
+  };
+  const [pendingTeachers, totalCount] = await Promise.all([
+    prismaFresh.user.findMany({
+      where,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * PENDING_PAGE_SIZE,
+      take: PENDING_PAGE_SIZE,
+    }),
+    prismaFresh.user.count({ where }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PENDING_PAGE_SIZE));
 
   const pendingRows: PendingTeacherRow[] = pendingTeachers.map((t) => ({
     id: t.id,
@@ -60,7 +71,27 @@ async function PendingTeachersBody({ view }: { view: SchoolHeadView }) {
         the Active tab at any time.
       </Callout>
 
-      <TeachersPendingTable rows={pendingRows} readOnly={view.isSuperAdminView} />
+      {pendingRows.length === 0 && totalCount > 0 ? (
+        <PageOutOfRangeState
+          basePath={SCHOOL_HEAD_ROUTES.teachersPending}
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          noun="registration requests"
+        />
+      ) : (
+        <TeachersPendingTable rows={pendingRows} readOnly={view.isSuperAdminView} />
+      )}
+      {totalPages > 1 ? (
+        <ListPager
+          basePath={SCHOOL_HEAD_ROUTES.teachersPending}
+          page={page}
+          pageSize={PENDING_PAGE_SIZE}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          noun="requests"
+        />
+      ) : null}
     </>
   );
 }
@@ -92,7 +123,7 @@ export default async function PendingTeachersPage({
       }
     >
       <Suspense fallback={<TableSectionSkeleton rows={4} columns={4} />}>
-        <PendingTeachersBody view={view} />
+        <PendingTeachersBody view={view} page={parseListPage(params.page)} />
       </Suspense>
     </SchoolHeadPage>
   );

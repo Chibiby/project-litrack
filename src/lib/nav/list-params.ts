@@ -94,3 +94,15 @@ export function adjacentPages(page: number, totalPages: number): number[] {
   if (next <= maxPage && next !== clampedCurrent) result.push(next);
   return result;
 }
+
+/** Highest page a list will read, so a hand-edited URL cannot ask for a huge offset. */
+export const MAX_LIST_PAGE = 10_000;
+
+/** `?page=` as a whole number from 1 to `MAX_LIST_PAGE`; anything else is page 1. */
+export function parseListPage(raw: string | string[] | undefined): number {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  if (page < 1) return 1;
+  return Math.min(page, MAX_LIST_PAGE);
+}

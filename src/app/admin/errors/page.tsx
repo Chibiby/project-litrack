@@ -7,6 +7,10 @@ import { TableSectionSkeleton } from "@/components/loading";
 import { ErrorLogFilters } from "@/components/admin/error-log-filters";
 import { ErrorLogTable } from "@/components/admin/error-log-table";
 import { buildErrorLogQuery, parseErrorLogParams } from "@/lib/admin/error-log";
+import { parseListPage } from "@/lib/nav/list-params";
+import { ListPager, PageOutOfRangeState } from "@/components/admin/management/list-pager";
+
+const ERROR_LOG_PAGE_SIZE = 50;
 
 export const dynamic = "force-dynamic";
 
@@ -16,14 +20,36 @@ type ErrorsPageProps = {
 
 async function ErrorLogSection({
   params,
+  page,
 }: {
   params: ReturnType<typeof parseErrorLogParams>;
+  page: number;
 }) {
-  const events = await prisma.errorEvent.findMany({
-    where: buildErrorLogQuery(params),
-    orderBy: { createdAt: "desc" },
-    take: 150,
-  });
+  const where = buildErrorLogQuery(params);
+  const [events, totalCount] = await Promise.all([
+    prisma.errorEvent.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * ERROR_LOG_PAGE_SIZE,
+      take: ERROR_LOG_PAGE_SIZE,
+    }),
+    prisma.errorEvent.count({ where }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / ERROR_LOG_PAGE_SIZE));
+
+  if (events.length === 0 && totalCount > 0) {
+    return (
+      <div className="p-4">
+        <PageOutOfRangeState
+          basePath="/admin/errors"
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          noun="events"
+        />
+      </div>
+    );
+  }
 
   const schoolIds = [...new Set(events.map((e) => e.schoolId).filter(Boolean))] as string[];
   const schools =
@@ -55,7 +81,21 @@ async function ErrorLogSection({
     };
   });
 
-  return <ErrorLogTable events={rows} hasRefFilter={Boolean(params.ref)} />;
+  return (
+    <>
+      <ErrorLogTable events={rows} hasRefFilter={Boolean(params.ref)} />
+      {totalPages > 1 ? (
+        <ListPager
+          basePath="/admin/errors"
+          page={page}
+          pageSize={ERROR_LOG_PAGE_SIZE}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          noun="events"
+        />
+      ) : null}
+    </>
+  );
 }
 
 /**
@@ -67,7 +107,9 @@ async function ErrorLogSection({
  */
 export default async function AdminErrorsPage({ searchParams }: ErrorsPageProps) {
   const user = await requireDeveloperAdminPage();
-  const params = parseErrorLogParams(await searchParams);
+  const raw = await searchParams;
+  const params = parseErrorLogParams(raw);
+  const page = parseListPage(raw.page);
 
   return (
     <AdminPage
@@ -79,7 +121,7 @@ export default async function AdminErrorsPage({ searchParams }: ErrorsPageProps)
       <Surface as="section" className="min-w-0 rounded-lg">
         <SurfaceHeader className="flex-col items-stretch gap-3">
           <h2 className="text-base font-semibold">
-            {params.ref ? `Reference ${params.ref}` : `Last 150 events`}
+            {params.ref ? `Reference ${params.ref}` : "Events"}
           </h2>
           <ErrorLogFilters
             refFilter={params.ref}
@@ -90,7 +132,7 @@ export default async function AdminErrorsPage({ searchParams }: ErrorsPageProps)
         </SurfaceHeader>
         <SurfaceBody className="p-0 lg:p-2">
           <Suspense fallback={<TableSectionSkeleton rows={10} columns={6} />}>
-            <ErrorLogSection params={params} />
+            <ErrorLogSection params={params} page={page} />
           </Suspense>
         </SurfaceBody>
       </Surface>

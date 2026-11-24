@@ -39,6 +39,8 @@ export function ErrorLogFilters({
 
   const apply = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams.toString());
+    // New filters make the old page number meaningless: back to page 1.
+    next.delete("page");
     for (const [key, value] of Object.entries(changes)) {
       if (!value || value === ANY) next.delete(key);
       else next.set(key, value);
