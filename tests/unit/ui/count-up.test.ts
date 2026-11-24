@@ -1,23 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  COUNT_UP_STORAGE_KEY,
+  COUNT_UP_MS,
   countUpFrame,
   createCountUpGate,
-  easeOutExpo,
+  easeOutCubic,
   parseCountable,
-  resetCountUp,
-  type SeenStore,
 } from "@/lib/ui/count-up";
-
-function memoryStore(): SeenStore & { data: Map<string, string> } {
-  const data = new Map<string, string>();
-  return {
-    data,
-    getItem: (k) => data.get(k) ?? null,
-    setItem: (k, v) => void data.set(k, v),
-    removeItem: (k) => void data.delete(k),
-  };
-}
 
 describe("parseCountable", () => {
   it("counts whole numbers and digit strings, keeping commas and a % suffix", () => {
@@ -41,10 +29,11 @@ describe("parseCountable", () => {
 });
 
 describe("countUpFrame", () => {
-  it("starts at 0, rises fast, and lands exactly on the target", () => {
+  it("starts at 0, climbs steadily, and lands exactly on the target", () => {
     expect(countUpFrame(1000, 0, 1000)).toBe(0);
-    // ease-out: well past half the value at a quarter of the time
-    expect(countUpFrame(1000, 250, 1000)).toBeGreaterThan(700);
+    // ease-out, but not a jump: about half the value at a quarter of the time
+    expect(countUpFrame(1000, 250, 1000)).toBeGreaterThan(500);
+    expect(countUpFrame(1000, 250, 1000)).toBeLessThan(650);
     expect(countUpFrame(1000, 1000, 1000)).toBe(1000);
     expect(countUpFrame(1000, 5000, 1000)).toBe(1000);
   });
@@ -56,47 +45,37 @@ describe("countUpFrame", () => {
       expect(n).toBeGreaterThanOrEqual(last);
       last = n;
     }
-    expect(easeOutExpo(1)).toBe(1);
+    expect(easeOutCubic(1)).toBe(1);
+  });
+
+  it("runs long enough to follow", () => {
+    expect(COUNT_UP_MS).toBeGreaterThanOrEqual(2000);
   });
 });
 
 describe("createCountUpGate", () => {
-  it("counts a page once per sign-in, for every card on it", () => {
-    const store = memoryStore();
+  it("counts a page once per page load, for every card on it", () => {
     let clock = 0;
-    const gate = createCountUpGate(() => store, () => clock);
+    const gate = createCountUpGate(() => clock);
 
     // Four cards on the dashboard mount in the same moment: all count.
-    expect([1, 2, 3, 4].map(() => gate("/admin"))).toEqual([true, true, true, true]);
-    // Coming back later in the same sign-in: no count.
+    expect([1, 2, 3, 4].map(() => gate.shouldCount("/admin"))).toEqual([true, true, true, true]);
+    // Coming back later without a refresh: no count.
     clock = 10_000;
-    expect(gate("/admin")).toBe(false);
+    expect(gate.shouldCount("/admin")).toBe(false);
     // Another page still counts its first time.
-    expect(gate("/admin/management/learners")).toBe(true);
+    expect(gate.shouldCount("/admin/management/learners")).toBe(true);
   });
 
-  it("counts again after a sign-in resets it", () => {
-    const store = memoryStore();
+  it("counts again after a refresh (a new gate) or a sign-in reset", () => {
     let clock = 0;
-    const gate = createCountUpGate(() => store, () => clock);
-    expect(gate("/teacher")).toBe(true);
+    const gate = createCountUpGate(() => clock);
+    expect(gate.shouldCount("/teacher")).toBe(true);
     clock = 10_000;
-    expect(gate("/teacher")).toBe(false);
-    resetCountUp(store);
-    expect(store.data.has(COUNT_UP_STORAGE_KEY)).toBe(false);
-    expect(gate("/teacher")).toBe(true);
-  });
-
-  it("just shows the numbers when storage is missing or throws", () => {
-    expect(createCountUpGate(() => null, () => 0)("/x")).toBe(false);
-    const broken: SeenStore = {
-      getItem: () => {
-        throw new Error("blocked");
-      },
-      setItem: () => undefined,
-      removeItem: () => undefined,
-    };
-    expect(createCountUpGate(() => broken, () => 0)("/x")).toBe(false);
-    expect(() => resetCountUp(broken)).not.toThrow();
+    expect(gate.shouldCount("/teacher")).toBe(false);
+    gate.reset();
+    expect(gate.shouldCount("/teacher")).toBe(true);
+    // A refresh loads the module again, which makes a fresh gate.
+    expect(createCountUpGate(() => clock).shouldCount("/teacher")).toBe(true);
   });
 });

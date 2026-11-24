@@ -2,24 +2,24 @@
  * Pure half of the stat-card count-up (`src/components/ui/count-up.tsx`).
  *
  * Practice this follows:
- * - Count once, on the first visit to a page in a sign-in, never on every
- *   refresh or revisit: repeated motion on numbers people come back to read
- *   becomes noise.
- * - A fast start and a long settle (ease-out), so the eye lands on the final
- *   figure instead of watching it crawl.
+ * - Count on the first visit to a page after the app loads: a refresh counts
+ *   again, moving between pages and back does not.
+ * - Start only once the page has finished loading, so the count plays while
+ *   someone is looking, not behind a loading screen.
+ * - A steady ease-out over about two seconds, slow enough to follow.
  * - Reduced motion shows the final value at once; the final value is always
  *   what assistive tech reads, never a mid-count number.
  * - Tabular numerals (already on the card) so digits do not jitter.
  */
 
-/** How long one count runs. Short enough not to hold the reader up. */
-export const COUNT_UP_MS = 1100;
+/** How long one count runs. */
+export const COUNT_UP_MS = 2200;
 
-/** easeOutExpo: rushes, then settles on the figure. */
-export function easeOutExpo(t: number): number {
+/** easeOutCubic: a steady climb that slows into the figure. */
+export function easeOutCubic(t: number): number {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
-  return 1 - Math.pow(2, -10 * t);
+  return 1 - Math.pow(1 - t, 3);
 }
 
 export type CountableValue = { target: number; format: (n: number) => string };
@@ -50,45 +50,30 @@ export function parseCountable(value: number | string): CountableValue | null {
 /** The figure shown `elapsed` ms into the count. Ends exactly on `target`. */
 export function countUpFrame(target: number, elapsed: number, duration = COUNT_UP_MS): number {
   if (elapsed >= duration) return target;
-  return Math.round(target * easeOutExpo(Math.max(0, elapsed) / duration));
+  return Math.round(target * easeOutCubic(Math.max(0, elapsed) / duration));
 }
-
-export const COUNT_UP_STORAGE_KEY = "litrack.countUp.seen";
-
-/** Storage the decision is read from; `sessionStorage` in the browser. */
-export type SeenStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 /**
- * Whether the cards on `page` should count this time, marking the page as
- * seen. Every card on one page asks in the same moment, so a fresh "yes" is
- * remembered for `windowMs` and handed to the rest of that page's cards;
- * after that window a revisit gets "no". Storage that throws (private mode,
- * blocked site data) means "no": the numbers simply appear.
+ * Decides whether the cards on a page should count. The memory lives in this
+ * module, so a page refresh (a new page load) forgets it and counts again,
+ * while moving between pages inside the app does not. Every card on one page
+ * asks in the same moment, so a fresh "yes" is handed to the rest of that
+ * page's cards for `windowMs`.
  */
-export function createCountUpGate(store: () => SeenStore | null, now: () => number, windowMs = 1500) {
-  const fresh = new Map<string, number>();
-  return function shouldCount(page: string): boolean {
-    const at = fresh.get(page);
-    if (at !== undefined && now() - at < windowMs) return true;
-    try {
-      const s = store();
-      if (!s) return false;
-      const seen: string[] = JSON.parse(s.getItem(COUNT_UP_STORAGE_KEY) ?? "[]");
-      if (seen.includes(page)) return false;
-      s.setItem(COUNT_UP_STORAGE_KEY, JSON.stringify([...seen, page]));
-      fresh.set(page, now());
-      return true;
-    } catch {
-      return false;
-    }
+export function createCountUpGate(now: () => number, windowMs = 1500) {
+  const seen = new Map<string, number>();
+  return {
+    shouldCount(page: string): boolean {
+      const at = seen.get(page);
+      if (at === undefined) {
+        seen.set(page, now());
+        return true;
+      }
+      return now() - at < windowMs;
+    },
+    /** Forget every seen page, so a new sign-in counts again. */
+    reset(): void {
+      seen.clear();
+    },
   };
-}
-
-/** Forget every seen page, so a new sign-in counts again. */
-export function resetCountUp(store: SeenStore | null): void {
-  try {
-    store?.removeItem(COUNT_UP_STORAGE_KEY);
-  } catch {
-    // Storage unavailable: nothing was remembered either.
-  }
 }
