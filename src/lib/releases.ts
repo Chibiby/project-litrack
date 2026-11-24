@@ -135,6 +135,17 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.86.3",
+    date: "2026-11-25",
+    title: "Stat card numbers are easier to read",
+    announce: true,
+    fixes: [
+      "Big numbers on stat cards always show commas, such as 5,695 instead of 5695.",
+      "Stat card numbers count up when the card comes into view, one card after another, instead of sitting at 0 while the page loads.",
+      "Stat card numbers count up again each time you refresh the page.",
+    ],
+  },
+  {
     version: "2.86.2",
     date: "2026-11-25",
     title: "Pages fit better on phones and in pop-ups",
