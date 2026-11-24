@@ -135,6 +135,29 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.85.0",
+    date: "2026-11-24",
+    title: "Chat works like a messenger app",
+    announce: true,
+    fixes: [
+      "Chat messages now arrive as they are sent, and you can see who is typing and who is active now.",
+      "React to any message with an emoji. Hover a message, or press and hold it on a phone, then pick a reaction. Tap a reaction to add or remove yours.",
+      "Reply to a specific message: the reply shows a quote, and tapping the quote jumps to the original.",
+      "Edit your message within 15 minutes, or delete it. A deleted message shows \"Message removed\" for everyone.",
+      "\"Seen by\" under your latest message shows who has read it.",
+      "The message box grows as you type. Enter sends, Shift+Enter starts a new line, and there is an emoji button.",
+      "When you scroll up to read older messages, new ones no longer pull you down. A \"Jump to latest\" button shows how many arrived.",
+      {
+        text: "Support Inbox shows the last message of each conversation, a green dot for members who are active now, and the unread count in the browser tab. The list refreshes every 10 seconds.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Super Admins are not shown as active or typing to teachers and School Heads, and do not appear in \"Seen by\". A Super Admin can delete any message; each such delete is recorded in the audit log.",
+        roles: ["SUPER_ADMIN"],
+      },
+    ],
+  },
+  {
     version: "2.84.1",
     date: "2026-11-24",
     title: "Smoother light and dark switching",

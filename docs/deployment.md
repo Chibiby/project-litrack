@@ -157,6 +157,26 @@ is not enabled on the account.
 `wrangler.jsonc` pins the Worker with targeted placement to `aws:ap-southeast-1`, next to the
 Supabase project. This replaces the Vercel `sin1` pin described in the appendix.
 
+### Live chat (Durable Object)
+
+Chat delivers messages, edits, reactions, reads, typing and presence over a WebSocket to one
+Durable Object per channel: class `ChatRoom` (`src/lib/chat/live/chat-room.ts`), bound as
+`CHAT_ROOM` in `wrangler.jsonc` with the SQLite-backed migration tag `v1-chat-room`. The class
+is exported from `worker.js`, which also routes `/chat-ws` to it through `handleChatSocket`
+(`src/lib/chat/live/socket-route.ts`) before OpenNext sees the request.
+
+- The browser gets a 60-second signed ticket from the `openChatSocket` server action, then
+  connects to `/chat-ws?ticket=…`. Tickets are HMAC-signed with `CHAT_SOCKET_SECRET` when it is
+  set, otherwise with `BETTER_AUTH_SECRET`. Setting `CHAT_SOCKET_SECRET` as a Worker secret is
+  optional and lets the socket key rotate apart from sessions.
+- Server actions publish each change to the room (`publishRoomEvent`, best-effort, never throws).
+- The room uses the hibernation API, so idle sockets cost no duration. An alarm every 30 s expires
+  typing and closes sockets older than 10 minutes (code 4001); the client reconnects with a fresh
+  ticket.
+- Nothing depends on the room. Without the binding or a secret (local `next dev`, a failed
+  socket), `openChatSocket` returns `live: false` and the thread polls every 6–30 s instead; with
+  the socket up it still polls every 60 s as a safety net.
+
 ### Known gaps
 
 Carried over from the Vercel cutover and not yet closed:
