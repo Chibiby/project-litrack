@@ -236,7 +236,7 @@ export function AppHeader({
             pages={searchPages}
             // Rests narrow, showing only its shortcut; widens while hovered,
             // focused or holding text, so typing never happens in a cramped box.
-            className="hidden w-44 max-w-sm transition-[width] duration-base ease-standard focus-within:w-96 hover:w-96 data-[filled]:w-96 motion-reduce:transition-none md:max-lg:block md:max-lg:max-w-xs lg:block"
+            className="hidden w-52 max-w-sm transition-[width] duration-base ease-standard focus-within:w-96 hover:w-96 data-[filled]:w-96 motion-reduce:transition-none md:max-lg:block md:max-lg:max-w-xs lg:block"
           />
         )}
 
