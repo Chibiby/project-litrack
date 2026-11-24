@@ -135,6 +135,20 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.86.2",
+    date: "2026-11-25",
+    title: "Pages fit better on phones and in pop-ups",
+    announce: true,
+    fixes: [
+      "Long school names no longer spill past the edge of the transfer pop-up, or any other pop-up.",
+      "On phones, the Transfers page heading, school picker and Send, Outgoing, Incoming and History tabs now fit on screen.",
+      "The Assistant button no longer covers the next-page arrow at the bottom of tables.",
+      "Chat messages no longer break short words in two, and the chat filter buttons wrap instead of hiding Unread.",
+      "Full compliance shows the date tracking began as a readable date, such as Nov 25, 2026.",
+      "On phones, the Got it button in the School Head reminder pop-up stays in reach at the bottom.",
+    ],
+  },
+  {
     version: "2.86.1",
     date: "2026-11-24",
     title: "Switching light and dark mode stays smooth every time",
