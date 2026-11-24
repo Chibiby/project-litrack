@@ -135,6 +135,34 @@ export type ReleaseWelcome = {
  */
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.86.0",
+    date: "2026-11-24",
+    title: "The side menu shows what is waiting for you",
+    announce: true,
+    fixes: [
+      {
+        text: "Support Inbox in the side menu shows how many support tickets and chat questions are waiting for an answer. It updates every 30 seconds.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "When any Super Admin opens or answers a chat, it counts as read for the whole team: the unread dot, the menu number and every admin's bell alert for it clear together.",
+        roles: ["SUPER_ADMIN"],
+      },
+      {
+        text: "Support in the side menu shows how many support requests from your districts are waiting. It updates every 30 seconds.",
+        roles: ["DISTRICT_ADMIN"],
+      },
+      {
+        text: "The side menu shows numbers for what needs you: incoming transfers on Transfer, section-move requests on Learners, and teachers, ARAL tutors and records needing attention under Monitoring.",
+        roles: ["SCHOOL_HEAD"],
+      },
+      {
+        text: "ARAL Profiling in the side menu shows how many of your ARAL learners still have no profile.",
+        roles: ["TEACHER"],
+      },
+    ],
+  },
+  {
     version: "2.85.0",
     date: "2026-11-24",
     title: "Chat works like a messenger app",
