@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { cachedQuery } from "@/lib/cache/unstable";
 import { adminDashboard, schoolsList } from "@/lib/cache/tags";
-import { adminPopulationScope } from "@/lib/dashboard/aggregates";
+import { ADMIN_DASHBOARD_TTL, adminPopulationScope } from "@/lib/dashboard/aggregates";
 import { isDemoVisible } from "@/lib/demo/session";
 import { ACTIVE_ENROLLED_LEARNER } from "@/lib/learners/population";
 import { IP_ETHNICITIES } from "@/lib/ip/ethnicity";
@@ -99,7 +99,9 @@ export async function getIpLearnersOverview(filter: IpOverviewFilter = {}): Prom
     {
       keyParts: ["admin-ip-overview-v1", `demo:${demoVisible}`, JSON.stringify(f)],
       tags: [adminDashboard, schoolsList],
-      profile: "aggregate",
+      // Same window as the admin dashboard: these groupBys re-ran ~80 times a
+      // day at the 60 s aggregate profile.
+      revalidate: ADMIN_DASHBOARD_TTL,
     }
   );
 }

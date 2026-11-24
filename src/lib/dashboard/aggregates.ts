@@ -29,12 +29,14 @@ import {
 
 /**
  * TTL (seconds) for the heavy cross-tenant Super Admin dashboard aggregates.
- * Five minutes, not the 60 s `aggregate` profile: each is a set of counts over a
- * school relation filter that can take seconds on a cold run. Writes that change
- * the figures still bust them at once through the `adminDashboard` tag; only the
- * attendance trend (not tag-busted) now lags by up to this long.
+ * Fifteen minutes (owner decision 2026-11-25; was five), not the 60 s
+ * `aggregate` profile: each is a set of counts over a school relation filter
+ * that takes 0.6–1.4 s on a cold run, and production re-ran them ~80 times a
+ * day. Writes that change the figures still bust them at once through the
+ * `adminDashboard` tag; only the attendance trend (not tag-busted) lags by up
+ * to this long.
  */
-export const ADMIN_DASHBOARD_TTL = 300;
+export const ADMIN_DASHBOARD_TTL = 900;
 
 export type NamedCount = { name: string; value: number };
 export type DayCount = { date: string; value: number };

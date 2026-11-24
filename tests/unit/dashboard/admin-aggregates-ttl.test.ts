@@ -38,18 +38,18 @@ beforeEach(() => {
 });
 
 describe("admin dashboard aggregate TTL", () => {
-  it("is 300 seconds", () => {
-    expect(ADMIN_DASHBOARD_TTL).toBe(300);
+  it("is 900 seconds", () => {
+    expect(ADMIN_DASHBOARD_TTL).toBe(900);
   });
 
   it.each([
     ["getAdminMetricCounts", getAdminMetricCounts],
     ["getAdminActivitySeries", getAdminActivitySeries],
     ["getAdminIpAndAdvisoryMetrics", getAdminIpAndAdvisoryMetrics],
-  ])("%s caches for 300 s under the adminDashboard tag", async (_name, load) => {
+  ])("%s caches for 900 s under the adminDashboard tag", async (_name, load) => {
     await (load as () => Promise<unknown>)();
     expect(calls).toHaveLength(1);
-    expect(calls[0].revalidate).toBe(300);
+    expect(calls[0].revalidate).toBe(900);
     expect(calls[0].tags).toContain(adminDashboard);
   });
 });
