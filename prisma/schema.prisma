@@ -898,6 +898,7 @@ model User {
   chatMessages               ChatMessage[]             @relation("ChatMessageAuthor")
   chatMentions               ChatMention[]             @relation("ChatMentionUser")
   chatReads                  ChatRead[]                @relation("ChatReadUser")
+  chatReactions              ChatReaction[]            @relation("ChatReactionUser")
   supportTickets             SupportTicket[]           @relation("SupportTicketRequester")
   supportTicketsResolved     SupportTicket[]           @relation("SupportTicketResolver")
   unlockGrants               UnlockGrant[]             @relation("UnlockGrantUser")
@@ -2357,15 +2358,43 @@ model ChatMessage {
   authorId  String
   body      String
   createdAt DateTime  @default(now())
+  /// Set by a delete, which also blanks `body`: a removed message keeps its
+  /// place in the thread but none of its words.
   deletedAt DateTime?
+  /// When the author last changed the text (within the 15-minute edit window).
+  editedAt  DateTime?
+  /// The message this one quotes. Same channel only, enforced by the action.
+  replyToId String?
 
-  channel  ChatChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  author   User          @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  mentions ChatMention[]
+  channel   ChatChannel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author    User           @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  replyTo   ChatMessage?   @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[]  @relation("ChatReply")
+  mentions  ChatMention[]
+  reactions ChatReaction[]
 
   /// The transcript read: one channel, oldest to newest.
   @@index([channelId, createdAt])
   @@index([authorId])
+  @@index([replyToId])
+}
+
+/// One person's emoji on one message. One row per (message, person, emoji), so
+/// a reaction is a toggle and a chip's count is a plain group-by.
+model ChatReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  /// One of the six fixed reactions (`REACTION_EMOJI` in src/lib/chat/view.ts).
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User        @relation("ChatReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
 }
 
 /// A resolved @mention. Stored rather than re-parsed on read: the body keeps the

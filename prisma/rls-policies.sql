@@ -82,6 +82,7 @@ ALTER TABLE "ChatChannel"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatMessage"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatMention"          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ChatRead"             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "ChatReaction"         ENABLE ROW LEVEL SECURITY;
 
 -- Server-side failures kept for the Super Admin error page. Rows carry stack
 -- traces, request routes and whatever context the failing call site attached, so

@@ -198,6 +198,12 @@ export const SNAPSHOT_MODELS: SnapshotModel[] = [
     operational: true,
     schoolScope: (schoolId) => ({ message: { channel: { schoolId } } }),
   },
+  {
+    model: "ChatReaction",
+    delegate: "chatReaction",
+    operational: true,
+    schoolScope: (schoolId) => ({ message: { channel: { schoolId } } }),
+  },
   { model: "ChatRead", delegate: "chatRead", operational: true, schoolScope: byChannel },
   { model: "Notification", delegate: "notification", operational: true, schoolScope: bySchoolId },
   // `AuditLog.schoolId` is a plain nullable column, not a relation (see the
